@@ -1,0 +1,8 @@
+{
+  "name": "RMC SSG Tracker",
+  "description": "A regal PWA for Rizal Memorial Colleges to track attendance and sanctions with QR verification and geo-fencing.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
