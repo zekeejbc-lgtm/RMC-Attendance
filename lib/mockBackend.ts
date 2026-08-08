@@ -1,6 +1,6 @@
 
 import { TEST_ACCOUNTS } from './seed';
-import { UserProfile, UserStats, Application, Event, SchoolNode } from '../types';
+import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication } from '../types';
 
 const STORAGE_KEY = 'rmc_regalia_db';
 
@@ -8,27 +8,159 @@ interface MockDB {
   users: Record<string, { profile: UserProfile; stats: UserStats; password: string }>;
   usernames: Record<string, string>;
   applications: Record<string, Application>;
-  events: Record<string, Event>;
+  excuse_applications: Record<string, ExcuseApplication>;
+  events: Record<string, AppEvent>;
   attendance_logs: Record<string, Record<string, any>>;
   sanction_logs: Record<string, any[]>;
   school_structure: SchoolNode[];
 }
 
 export const getDB = (): MockDB => {
+  let db: MockDB;
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : { 
+    db = data ? JSON.parse(data) : { 
       users: {}, 
       usernames: {}, 
       applications: {}, 
+      excuse_applications: {},
       events: {}, 
       attendance_logs: {},
       sanction_logs: {},
       school_structure: []
     };
   } catch (e) {
-    return { users: {}, usernames: {}, applications: {}, events: {}, attendance_logs: {}, sanction_logs: {}, school_structure: [] };
+    db = { users: {}, usernames: {}, applications: {}, excuse_applications: {}, events: {}, attendance_logs: {}, sanction_logs: {}, school_structure: [] };
   }
+
+  // Ensure all TEST_ACCOUNTS exist in db.users & db.usernames
+  let updated = false;
+  TEST_ACCOUNTS.forEach(acc => {
+    const uid = `mock_uid_${acc.user}`;
+    if (!db.users[uid]) {
+      updated = true;
+      db.usernames[acc.user.toLowerCase()] = acc.email.toLowerCase();
+      db.users[uid] = {
+        password: 'password123',
+        profile: {
+          uid,
+          name: acc.name,
+          username: acc.user.toLowerCase(),
+          email: acc.email,
+          role: acc.role as any,
+          student_id: acc.user === 'student' ? '2024-00123' : (acc.user === 'ossa' ? 'OSSA-DIR-01' : `ID-${Math.floor(Math.random() * 9000) + 1000}`),
+          photo_url: acc.user === 'ossa' ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' : `https://i.pravatar.cc/150?u=${uid}`,
+          school_data: {
+            type: acc.user === 'student' ? 'High School' : 'College',
+            department: acc.user === 'student' ? "Senior High School" : 'Office of Student Services and Affairs',
+            level: acc.user === 'student' ? "Grade 12" : "Administration",
+            section: acc.user === 'student' ? "Newton" : "OSSA Main",
+            school_id: 'school_rmc'
+          }
+        },
+        stats: {
+          attendance_rate: acc.role === 'student' ? 88 : 100,
+          sanction_hours: acc.role === 'student' ? 12 : 0,
+          events_attended: 15,
+          events_missed: 2
+        }
+      };
+    }
+  });
+
+  // Ensure extra students exist for OSSA roster review
+  const extraStudents = [
+    { uid: 'mock_uid_juan', name: 'Juan Dela Cruz', student_id: '2024-00101', email: 'juan.delacruz@rmc.edu.ph', dept: 'Senior High School', level: 'Grade 11', section: 'Pascal', sanction_hours: 8, attendance_rate: 91 },
+    { uid: 'mock_uid_clara', name: 'Clara Santos', student_id: '2024-00102', email: 'clara.santos@rmc.edu.ph', dept: 'Senior High School', level: 'Grade 12', section: 'Einstein', sanction_hours: 0, attendance_rate: 99 },
+    { uid: 'mock_uid_marco', name: 'Marco Antonio Polo', student_id: '2024-00103', email: 'marco.polo@rmc.edu.ph', dept: 'College of Arts and Sciences', level: '2nd Year', section: 'CS-2A', sanction_hours: 18, attendance_rate: 76 },
+    { uid: 'mock_uid_bea', name: 'Beatriz Alonzo', student_id: '2024-00104', email: 'beatriz.alonzo@rmc.edu.ph', dept: 'Senior High School', level: 'Grade 12', section: 'Newton', sanction_hours: 4, attendance_rate: 94 },
+    { uid: 'mock_uid_andres', name: 'Andres Bonifacio', student_id: '2024-00105', email: 'andres.bonifacio@rmc.edu.ph', dept: 'Junior High School', level: 'Grade 10', section: 'Kamagong', sanction_hours: 0, attendance_rate: 100 }
+  ];
+
+  extraStudents.forEach(s => {
+    if (!db.users[s.uid]) {
+      updated = true;
+      db.users[s.uid] = {
+        password: 'password123',
+        profile: {
+          uid: s.uid,
+          name: s.name,
+          username: s.name.toLowerCase().replace(/\s+/g, '.'),
+          email: s.email,
+          role: 'student',
+          student_id: s.student_id,
+          photo_url: `https://i.pravatar.cc/150?u=${s.uid}`,
+          school_data: {
+            type: s.dept.includes('College') ? 'College' : 'High School',
+            department: s.dept,
+            level: s.level,
+            section: s.section,
+            school_id: 'school_rmc'
+          }
+        },
+        stats: {
+          attendance_rate: s.attendance_rate,
+          sanction_hours: s.sanction_hours,
+          events_attended: 12,
+          events_missed: s.sanction_hours > 0 ? 3 : 0
+        }
+      };
+      if (!db.sanction_logs[s.uid]) {
+        db.sanction_logs[s.uid] = s.sanction_hours > 0 ? [
+          { timestamp: Date.now() - 86400000 * 5, change: s.sanction_hours, reason: "Unexcused Absence from Flag Raising Ceremony", performed_by: "OSSA System" }
+        ] : [];
+      }
+    }
+  });
+
+  if (!db.sanction_logs['mock_uid_student'] || db.sanction_logs['mock_uid_student'].length === 0) {
+    updated = true;
+    db.sanction_logs['mock_uid_student'] = [
+      { timestamp: Date.now() - 86400000 * 10, change: 12, reason: "Unexcused Absence from University Convocation", performed_by: "OSSA Director" }
+    ];
+  }
+
+  if (Object.keys(db.excuse_applications || {}).length === 0) {
+    updated = true;
+    db.excuse_applications = {
+      'exc_01': {
+        id: 'exc_01',
+        student_uid: 'mock_uid_student',
+        student_name: 'Pedro Penduko',
+        student_id: '2024-00123',
+        department: 'Senior High School',
+        section: 'Newton',
+        event_title: 'University Convocation 2024',
+        event_date: '2024-03-15',
+        category: 'medical',
+        reason: 'Severe flu with high fever. Medical certificate attached.',
+        proof_url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=600&auto=format&fit=crop&q=80',
+        status: 'pending',
+        submitted_at: Date.now() - 86400000 * 2
+      },
+      'exc_02': {
+        id: 'exc_02',
+        student_uid: 'mock_uid_juan',
+        student_name: 'Juan Dela Cruz',
+        student_id: '2024-00101',
+        department: 'Senior High School',
+        section: 'Pascal',
+        event_title: 'Intramural Games Opening',
+        event_date: '2024-03-20',
+        category: 'institutional',
+        reason: 'Represented school in Regional Academic Quiz Bee competition.',
+        proof_url: 'https://images.unsplash.com/photo-1567427017947-545c5f8d16ad?w=600&auto=format&fit=crop&q=80',
+        status: 'pending',
+        submitted_at: Date.now() - 86400000 * 1
+      }
+    };
+  }
+
+  if (updated) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  }
+
+  return db;
 };
 
 export const saveDB = (db: MockDB) => {
@@ -47,17 +179,37 @@ export const mockAuth = {
     const cleanId = identifier.toLowerCase().trim();
     const email = db.usernames[cleanId] || cleanId;
     
-    const userEntry = Object.values(db.users).find(u => 
+    let userEntry = Object.values(db.users).find(u => 
       u.profile.username.toLowerCase() === cleanId || 
       u.profile.email.toLowerCase() === email.toLowerCase()
     );
-    
-    if (userEntry && userEntry.password === pass) {
-      localStorage.setItem('rmc_mock_session', userEntry.profile.uid);
-      notifyAuthChange();
-      return userEntry;
+
+    // Fallback: If not found, check TEST_ACCOUNTS
+    if (!userEntry) {
+      const testAcc = TEST_ACCOUNTS.find(a => 
+        a.user.toLowerCase() === cleanId || 
+        a.email.toLowerCase() === cleanId
+      );
+      if (testAcc) {
+        mockSeed();
+        const refreshedDb = getDB();
+        userEntry = Object.values(refreshedDb.users).find(u => 
+          u.profile.username.toLowerCase() === cleanId || 
+          u.profile.email.toLowerCase() === email.toLowerCase()
+        );
+      }
     }
-    throw new Error(`Invalid credentials for '${identifier}'.`);
+    
+    if (userEntry) {
+      if (userEntry.password === pass || pass === 'password123') {
+        localStorage.setItem('rmc_mock_session', userEntry.profile.uid);
+        notifyAuthChange();
+        return userEntry;
+      } else {
+        throw new Error(`Incorrect password for '${identifier}'. Test accounts use 'password123'.`);
+      }
+    }
+    throw new Error(`User '${identifier}' not found. Try 'ossa', 'admin', 'ssg', 'mayor', or 'student'.`);
   },
   signOut: () => {
     localStorage.removeItem('rmc_mock_session');
@@ -170,24 +322,146 @@ export const mockSeed = () => {
         username: acc.user.toLowerCase(),
         email: acc.email,
         role: acc.role as any,
-        student_id: acc.user === 'student' ? '2024-00123' : `ID-${Math.floor(Math.random() * 9000) + 1000}`,
-        photo_url: `https://i.pravatar.cc/150?u=${uid}`,
+        student_id: acc.user === 'student' ? '2024-00123' : (acc.user === 'ossa' ? 'OSSA-DIR-01' : `ID-${Math.floor(Math.random() * 9000) + 1000}`),
+        photo_url: acc.user === 'ossa' ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' : `https://i.pravatar.cc/150?u=${uid}`,
         school_data: {
           type: acc.user === 'student' ? 'High School' : 'College',
-          department: acc.user === 'student' ? "Senior High School" : 'College of Arts and Sciences',
-          level: "Grade 12",
-          section: "Newton",
+          department: acc.user === 'student' ? "Senior High School" : 'Office of Student Services and Affairs',
+          level: acc.user === 'student' ? "Grade 12" : "Administration",
+          section: acc.user === 'student' ? "Newton" : "OSSA Main",
           school_id: 'school_rmc'
         }
       },
       stats: {
-        attendance_rate: 98,
+        attendance_rate: acc.role === 'student' ? 88 : 100,
         sanction_hours: acc.role === 'student' ? 12 : 0,
         events_attended: 15,
-        events_missed: 1
+        events_missed: 2
       }
     };
   });
+
+  // Seed additional sample students for OSSA roster review
+  const extraStudents = [
+    {
+      uid: 'mock_uid_juan',
+      name: 'Juan Dela Cruz',
+      student_id: '2024-00101',
+      email: 'juan.delacruz@rmc.edu.ph',
+      dept: 'Senior High School',
+      level: 'Grade 11',
+      section: 'Pascal',
+      sanction_hours: 8,
+      attendance_rate: 91
+    },
+    {
+      uid: 'mock_uid_clara',
+      name: 'Clara Santos',
+      student_id: '2024-00102',
+      email: 'clara.santos@rmc.edu.ph',
+      dept: 'Senior High School',
+      level: 'Grade 12',
+      section: 'Einstein',
+      sanction_hours: 0,
+      attendance_rate: 99
+    },
+    {
+      uid: 'mock_uid_marco',
+      name: 'Marco Antonio Polo',
+      student_id: '2024-00103',
+      email: 'marco.polo@rmc.edu.ph',
+      dept: 'College of Arts and Sciences',
+      level: '2nd Year',
+      section: 'CS-2A',
+      sanction_hours: 18,
+      attendance_rate: 76
+    },
+    {
+      uid: 'mock_uid_bea',
+      name: 'Beatriz Alonzo',
+      student_id: '2024-00104',
+      email: 'beatriz.alonzo@rmc.edu.ph',
+      dept: 'Senior High School',
+      level: 'Grade 12',
+      section: 'Newton',
+      sanction_hours: 4,
+      attendance_rate: 94
+    },
+    {
+      uid: 'mock_uid_andres',
+      name: 'Andres Bonifacio',
+      student_id: '2024-00105',
+      email: 'andres.bonifacio@rmc.edu.ph',
+      dept: 'Junior High School',
+      level: 'Grade 10',
+      section: 'Kamagong',
+      sanction_hours: 0,
+      attendance_rate: 100
+    }
+  ];
+
+  extraStudents.forEach(s => {
+    db.users[s.uid] = {
+      password: 'password123',
+      profile: {
+        uid: s.uid,
+        name: s.name,
+        username: s.name.toLowerCase().replace(/\s+/g, '.'),
+        email: s.email,
+        role: 'student',
+        student_id: s.student_id,
+        photo_url: `https://i.pravatar.cc/150?u=${s.uid}`,
+        school_data: {
+          type: s.dept.includes('College') ? 'College' : 'High School',
+          department: s.dept,
+          level: s.level,
+          section: s.section,
+          school_id: 'school_rmc'
+        }
+      },
+      stats: {
+        attendance_rate: s.attendance_rate,
+        sanction_hours: s.sanction_hours,
+        events_attended: 12,
+        events_missed: s.sanction_hours > 0 ? 3 : 0
+      }
+    };
+    db.sanction_logs[s.uid] = s.sanction_hours > 0 ? [
+      { timestamp: Date.now() - 86400000 * 5, change: s.sanction_hours, reason: "Unexcused Absence from Flag Raising Ceremony" }
+    ] : [];
+  });
+
+  // Seed sample excuse applications for OSSA
+  db.excuse_applications = {
+    'exc_01': {
+      id: 'exc_01',
+      student_uid: 'mock_uid_student',
+      student_name: 'Pedro Penduko',
+      student_id: '2024-00123',
+      department: 'Senior High School',
+      section: 'Grade 12 - Newton',
+      event_title: 'Weekly Flag Raising Ceremony',
+      category: 'medical',
+      reason: 'Suffered high fever and flu. Medical certificate attached from Davao Doctors Hospital.',
+      proof_url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=500&auto=format&fit=crop&q=80',
+      submission_date: Date.now() - 86400000,
+      status: 'pending'
+    },
+    'exc_02': {
+      id: 'exc_02',
+      student_uid: 'mock_uid_marco',
+      student_name: 'Marco Antonio Polo',
+      student_id: '2024-00103',
+      department: 'College of Arts and Sciences',
+      section: 'CS-2A',
+      event_title: 'Institutional Convocation Assembly',
+      category: 'institutional',
+      reason: 'Represented school in Regional Collegiate Cyber Security Quiz Bowl.',
+      proof_url: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=500&auto=format&fit=crop&q=80',
+      submission_date: Date.now() - 86400000 * 2,
+      status: 'pending'
+    }
+  };
   
   db.events['e1'] = {
     id: 'e1',
@@ -203,7 +477,7 @@ export const mockSeed = () => {
     target: { all: true },
     location: { lat: 7.0736, lng: 125.6126, radius_meters: 5000 },
     timestamp: Date.now()
-  } as Event;
+  } as AppEvent;
   
   saveDB(db);
 };
@@ -211,7 +485,18 @@ export const mockSeed = () => {
 export const mockData = {
   getEvents: () => Object.values(getDB().events),
   getApplications: () => Object.values(getDB().applications),
+  getExcuseApplications: () => Object.values(getDB().excuse_applications || {}),
   getSchoolStructure: () => getDB().school_structure,
+  getAllStudents: () => {
+    const db = getDB();
+    return Object.values(db.users)
+      .filter(u => u.profile.role === 'student' || u.profile.role === 'mayor')
+      .map(u => ({
+        ...u.profile,
+        stats: u.stats,
+        sanction_logs: db.sanction_logs[u.profile.uid] || []
+      }));
+  },
   getStudentsBySection: (sectionName: string) => {
     const db = getDB();
     return Object.values(db.users)
@@ -220,7 +505,6 @@ export const mockData = {
   },
   getUserProfile: (studentIdentifier: string) => {
     const db = getDB();
-    // Search across uid and student_id
     return Object.values(db.users).find(u => 
       u.profile.uid === studentIdentifier || 
       u.profile.student_id === studentIdentifier
@@ -228,7 +512,34 @@ export const mockData = {
   },
   getUserDetail: (uid: string) => {
     const db = getDB();
-    return db.users[uid];
+    const u = db.users[uid];
+    if (!u) return null;
+    return {
+      ...u,
+      sanction_logs: db.sanction_logs[uid] || [],
+      excuse_applications: Object.values(db.excuse_applications || {}).filter(a => a.student_uid === uid)
+    };
+  },
+  createUser: (profile: Omit<UserProfile, 'uid' | 'photo_url'>, password = 'password123') => {
+    const db = getDB();
+    const uid = `u_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    db.usernames[profile.username.toLowerCase()] = profile.email.toLowerCase();
+    db.users[uid] = {
+      password,
+      profile: {
+        ...profile,
+        uid,
+        photo_url: `https://i.pravatar.cc/150?u=${uid}`,
+      } as UserProfile,
+      stats: {
+        attendance_rate: 100,
+        sanction_hours: 0,
+        events_attended: 0,
+        events_missed: 0
+      }
+    };
+    saveDB(db);
+    return uid;
   },
   addSchoolNode: (parentId: string | null, node: SchoolNode) => {
     const db = getDB();
@@ -258,16 +569,91 @@ export const mockData = {
       notifyAuthChange();
     }
   },
-  adjustSanctionHours: (uid: string, hours: number, reason: string = "Manual Adjustment") => {
+  adjustSanctionHours: (uid: string, hoursDelta: number, reason: string = "Manual Adjustment") => {
     const db = getDB();
     if (db.users[uid]) {
-      db.users[uid].stats.sanction_hours = Math.max(0, db.users[uid].stats.sanction_hours + hours);
+      const current = db.users[uid].stats.sanction_hours || 0;
+      const newTotal = Math.max(0, current + hoursDelta);
+      db.users[uid].stats.sanction_hours = newTotal;
       if (!db.sanction_logs[uid]) db.sanction_logs[uid] = [];
-      db.sanction_logs[uid].push({ timestamp: Date.now(), change: hours, reason });
+      db.sanction_logs[uid].unshift({
+        timestamp: Date.now(),
+        change: hoursDelta,
+        new_total: newTotal,
+        reason,
+        performed_by: 'OSSA Office'
+      });
       saveDB(db);
+      notifyAuthChange();
       return true;
     }
     return false;
+  },
+  resolveStudentSanctions: (uid: string, notes: string = "Cleared and Resolved by OSSA") => {
+    const db = getDB();
+    if (db.users[uid]) {
+      const previousHours = db.users[uid].stats.sanction_hours || 0;
+      db.users[uid].stats.sanction_hours = 0;
+      if (!db.sanction_logs[uid]) db.sanction_logs[uid] = [];
+      db.sanction_logs[uid].unshift({
+        timestamp: Date.now(),
+        change: -previousHours,
+        new_total: 0,
+        reason: notes,
+        performed_by: 'OSSA Director'
+      });
+      saveDB(db);
+      notifyAuthChange();
+      return true;
+    }
+    return false;
+  },
+  reviewExcuseApplication: (id: string, status: 'approved' | 'rejected', notes: string, waivedHours: number = 0) => {
+    const db = getDB();
+    if (db.excuse_applications[id]) {
+      db.excuse_applications[id].status = status;
+      db.excuse_applications[id].review_notes = notes;
+      db.excuse_applications[id].reviewed_at = Date.now();
+      db.excuse_applications[id].reviewed_by = 'OSSA Director';
+      db.excuse_applications[id].waived_hours = waivedHours;
+
+      // If approved and waivedHours > 0, deduct from student's sanction_hours
+      if (status === 'approved' && waivedHours > 0) {
+        const studentUid = db.excuse_applications[id].student_uid;
+        if (db.users[studentUid]) {
+          const current = db.users[studentUid].stats.sanction_hours || 0;
+          const newTotal = Math.max(0, current - waivedHours);
+          db.users[studentUid].stats.sanction_hours = newTotal;
+          if (!db.sanction_logs[studentUid]) db.sanction_logs[studentUid] = [];
+          db.sanction_logs[studentUid].unshift({
+            timestamp: Date.now(),
+            change: -waivedHours,
+            new_total: newTotal,
+            reason: `Excuse Application Approved (${db.excuse_applications[id].category.toUpperCase()}): ${notes}`,
+            performed_by: 'OSSA Director'
+          });
+        }
+      }
+      saveDB(db);
+      notifyAuthChange();
+      return true;
+    }
+    return false;
+  },
+  submitExcuseApplication: (app: Omit<ExcuseApplication, 'id' | 'submission_date' | 'status'>) => {
+    const db = getDB();
+    const id = `exc_${Date.now()}`;
+    const newApp: ExcuseApplication = {
+      ...app,
+      id,
+      submission_date: Date.now(),
+      status: 'pending'
+    };
+    if (!db.excuse_applications) db.excuse_applications = {};
+    db.excuse_applications[id] = newApp;
+    saveDB(db);
+    notifyAuthChange();
+    return newApp;
   },
   submitApplication: (data: UserProfile) => {
     const db = getDB();
@@ -293,10 +679,10 @@ export const mockData = {
       saveDB(db);
     }
   },
-  createEvent: (ev: Omit<Event, 'id'>) => {
+  createEvent: (ev: Omit<AppEvent, 'id'>) => {
     const db = getDB();
     const id = `ev_${Date.now()}`;
-    db.events[id] = { ...ev, id } as Event;
+    db.events[id] = { ...ev, id } as AppEvent;
     saveDB(db);
   },
   logAttendance: (eventId: string, studentUid: string, loggerUid: string, loggerName: string) => {

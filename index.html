@@ -4,34 +4,89 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RMC SSG Tracker</title>
+    <title>Institution Attendance and Records System (IARS)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,300..1000;1,300..1000&family=Outfit:wght@300..900&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
+        darkMode: 'class',
         theme: {
           extend: {
+            fontFamily: {
+              sans: ['"Nunito"', '"Outfit"', 'system-ui', '-apple-system', 'sans-serif'],
+              display: ['"Outfit"', '"Nunito"', 'sans-serif'],
+            },
             colors: {
+              rmc: {
+                blue: '#0081C8',
+                'blue-dark': '#0055B7',
+                green: '#00A859',
+                orange: '#FF8C00',
+                dark: '#111827',
+                light: '#F8FAFC',
+              },
               brand: {
-                50: '#f0f4ff',
-                100: '#e0e7ff',
-                800: '#172554',
-                900: '#0E1B42',
-                950: '#020617',
+                50: '#e6f4fc',
+                100: '#cce9f9',
+                200: '#99d3f3',
+                300: '#66bded',
+                400: '#00A3E0',
+                500: '#0081C8',
+                600: '#006bb0',
+                700: '#0055B7',
+                800: '#003d85',
+                900: '#002859',
+                950: '#111827',
               },
               gold: {
-                50: '#fbf8eb',
-                100: '#f5efcd',
-                400: '#D4AF37',
-                500: '#b89225',
-                600: '#99752D',
+                50: '#fffbf0',
+                100: '#fff4d6',
+                200: '#ffe3ad',
+                300: '#ffd085',
+                400: '#FFD700',
+                500: '#FF8C00',
+                600: '#e07800',
+                700: '#b85f00',
+              },
+              emerald: {
+                50: '#f0fdf4',
+                100: '#dcfce7',
+                200: '#bbf7d0',
+                300: '#86efac',
+                400: '#4ade80',
+                500: '#00A859',
+                600: '#008e4a',
+                700: '#00703a',
               },
               slate: {
                 50: '#F8FAFC',
+                100: '#F1F5F9',
+                200: '#E2E8F0',
+                300: '#CBD5E1',
+                400: '#94A3B8',
+                500: '#64748B',
+                600: '#475569',
+                700: '#334155',
+                800: '#1E293B',
+                850: '#151F32',
+                900: '#111827',
+                950: '#0B0F19',
               }
             },
+            boxShadow: {
+              'glow-gold': '0 0 25px -5px rgba(255, 140, 0, 0.4)',
+              'glow-brand': '0 0 25px -5px rgba(0, 129, 200, 0.4)',
+              'panel': '0 20px 50px -10px rgba(17, 24, 39, 0.15)',
+              'modal': '0 25px 60px -15px rgba(17, 24, 39, 0.35)',
+            },
             backgroundImage: {
-              'gold-gradient': 'linear-gradient(135deg, #F2D680 0%, #D4AF37 50%, #99752D 100%)',
+              'gold-gradient': 'linear-gradient(135deg, #FFD700 0%, #FF8C00 100%)',
+              'brand-gradient': 'linear-gradient(135deg, #00A3E0 0%, #0055B7 100%)',
+              'brand-dark-gradient': 'linear-gradient(135deg, #002859 0%, #111827 100%)',
+              'green-gradient': 'linear-gradient(135deg, #00A859 0%, #00703a 100%)',
+              'glass-gradient': 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%)',
             }
           }
         }
@@ -39,13 +94,35 @@
     </script>
     <style>
       body {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Nunito', 'Outfit', sans-serif;
         background-color: #F8FAFC;
         color: #0f172a;
+      }
+      .dark body {
+        background-color: #0f172a;
+        color: #f8fafc;
       }
       .qr-scanner-container video {
         border-radius: 1rem;
         border: 4px solid #D4AF37;
+      }
+      /* Custom Scrollbar for dark mode compatibility */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 4px;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #334155; 
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
       }
     </style>
   <script type="importmap">
@@ -64,8 +141,10 @@
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
-  </body>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>

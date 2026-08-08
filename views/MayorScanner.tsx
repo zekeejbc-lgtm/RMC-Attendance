@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useAuth } from '../components/AuthContext';
-import { Event, UserProfile } from '../types';
+import { AppEvent, UserProfile } from '../types';
 import Button from '../components/ui/Button';
 import { 
   Scan, 
@@ -20,8 +20,8 @@ import { mockData } from '../lib/mockBackend';
 const MayorScanner: React.FC = () => {
   const { profile, isMock } = useAuth();
   const [mode, setMode] = useState<'attendance' | 'sanctions'>('attendance');
-  const [activeEvents, setActiveEvents] = useState<Event[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [activeEvents, setActiveEvents] = useState<AppEvent[]>([]);
+  const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<UserProfile | null>(null);
   const [scanStatus, setScanStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -122,10 +122,10 @@ const MayorScanner: React.FC = () => {
       </header>
 
       {!isScanning ? (
-        <div className="bg-white p-6 lg:p-10 rounded-2xl border border-slate-100 shadow-xl space-y-8 animate-in fade-in">
+        <div className="bg-white dark:bg-slate-800 p-6 lg:p-10 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-xl space-y-8 animate-in fade-in">
           {mode === 'attendance' ? (
             <div className="space-y-4">
-              <h3 className="text-[10px] font-black text-brand-900 uppercase tracking-widest flex items-center gap-2">
+              <h3 className="text-[10px] font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
                  <History size={16} /> Operational Directives
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -133,11 +133,11 @@ const MayorScanner: React.FC = () => {
                   <button 
                     key={ev.id} 
                     onClick={() => setSelectedEvent(ev)}
-                    className={`p-4 rounded-xl border-2 text-left transition-all flex justify-between items-center group ${selectedEvent?.id === ev.id ? 'border-gold-400 bg-gold-50 shadow-inner' : 'border-slate-50'}`}
+                    className={`p-4 rounded-xl border-2 text-left transition-all flex justify-between items-center group ${selectedEvent?.id === ev.id ? 'border-gold-400 bg-gold-50 dark:bg-gold-950/40 shadow-inner' : 'border-slate-50 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-900'}`}
                   >
                     <div>
-                      <p className="font-black text-brand-900 uppercase tracking-tighter text-sm">{ev.title}</p>
-                      <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest mt-0.5">Deployment Live</p>
+                      <p className="font-black text-brand-900 dark:text-slate-100 uppercase tracking-tighter text-sm">{ev.title}</p>
+                      <p className="text-[8px] font-black text-slate-300 dark:text-slate-500 uppercase tracking-widest mt-0.5">Deployment Live</p>
                     </div>
                     {selectedEvent?.id === ev.id && <CheckCircle2 size={18} className="text-gold-500" />}
                   </button>
@@ -146,12 +146,12 @@ const MayorScanner: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 text-center space-y-4">
+              <div className="bg-slate-50 dark:bg-slate-900 p-8 rounded-2xl border border-slate-100 dark:border-slate-700/80 text-center space-y-4">
                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Adjustment Power</p>
                  <div className="flex items-center justify-center gap-8">
-                    <button onClick={() => setReductionHours(Math.max(1, reductionHours - 1))} className="w-12 h-12 rounded-xl bg-white shadow-md text-brand-900 flex items-center justify-center border border-slate-200 active:scale-90 transition-all">-</button>
-                    <span className="text-5xl font-black text-brand-900 tracking-tighter">{reductionHours}h</span>
-                    <button onClick={() => setReductionHours(reductionHours + 1)} className="w-12 h-12 rounded-xl bg-white shadow-md text-brand-900 flex items-center justify-center border border-slate-200 active:scale-90 transition-all">+</button>
+                    <button onClick={() => setReductionHours(Math.max(1, reductionHours - 1))} className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 shadow-md text-brand-900 dark:text-slate-100 flex items-center justify-center border border-slate-200 dark:border-slate-700 active:scale-90 transition-all">-</button>
+                    <span className="text-5xl font-black text-brand-900 dark:text-slate-100 tracking-tighter">{reductionHours}h</span>
+                    <button onClick={() => setReductionHours(reductionHours + 1)} className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 shadow-md text-brand-900 dark:text-slate-100 flex items-center justify-center border border-slate-200 dark:border-slate-700 active:scale-90 transition-all">+</button>
                  </div>
                  <p className="text-[8px] font-bold text-red-400 uppercase tracking-widest italic opacity-60">President Level Authorization Required</p>
               </div>

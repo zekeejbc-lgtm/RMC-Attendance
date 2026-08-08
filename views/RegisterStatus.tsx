@@ -6,6 +6,7 @@ import { auth, db } from '../firebase';
 import { useAuth } from '../components/AuthContext';
 import { Application } from '../types';
 import Button from '../components/ui/Button';
+import ThemeToggle from '../components/ui/ThemeToggle';
 import { Clock, CheckCircle2, XCircle, AlertCircle, LogOut } from 'lucide-react';
 import { mockData, mockAuth } from '../lib/mockBackend';
 
@@ -54,30 +55,34 @@ const RegisterStatus: React.FC = () => {
   };
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-900"></div>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-900 dark:border-gold-400"></div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-brand-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 text-center">
+    <div className="min-h-screen bg-brand-900 dark:bg-slate-950 flex items-center justify-center p-4 relative">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
+
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 text-center border border-slate-100 dark:border-slate-800">
         {!application ? (
           <div className="space-y-6">
             <AlertCircle size={64} className="mx-auto text-gold-500" />
-            <h2 className="text-2xl font-bold text-brand-900">No Application Found</h2>
-            <p className="text-slate-500">You haven't submitted a registration application yet.</p>
+            <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">No Application Found</h2>
+            <p className="text-slate-500 dark:text-slate-400">You haven't submitted a registration application yet.</p>
             <Button onClick={() => navigate('/register')}>Apply Now</Button>
             <Button variant="secondary" onClick={handleLogout}>Sign Out</Button>
           </div>
         ) : application.status === 'pending' ? (
           <div className="space-y-6 animate-pulse">
-            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full mx-auto flex items-center justify-center shadow-inner">
+            <div className="w-20 h-20 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-full mx-auto flex items-center justify-center shadow-inner">
                <Clock size={40} />
             </div>
-            <h2 className="text-2xl font-bold text-brand-900">Review Pending</h2>
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-500 leading-relaxed text-center">
-              Your application is being verified. Log in as an <span className="font-bold text-brand-900 underline" onClick={() => handleLogout()}>Admin</span> to approve it.
+            <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Review Pending</h2>
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-700/60 text-sm text-slate-500 dark:text-slate-400 leading-relaxed text-center">
+              Your application is being verified. Log in as an <span className="font-bold text-brand-900 dark:text-gold-400 underline cursor-pointer" onClick={() => handleLogout()}>Admin</span> to approve it.
             </div>
             <Button variant="secondary" onClick={handleLogout}>
               <LogOut size={20}/> Sign Out
@@ -86,14 +91,14 @@ const RegisterStatus: React.FC = () => {
         ) : application.status === 'rejected' ? (
           <div className="space-y-6">
             <XCircle size={64} className="mx-auto text-red-500" />
-            <h2 className="text-2xl font-bold text-brand-900">Application Rejected</h2>
-            <div className="p-4 bg-red-50 rounded-2xl border border-red-100 text-sm text-red-600">
+            <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Application Rejected</h2>
+            <div className="p-4 bg-red-50 dark:bg-red-950/50 rounded-2xl border border-red-100 dark:border-red-900/50 text-sm text-red-600 dark:text-red-300">
               <p className="font-bold mb-1">Reason:</p>
               <p>{application.rejection_reason || 'Information provided does not match records.'}</p>
             </div>
-            <p className="text-xs text-slate-400">Trial Count: {application.rejection_count}/3 (Monthly)</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Trial Count: {application.rejection_count}/3 (Monthly)</p>
             {application.rejection_count >= 3 ? (
-              <div className="p-4 bg-slate-100 rounded-xl text-slate-500 text-xs italic">
+              <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-xs italic">
                 Form locked. Max rejection limit reached.
               </div>
             ) : (
@@ -104,8 +109,8 @@ const RegisterStatus: React.FC = () => {
         ) : (
           <div className="space-y-6">
             <CheckCircle2 size={64} className="mx-auto text-green-500" />
-            <h2 className="text-2xl font-bold text-brand-900">Account Approved!</h2>
-            <p className="text-slate-500">Welcome to the Regal system. Your profile is now active.</p>
+            <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Account Approved!</h2>
+            <p className="text-slate-500 dark:text-slate-400">Welcome to the Regal system. Your profile is now active.</p>
             <Button variant="gold" onClick={() => window.location.reload()}>Go to Dashboard</Button>
           </div>
         )}

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { TEST_ACCOUNTS } from '../lib/seed';
 import { mockAuth, mockSeed, getDB } from '../lib/mockBackend';
+import ThemeToggle from '../components/ui/ThemeToggle';
 
 const Login: React.FC = () => {
   const { isMock, user } = useAuth();
@@ -91,17 +92,22 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-brand-950 relative overflow-hidden">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-gold-600/10 rounded-full blur-3xl"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-gold-400/10 rounded-full blur-3xl"></div>
 
       <div className="w-full max-w-sm space-y-4 relative z-10 animate-in fade-in zoom-in duration-500">
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-white/10">
-          <div className="bg-gold-gradient p-6 text-center border-b-2 border-brand-900/10">
-            <div className="w-16 h-16 bg-brand-900 rounded-xl mx-auto flex items-center justify-center shadow-lg mb-3 border border-gold-400/20">
-               <span className="text-gold-400 font-black text-3xl">R</span>
-            </div>
-            <h2 className="text-lg font-black text-brand-900 uppercase tracking-widest leading-none">Project Regalia</h2>
-            <p className="text-brand-800 text-[9px] font-black mt-2 uppercase tracking-[0.3em] opacity-60">Identity Verification</p>
+          <div className="bg-brand-gradient p-6 text-center border-b-2 border-emerald-500/20">
+            <img 
+              src="https://i.imgur.com/K3T5yIT.jpeg" 
+              alt="IARS Academic Seal" 
+              className="w-20 h-20 rounded-full object-cover mx-auto shadow-xl mb-3 ring-4 ring-gold-400/40" 
+            />
+            <h2 className="text-base font-black text-white uppercase tracking-wide leading-tight">Institution Attendance & Records System</h2>
+            <p className="text-gold-300 text-[9px] font-black mt-2 uppercase tracking-[0.3em]">Identity Verification</p>
           </div>
 
           <div className="p-6">

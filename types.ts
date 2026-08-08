@@ -1,5 +1,24 @@
 
-export type UserRole = 'student' | 'mayor' | 'ssg' | 'admin';
+export type UserRole = 'student' | 'mayor' | 'ssg' | 'admin' | 'ossa';
+
+export interface ExcuseApplication {
+  id: string;
+  student_uid: string;
+  student_name: string;
+  student_id: string;
+  department: string;
+  section: string;
+  event_title: string;
+  category: 'medical' | 'personal' | 'institutional' | 'emergency';
+  reason: string;
+  proof_url?: string;
+  submission_date: number;
+  status: 'pending' | 'approved' | 'rejected';
+  review_notes?: string;
+  waived_hours?: number;
+  reviewed_at?: number;
+  reviewed_by?: string;
+}
 
 export interface UserProfile {
   uid: string;
@@ -35,7 +54,7 @@ export interface UserStats {
   events_missed: number;
 }
 
-export interface Event {
+export interface AppEvent {
   id: string;
   title: string;
   description?: string;
@@ -65,7 +84,7 @@ export interface Event {
 export interface SchoolNode {
   id: string;
   name: string;
-  type: 'school' | 'department' | 'track' | 'strand' | 'level' | 'section';
+  type: 'school' | 'department' | 'sub_department' | 'track' | 'strand' | 'specialization' | 'level' | 'section' | 'college' | 'program' | 'major' | 'secondary' | 'elementary' | 'special';
   logo_url?: string;
   children?: SchoolNode[];
   metadata?: any;

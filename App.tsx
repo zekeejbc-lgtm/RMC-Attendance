@@ -2,14 +2,23 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
+import { ThemeProvider } from './components/ThemeContext';
 import Layout from './components/ui/Layout';
-import Login from './views/Login';
 import Register from './views/Register';
 import RegisterStatus from './views/RegisterStatus';
 import Dashboard from './views/Dashboard';
 import StudentQR from './views/StudentQR';
+import StudentEvents from './views/StudentEvents';
+import StudentCeremonies from './views/StudentCeremonies';
+import StudentRecords from './views/StudentRecords';
+import StudentProfile from './views/StudentProfile';
 import MayorScanner from './views/MayorScanner';
 import SSGPanel from './views/SSGPanel';
+import LandingPage from './views/LandingPage';
+
+import AttendanceDashboard from './views/AttendanceDashboard';
+import ManageMembers from './views/ManageMembers';
+import OSSADashboard from './views/OSSADashboard';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: string[] }> = ({ children, roles }) => {
   const { user, loading, profile } = useAuth();
@@ -20,15 +29,20 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: string[] }> 
     </div>
   );
 
-  if (!user) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/login" replace />;
 
   // If authenticated but no profile, they are likely still in the application phase
   if (!profile) {
-    return <Navigate to="/register/status" />;
+    return <Navigate to="/register/status" replace />;
   }
 
-  if (roles && !roles.includes(profile.role)) {
-    return <Navigate to="/dashboard" />;
+  // Handle OSSA role routing
+  if (profile.role === 'ossa') {
+    if (!roles || !roles.includes('ossa')) {
+      return <Navigate to="/ossa/dashboard" replace />;
+    }
+  } else if (roles && !roles.includes(profile.role)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Layout>{children}</Layout>;
@@ -36,10 +50,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: string[] }> 
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <HashRouter>
+          <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LandingPage defaultOpenLogin={true} />} />
           <Route path="/register" element={<Register />} />
           <Route path="/register/status" element={<RegisterStatus />} />
           
@@ -50,27 +66,68 @@ const App: React.FC = () => {
           } />
 
           <Route path="/student/qr" element={
-            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin']}>
+            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
               <StudentQR />
             </ProtectedRoute>
           } />
 
+          <Route path="/student/events" element={
+            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
+              <StudentEvents />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/student/ceremonies" element={
+            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
+              <StudentCeremonies />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/student/records" element={
+            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
+              <StudentRecords />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/student/profile" element={
+            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
+              <StudentProfile />
+            </ProtectedRoute>
+          } />
+
           <Route path="/mayor/scan" element={
-            <ProtectedRoute roles={['mayor', 'ssg', 'admin']}>
+            <ProtectedRoute roles={['mayor', 'ssg', 'admin', 'ossa']}>
               <MayorScanner />
             </ProtectedRoute>
           } />
 
           <Route path="/ssg/panel" element={
-            <ProtectedRoute roles={['ssg', 'admin']}>
+            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
               <SSGPanel />
             </ProtectedRoute>
           } />
 
-          <Route path="/" element={<Navigate to="/dashboard" />} />
+          <Route path="/admin/attendance" element={
+            <ProtectedRoute roles={['ssg', 'admin', 'mayor', 'ossa']}>
+              <AttendanceDashboard />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin/members" element={
+            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
+              <ManageMembers />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/ossa/dashboard" element={
+            <ProtectedRoute roles={['ossa', 'admin']}>
+              <OSSADashboard />
+            </ProtectedRoute>
+          } />
         </Routes>
       </HashRouter>
     </AuthProvider>
+  </ThemeProvider>
   );
 };
 

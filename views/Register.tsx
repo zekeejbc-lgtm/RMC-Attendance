@@ -5,6 +5,8 @@ import { useAuth } from '../components/AuthContext';
 import Button from '../components/ui/Button';
 import { mockData } from '../lib/mockBackend';
 import { SchoolNode } from '../types';
+import CustomSelect from '../components/ui/CustomSelect';
+import ThemeToggle from '../components/ui/ThemeToggle';
 import { 
   User, School, Shield, ChevronRight, ChevronLeft, 
   Camera, CheckCircle2, AlertCircle, ImageIcon, Upload, CreditCard,
@@ -77,15 +79,22 @@ const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-950 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-brand-950 flex flex-col items-center justify-center p-4 relative">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden animate-in fade-in duration-500 border border-white/10">
-        <div className="bg-gold-gradient p-6 text-brand-900 flex justify-between items-center border-b-2 border-brand-900/10">
-          <div>
-            <h2 className="text-xl font-black uppercase tracking-tight">System Enrollment</h2>
-            <p className="text-brand-900/60 text-[8px] font-black tracking-widest uppercase">Stage {step} of 3 • Protocol</p>
-          </div>
-          <div className="w-10 h-10 bg-brand-900 rounded-lg flex items-center justify-center text-gold-400">
-             <Shield size={20} />
+        <div className="bg-brand-gradient p-6 text-white flex justify-between items-center border-b-2 border-emerald-500">
+          <div className="flex items-center gap-3">
+            <img 
+              src="https://i.imgur.com/K3T5yIT.jpeg" 
+              alt="IARS Academic Seal" 
+              className="w-11 h-11 rounded-full object-cover ring-2 ring-gold-400/50 shadow-md shrink-0" 
+            />
+            <div>
+              <h2 className="text-xl font-black uppercase tracking-tight">System Enrollment</h2>
+              <p className="text-emerald-300 text-[9px] font-bold tracking-widest uppercase mt-0.5">Stage {step} of 3 • Protocol</p>
+            </div>
           </div>
         </div>
 
@@ -143,71 +152,83 @@ const Register: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 gap-2">
-                <select 
-                  className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-100 outline-none font-bold text-brand-900 text-[11px] appearance-none"
-                  onChange={e => {
-                    const s = structure.find(x => x.id === e.target.value);
+                <CustomSelect 
+                  label="Campus Location"
+                  options={structure.map(s => ({ value: s.id, label: s.name }))}
+                  value={selectedSchool?.id || ''}
+                  onChange={val => {
+                    const s = structure.find(x => x.id === val);
                     setSelectedSchool(s || null);
                     setSelectedDept(null); setSelectedTrack(null); setSelectedStrand(null); setSelectedLvl(null); setSelectedSec(null);
                   }}
-                >
-                  <option value="">Campus Location</option>
-                  {structure.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                  placeholder="Select Campus"
+                />
 
                 {selectedSchool && (
-                  <select 
-                    className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-100 outline-none font-bold text-brand-900 text-[11px] appearance-none"
-                    onChange={e => {
-                      const d = selectedSchool.children?.find(x => x.id === e.target.value);
+                  <CustomSelect 
+                    label="Academic Department"
+                    options={selectedSchool.children?.map(d => ({ value: d.id, label: d.name })) || []}
+                    value={selectedDept?.id || ''}
+                    onChange={val => {
+                      const d = selectedSchool.children?.find(x => x.id === val);
                       setSelectedDept(d || null);
                       setSelectedTrack(null); setSelectedStrand(null); setSelectedLvl(null); setSelectedSec(null);
                     }}
-                  >
-                    <option value="">Academic Department</option>
-                    {selectedSchool.children?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+                    placeholder="Select Department"
+                  />
                 )}
 
                 {isSHS && selectedDept && (
                   <div className="grid grid-cols-2 gap-2">
-                    <select className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 font-bold text-[11px]" onChange={e => {
-                      const t = selectedDept.children?.find(x => x.id === e.target.value);
-                      setSelectedTrack(t || null); setSelectedStrand(null); setSelectedLvl(null); setSelectedSec(null);
-                    }}>
-                      <option value="">Track</option>
-                      {selectedDept.children?.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
+                    <CustomSelect 
+                      label="Track"
+                      options={selectedDept.children?.map(t => ({ value: t.id, label: t.name })) || []}
+                      value={selectedTrack?.id || ''}
+                      onChange={val => {
+                        const t = selectedDept.children?.find(x => x.id === val);
+                        setSelectedTrack(t || null); setSelectedStrand(null); setSelectedLvl(null); setSelectedSec(null);
+                      }}
+                      placeholder="Select Track"
+                    />
                     {selectedTrack && (
-                      <select className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 font-bold text-[11px]" onChange={e => {
-                        const s = selectedTrack.children?.find(x => x.id === e.target.value);
-                        setSelectedStrand(s || null); setSelectedLvl(null); setSelectedSec(null);
-                      }}>
-                        <option value="">Strand</option>
-                        {selectedTrack.children?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
+                      <CustomSelect 
+                        label="Strand"
+                        options={selectedTrack.children?.map(s => ({ value: s.id, label: s.name })) || []}
+                        value={selectedStrand?.id || ''}
+                        onChange={val => {
+                          const s = selectedTrack.children?.find(x => x.id === val);
+                          setSelectedStrand(s || null); setSelectedLvl(null); setSelectedSec(null);
+                        }}
+                        placeholder="Select Strand"
+                      />
                     )}
                   </div>
                 )}
 
                 {((!isSHS && selectedDept) || (isSHS && selectedStrand)) && (
                   <div className="grid grid-cols-2 gap-2">
-                    <select className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 font-bold text-[11px]" onChange={e => {
-                      const parent = isSHS ? selectedStrand : selectedDept;
-                      const l = parent?.children?.find(x => x.id === e.target.value);
-                      setSelectedLvl(l || null); setSelectedSec(null);
-                    }}>
-                      <option value="">Year Level</option>
-                      {(isSHS ? selectedStrand : selectedDept)?.children?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                    </select>
+                    <CustomSelect 
+                      label="Year Level"
+                      options={(isSHS ? selectedStrand : selectedDept)?.children?.map(l => ({ value: l.id, label: l.name })) || []}
+                      value={selectedLvl?.id || ''}
+                      onChange={val => {
+                        const parent = isSHS ? selectedStrand : selectedDept;
+                        const l = parent?.children?.find(x => x.id === val);
+                        setSelectedLvl(l || null); setSelectedSec(null);
+                      }}
+                      placeholder="Select Level"
+                    />
                     {selectedLvl && (
-                      <select className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 font-bold text-[11px]" onChange={e => {
-                        const s = selectedLvl.children?.find(x => x.id === e.target.value);
-                        setSelectedSec(s || null);
-                      }}>
-                        <option value="">Class Section</option>
-                        {selectedLvl.children?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
+                      <CustomSelect 
+                        label="Class Section"
+                        options={selectedLvl.children?.map(s => ({ value: s.id, label: s.name })) || []}
+                        value={selectedSec?.id || ''}
+                        onChange={val => {
+                          const s = selectedLvl.children?.find(x => x.id === val);
+                          setSelectedSec(s || null);
+                        }}
+                        placeholder="Select Section"
+                      />
                     )}
                   </div>
                 )}
