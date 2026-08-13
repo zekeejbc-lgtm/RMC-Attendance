@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
 import { useAuth } from '../components/AuthContext';
 import { ShieldCheck, Info, Download, Sparkles, CheckCircle2 } from 'lucide-react';
+import Button from '../components/ui/Button';
+import { Page, PageHeader, Surface } from '../components/ui/Page';
 
 const StudentQR: React.FC = () => {
   const { profile } = useAuth();
@@ -125,18 +127,16 @@ const StudentQR: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-5 max-w-md mx-auto flex flex-col items-center animate-in zoom-in duration-200 space-y-4">
-      {/* Header Info */}
-      <div className="text-center space-y-0.5">
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-gold-50 dark:bg-gold-500/10 border border-gold-200 dark:border-gold-500/30 text-gold-700 dark:text-gold-300 rounded-full text-[9px] font-bold uppercase tracking-wider">
-          <Sparkles size={11} /> Digital Access Card
-        </div>
-        <h1 className="text-xl font-bold text-brand-900 dark:text-slate-100 uppercase tracking-tight">Student QR Passport</h1>
-        <p className="text-slate-400 dark:text-slate-400 text-[11px] font-medium">Use this minimalist QR code for instant event and ceremony attendance scanning.</p>
-      </div>
+    <Page className="max-w-lg animate-in zoom-in duration-200">
+      <PageHeader
+        className="justify-center text-center"
+        eyebrow={<span className="inline-flex items-center gap-1.5"><Sparkles size={12} /> Digital Access Card</span>}
+        title="Student QR Passport"
+        description="Use this minimalist QR code for instant event and ceremony attendance scanning."
+      />
 
       {/* Main Card */}
-      <div className="w-full bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden border border-slate-200 dark:border-slate-700 transition-all">
+      <Surface className="w-full overflow-hidden shadow-lg transition-all">
         <div className="bg-brand-gradient p-5 text-center relative border-b-2 border-emerald-500">
           <div className="absolute top-3 right-3 bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[8px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
             Verified
@@ -167,20 +167,26 @@ const StudentQR: React.FC = () => {
           </div>
 
           {/* QR Code Container */}
-          <div ref={qrWrapperRef} className="p-4 bg-white border border-slate-200 dark:border-slate-700 rounded-2xl shadow-inner mb-4 transition-all hover:border-gold-400/60">
+          <div
+            ref={qrWrapperRef}
+            role="img"
+            aria-label={`Student QR code for ${profile.name}`}
+            className="mb-4 w-full max-w-[min(17rem,calc(100vw-4rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-inner transition-all hover:border-gold-400/60 dark:border-slate-700"
+          >
             <QRCode 
               value={profile.student_id || profile.uid} 
               size={170} 
               fgColor="#0E1B42" 
               level="H"
+              className="h-auto w-full"
             />
           </div>
 
           {/* Download Action Button */}
-          <button
+          <Button
             onClick={handleDownloadPNG}
             disabled={downloading}
-            className="w-full py-2.5 px-4 bg-brand-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-md hover:bg-brand-800 active:scale-98 transition-all flex items-center justify-center gap-2 group border border-gold-400/30"
+            className="w-full border border-gold-400/30 uppercase tracking-wider sm:w-auto"
           >
             {downloading ? (
               <span className="animate-pulse">Generating Minimalist PNG...</span>
@@ -195,29 +201,29 @@ const StudentQR: React.FC = () => {
                 <span>Download Card as PNG</span>
               </>
             )}
-          </button>
+          </Button>
 
           {/* Security Badge */}
-          <div className="w-full mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-2.5">
+          <div className="mt-4 flex w-full items-center gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/50">
              <div className="w-7 h-7 bg-emerald-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-xs">
                 <ShieldCheck size={15} />
              </div>
-             <div className="text-left">
-                <p className="text-[11px] font-bold text-emerald-900">Cryptographically Secured</p>
-                <p className="text-[9px] text-emerald-700 font-medium">Linked to student record #{profile.student_id}</p>
+             <div className="min-w-0 text-left">
+                <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200">Cryptographically Secured</p>
+                <p className="text-[9px] text-emerald-700 font-medium [overflow-wrap:anywhere] dark:text-emerald-300">Linked to student record #{profile.student_id}</p>
              </div>
           </div>
         </div>
 
         {/* Card Footer */}
-        <div className="bg-slate-50 p-3.5 flex items-start gap-2 border-t border-slate-100">
+        <div className="flex items-start gap-2 border-t border-slate-100 bg-slate-50 p-3.5 dark:border-slate-700 dark:bg-slate-900/60">
           <Info size={14} className="text-slate-400 mt-0.5 shrink-0" />
           <p className="text-[10px] text-slate-500 leading-relaxed">
             Present this card during active attendance scanning for institutional events and mandatory flag ceremonies.
           </p>
         </div>
-      </div>
-    </div>
+      </Surface>
+    </Page>
   );
 };
 

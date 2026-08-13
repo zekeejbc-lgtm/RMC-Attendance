@@ -2,20 +2,23 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { mockData } from '../lib/mockBackend';
-import { AppEvent, SchoolNode, UserProfile } from '../types';
+import { AppEvent } from '../types';
 import CustomSelect from '../components/ui/CustomSelect';
 import { 
-  Filter, Calendar, Download, PieChart, BarChart, LineChart, 
+  Filter, Calendar, Download, PieChart,
   Users, CheckCircle, XCircle, Clock, AlertCircle, FileText, 
-  ChevronDown, ChevronRight, Search, Printer
+  Printer
 } from 'lucide-react';
 import { 
   PieChart as RePieChart, Pie, Cell, BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart as ReLineChart, Line, AreaChart, Area
+  LineChart as ReLineChart, Line
 } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import html2canvas from 'html2canvas';
+import Button from '../components/ui/Button';
+import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
+import { Modal } from '../components/ui/Modal';
 
 // --- Types ---
 
@@ -49,6 +52,17 @@ interface AttendanceRecord {
   program?: string; // or strand/track
   level: string;
 }
+
+const statusClasses: Record<AttendanceRecord['status'], string> = {
+  present: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+  late: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  excused: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+  absent: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
+  not_recorded: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200',
+};
+
+const formatStatus = (status: AttendanceRecord['status']) =>
+  status === 'not_recorded' ? 'No Record' : `${status.charAt(0).toUpperCase()}${status.slice(1)}`;
 
 // --- Mock Data Generator (since backend is limited) ---
 const generateMockAttendance = (events: AppEvent[], filter: FilterState): AttendanceRecord[] => {
@@ -257,427 +271,193 @@ const AttendanceDashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-6 animate-in fade-in">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-brand-900 dark:text-slate-100 uppercase tracking-tight">Attendance Dashboard</h1>
-          <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest">Analytics & Reporting Module</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowExportModal(true)} className="flex items-center gap-2 px-4 py-2 bg-brand-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-brand-800 transition-all shadow-lg">
-            <Printer size={16} /> Export Report
-          </button>
-          <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 text-brand-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm">
-            <Download size={16} /> CSV
-          </button>
-        </div>
-      </div>
+    <Page className="max-w-[1600px] animate-in fade-in">
+      <PageHeader
+        actions={(
+          <>
+            <Button className="sm:w-auto" onClick={() => setShowExportModal(true)} size="sm">
+              <Printer size={16} /> Export Report
+            </Button>
+            <Button className="sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-white" onClick={handleExportCSV} size="sm" variant="secondary">
+              <Download size={16} /> CSV
+            </Button>
+          </>
+        )}
+        className="flex-col sm:flex-row"
+        description="Analytics & Reporting Module"
+        eyebrow="Attendance Administration"
+        title="Attendance Dashboard"
+      />
 
-      {/* FILTERS */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
-        <div className="flex items-center gap-2 text-brand-900 dark:text-slate-100 font-black uppercase tracking-widest text-xs border-b border-slate-100 dark:border-slate-700 pb-4">
+      <Surface aria-label="Attendance filters" className="space-y-5 p-4 sm:p-6">
+        <h2 id="attendance-filters-heading" className="flex items-center gap-2 border-b border-slate-200 pb-4 text-xs font-black uppercase tracking-widest text-brand-900 dark:border-slate-700 dark:text-white">
           <Filter size={14} className="text-gold-500" /> Data Filters
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Event Selection - Smart Search */}
-          <div className="space-y-1.5 relative">
-             <CustomSelect 
-               label="Event Scope"
-               options={[
-                 { value: 'all', label: 'All Events' },
-                 ...events.map(ev => ({ value: ev.id, label: ev.title }))
-               ]}
-               value={selectedEvents.length === 0 ? 'all' : selectedEvents}
-               onChange={(val) => {
-                 if (val === 'all' || (Array.isArray(val) && val.length === 0)) setSelectedEvents([]);
-                 else if (Array.isArray(val)) setSelectedEvents(val);
-                 else setSelectedEvents([val]);
-               }}
-               multi={true}
-               searchable={true}
-               placeholder="Select Events..."
-             />
-          </div>
-
-          {/* Time Filter */}
-          <div className="space-y-1.5">
-            <CustomSelect 
-              label="Time Period"
-              options={[
-                { value: 'all', label: 'All Time' },
-                { value: 'this_month', label: 'This Month' },
-                { value: 'this_week', label: 'This Week' },
-                { value: 'custom', label: 'Custom Range...' }
-              ]}
-              value={timeFilter}
-              onChange={(val) => {
-                const v = val as TimeFilter;
-                setTimeFilter(v);
-                if (v === 'custom') setShowTimeModal(true);
-              }}
-            />
-          </div>
-
-          {/* Level Filter */}
-          <div className="space-y-1.5">
-            <CustomSelect 
-              label="Education Level"
-              options={[
-                { value: 'all', label: 'All Levels' },
-                { value: 'tertiary', label: 'Tertiary (College)' },
-                { value: 'secondary', label: 'Secondary (High School)' },
-                { value: 'elementary', label: 'Elementary' }
-              ]}
-              value={filters.level}
-              onChange={(val) => setFilters({...filters, level: val as LevelFilter})}
-            />
-          </div>
+        </h2>
+        <div className="flex flex-wrap gap-4 [&>*]:min-w-0 [&>*]:basis-full sm:[&>*]:basis-[calc(50%-0.5rem)] xl:[&>*]:basis-[calc(25%-0.75rem)]">
+          <CustomSelect
+            label="Event Scope"
+            multi
+            onChange={(value) => {
+              if (Array.isArray(value)) setSelectedEvents(value);
+              else setSelectedEvents([value]);
+            }}
+            options={events.map((event) => ({ value: event.id, label: event.title }))}
+            placeholder="All Events"
+            searchable
+            value={selectedEvents}
+          />
+          <CustomSelect
+            label="Time Period"
+            onChange={(value) => {
+              const nextFilter = value as TimeFilter;
+              setTimeFilter(nextFilter);
+              if (nextFilter === 'custom') setShowTimeModal(true);
+            }}
+            options={[
+              { value: 'all', label: 'All Time' },
+              { value: 'this_month', label: 'This Month' },
+              { value: 'this_week', label: 'This Week' },
+              { value: 'custom', label: 'Custom Range...' },
+            ]}
+            value={timeFilter}
+          />
+          <CustomSelect
+            label="Education Level"
+            onChange={(value) => setFilters({ ...filters, level: value as LevelFilter })}
+            options={[
+              { value: 'all', label: 'All Levels' },
+              { value: 'tertiary', label: 'Tertiary (College)' },
+              { value: 'secondary', label: 'Secondary (High School)' },
+              { value: 'elementary', label: 'Elementary' },
+            ]}
+            value={filters.level}
+          />
         </div>
 
-        {/* Dynamic Sub-Filters */}
-        {filters.level === 'tertiary' && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2">
-            <div className="space-y-1.5">
-              <CustomSelect 
-                label="College"
-                options={[
-                  { value: '', label: 'All Colleges' },
-                  { value: 'cas', label: 'Arts & Sciences' },
-                  { value: 'cba', label: 'Business Admin' },
-                  { value: 'ccje', label: 'Criminal Justice' }
-                ]}
-                value={filters.college}
-                onChange={(val) => setFilters({...filters, college: val as string})}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <CustomSelect 
-                label="Program"
-                options={[
-                  { value: '', label: 'All Programs' },
-                  { value: 'bscs', label: 'BS Computer Science' },
-                  { value: 'bsit', label: 'BS Info Tech' }
-                ]}
-                value={filters.program}
-                onChange={(val) => setFilters({...filters, program: val as string})}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <CustomSelect 
-                label="Year Level"
-                options={[
-                  { value: '', label: 'All Years' },
-                  { value: '1', label: '1st Year' },
-                  { value: '2', label: '2nd Year' },
-                  { value: '3', label: '3rd Year' },
-                  { value: '4', label: '4th Year' }
-                ]}
-                value={filters.yearLevel}
-                onChange={(val) => setFilters({...filters, yearLevel: val as string})}
-              />
-            </div>
+        {filters.level === 'tertiary' ? (
+          <div className="flex flex-wrap gap-4 animate-in fade-in slide-in-from-top-2 [&>*]:min-w-0 [&>*]:basis-full sm:[&>*]:basis-[calc(50%-0.5rem)] xl:[&>*]:basis-[calc(25%-0.75rem)]">
+            <CustomSelect label="College" onChange={(value) => setFilters({ ...filters, college: value as string })} options={[{ value: '', label: 'All Colleges' }, { value: 'cas', label: 'Arts & Sciences' }, { value: 'cba', label: 'Business Admin' }, { value: 'ccje', label: 'Criminal Justice' }]} value={filters.college} />
+            <CustomSelect label="Program" onChange={(value) => setFilters({ ...filters, program: value as string })} options={[{ value: '', label: 'All Programs' }, { value: 'bscs', label: 'BS Computer Science' }, { value: 'bsit', label: 'BS Info Tech' }]} value={filters.program} />
+            <CustomSelect label="Year Level" onChange={(value) => setFilters({ ...filters, yearLevel: value as string })} options={[{ value: '', label: 'All Years' }, { value: '1', label: '1st Year' }, { value: '2', label: '2nd Year' }, { value: '3', label: '3rd Year' }, { value: '4', label: '4th Year' }]} value={filters.yearLevel} />
           </div>
-        )}
+        ) : null}
 
-        {filters.level === 'secondary' && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2">
-            <div className="space-y-1.5">
-              <CustomSelect 
-                label="Type"
-                options={[
-                  { value: '', label: 'All Secondary' },
-                  { value: 'shs', label: 'Senior High' },
-                  { value: 'jhs', label: 'Junior High' }
-                ]}
-                value={filters.secondaryType}
-                onChange={(val) => setFilters({...filters, secondaryType: val as any})}
-              />
-            </div>
-            {filters.secondaryType === 'shs' && (
+        {filters.level === 'secondary' ? (
+          <div className="flex flex-wrap gap-4 animate-in fade-in slide-in-from-top-2 [&>*]:min-w-0 [&>*]:basis-full sm:[&>*]:basis-[calc(50%-0.5rem)] xl:[&>*]:basis-[calc(25%-0.75rem)]">
+            <CustomSelect label="Type" onChange={(value) => setFilters({ ...filters, secondaryType: value as FilterState['secondaryType'] })} options={[{ value: '', label: 'All Secondary' }, { value: 'shs', label: 'Senior High' }, { value: 'jhs', label: 'Junior High' }]} value={filters.secondaryType} />
+            {filters.secondaryType === 'shs' ? (
               <>
-                <div className="space-y-1.5">
-                  <CustomSelect 
-                    label="Strand"
-                    options={[
-                      { value: '', label: 'All Strands' },
-                      { value: 'stem', label: 'STEM' },
-                      { value: 'abm', label: 'ABM' },
-                      { value: 'humss', label: 'HUMSS' }
-                    ]}
-                    value={filters.strand}
-                    onChange={(val) => setFilters({...filters, strand: val as string})}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <CustomSelect 
-                    label="Grade"
-                    options={[
-                      { value: '', label: 'All Grades' },
-                      { value: '11', label: 'Grade 11' },
-                      { value: '12', label: 'Grade 12' }
-                    ]}
-                    value={filters.gradeLevel}
-                    onChange={(val) => setFilters({...filters, gradeLevel: val as string})}
-                  />
-                </div>
+                <CustomSelect label="Strand" onChange={(value) => setFilters({ ...filters, strand: value as string })} options={[{ value: '', label: 'All Strands' }, { value: 'stem', label: 'STEM' }, { value: 'abm', label: 'ABM' }, { value: 'humss', label: 'HUMSS' }]} value={filters.strand} />
+                <CustomSelect label="Grade" onChange={(value) => setFilters({ ...filters, gradeLevel: value as string })} options={[{ value: '', label: 'All Grades' }, { value: '11', label: 'Grade 11' }, { value: '12', label: 'Grade 12' }]} value={filters.gradeLevel} />
               </>
-            )}
-             {filters.secondaryType === 'jhs' && (
-              <div className="space-y-1.5">
-                <CustomSelect 
-                  label="Grade"
-                  options={[
-                    { value: '', label: 'All Grades' },
-                    { value: '7', label: 'Grade 7' },
-                    { value: '8', label: 'Grade 8' },
-                    { value: '9', label: 'Grade 9' },
-                    { value: '10', label: 'Grade 10' }
-                  ]}
-                  value={filters.gradeLevel}
-                  onChange={(val) => setFilters({...filters, gradeLevel: val as string})}
-                />
-              </div>
-            )}
+            ) : null}
+            {filters.secondaryType === 'jhs' ? (
+              <CustomSelect label="Grade" onChange={(value) => setFilters({ ...filters, gradeLevel: value as string })} options={[{ value: '', label: 'All Grades' }, { value: '7', label: 'Grade 7' }, { value: '8', label: 'Grade 8' }, { value: '9', label: 'Grade 9' }, { value: '10', label: 'Grade 10' }]} value={filters.gradeLevel} />
+            ) : null}
           </div>
-        )}
+        ) : null}
+      </Surface>
+
+      <div aria-label="Attendance summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard detail={`${stats.total} total students`} icon={<CheckCircle size={22} />} label="Present" value={stats.present} />
+        <MetricCard icon={<Clock size={22} />} label="Late" value={stats.late} />
+        <MetricCard icon={<FileText size={22} />} label="Excused" value={stats.excused} />
+        <MetricCard icon={<XCircle size={22} />} label="Absent" value={stats.absent} />
+        <MetricCard icon={<AlertCircle size={22} />} label="No Record" value={stats.not_recorded} />
       </div>
 
-      {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center text-center">
-          <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-950/60 text-green-600 dark:text-green-400 flex items-center justify-center mb-2">
-            <CheckCircle size={20} />
-          </div>
-          <span className="text-2xl font-black text-brand-900 dark:text-slate-100">{stats.present}</span>
-          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Present</span>
-        </div>
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center text-center">
-          <div className="w-10 h-10 rounded-full bg-yellow-50 dark:bg-yellow-950/60 text-yellow-600 dark:text-yellow-400 flex items-center justify-center mb-2">
-            <Clock size={20} />
-          </div>
-          <span className="text-2xl font-black text-brand-900 dark:text-slate-100">{stats.late}</span>
-          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Late</span>
-        </div>
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center text-center">
-          <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-2">
-            <FileText size={20} />
-          </div>
-          <span className="text-2xl font-black text-brand-900 dark:text-slate-100">{stats.excused}</span>
-          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Excused</span>
-        </div>
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center text-center">
-          <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center mb-2">
-            <XCircle size={20} />
-          </div>
-          <span className="text-2xl font-black text-brand-900 dark:text-slate-100">{stats.absent}</span>
-          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Absent</span>
-        </div>
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center text-center">
-          <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center mb-2">
-            <AlertCircle size={20} />
-          </div>
-          <span className="text-2xl font-black text-brand-900 dark:text-slate-100">{stats.not_recorded}</span>
-          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">No Record</span>
-        </div>
-      </div>
-
-      {/* VISUALIZATION */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Surface className="min-w-0 p-4 sm:p-6 lg:col-span-2">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-brand-900 dark:text-white">
               <PieChart size={14} className="text-gold-500" /> Data Visualization
-            </h3>
-            <div className="flex bg-slate-50 dark:bg-slate-900 p-1 rounded-lg border border-slate-100 dark:border-slate-700">
-              {(['pie', 'donut', 'bar', 'column', 'line'] as ChartType[]).map(t => (
-                <button 
-                  key={t}
-                  onClick={() => setChartType(t)}
-                  className={`px-3 py-1.5 rounded-md text-[9px] font-bold uppercase tracking-widest transition-all ${chartType === t ? 'bg-white dark:bg-slate-800 text-brand-900 dark:text-slate-100 shadow-sm' : 'text-slate-400 hover:text-brand-900 dark:hover:text-slate-100'}`}
-                >
-                  {t}
+            </h2>
+            <div aria-label="Chart type" className="flex max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900" role="group">
+              {(['pie', 'donut', 'bar', 'column', 'line'] as ChartType[]).map((type) => (
+                <button aria-pressed={chartType === type} className={`shrink-0 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-widest ${chartType === type ? 'bg-white text-brand-900 shadow-sm dark:bg-slate-700 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`} key={type} onClick={() => setChartType(type)} type="button">
+                  {type}
                 </button>
               ))}
             </div>
           </div>
-          
-          <div className="h-[400px] w-full" ref={chartRef}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div aria-label="Attendance visualization" className="h-64 min-h-64 min-w-0 w-full sm:h-72 sm:min-h-72" ref={chartRef} role="region">
+            <ResponsiveContainer height="100%" initialDimension={{ width: 1, height: 256 }} minHeight={256} minWidth={0} width="100%">
               {chartType === 'pie' || chartType === 'donut' ? (
                 <RePieChart>
-                  <Pie
-                    data={chartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={chartType === 'donut' ? 80 : 0}
-                    outerRadius={140}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
+                  <Pie data={chartData} dataKey="value" innerRadius={chartType === 'donut' ? 52 : 0} outerRadius={90} paddingAngle={2}>
+                    {chartData.map((entry, index) => <Cell fill={entry.color} key={`cell-${index}`} />)}
                   </Pie>
-                  <Tooltip />
-                  <Legend />
+                  <Tooltip /><Legend />
                 </RePieChart>
               ) : chartType === 'bar' ? (
-                <ReBarChart data={chartData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" width={100} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="value" fill="#D4AF37" radius={[0, 4, 4, 0]} />
-                </ReBarChart>
+                <ReBarChart data={chartData} layout="vertical"><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis type="number" /><YAxis dataKey="name" type="category" width={80} /><Tooltip /><Legend /><Bar dataKey="value" fill="#D4AF37" radius={[0, 4, 4, 0]} /></ReBarChart>
               ) : chartType === 'column' ? (
-                <ReBarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="value" fill="#0E1B42" radius={[4, 4, 0, 0]} />
-                </ReBarChart>
+                <ReBarChart data={chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="value" fill="#0E1B42" radius={[4, 4, 0, 0]} /></ReBarChart>
               ) : (
-                <ReLineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="value" stroke="#D4AF37" strokeWidth={3} dot={{ r: 6 }} />
-                </ReLineChart>
+                <ReLineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Line dataKey="value" dot={{ r: 5 }} stroke="#D4AF37" strokeWidth={3} type="monotone" /></ReLineChart>
               )}
             </ResponsiveContainer>
           </div>
-        </div>
+        </Surface>
 
-        {/* RECENT RECORDS */}
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
-          <h3 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2 mb-4">
-            <Users size={14} className="text-gold-500" /> Recent Logs
-          </h3>
-          <div className="flex-1 overflow-y-auto space-y-3 pr-2 max-h-[400px]">
-            {attendanceData.slice(0, 10).map((record, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700/60">
-                <div className={`w-2 h-10 rounded-full ${
-                  record.status === 'present' ? 'bg-green-500' : 
-                  record.status === 'late' ? 'bg-yellow-500' :
-                  record.status === 'absent' ? 'bg-red-500' : 'bg-slate-300'
-                }`}></div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-brand-900 dark:text-slate-100 truncate">{record.studentName}</p>
-                  <p className="text-[9px] text-slate-400 uppercase tracking-wider">{record.studentId}</p>
-                </div>
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                  {record.timeIn ? new Date(record.timeIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
-                </span>
+        <Surface className="flex min-w-0 flex-col p-4 sm:p-6">
+          <h2 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-brand-900 dark:text-white"><Users size={14} className="text-gold-500" /> Recent Logs</h2>
+          <div className="max-h-72 flex-1 space-y-3 overflow-y-auto pr-1">
+            {attendanceData.slice(0, 10).map((record) => (
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900" key={record.studentId}>
+                <span aria-hidden="true" className={`h-10 w-2 shrink-0 rounded-full ${record.status === 'present' ? 'bg-emerald-500' : record.status === 'late' ? 'bg-amber-500' : record.status === 'absent' ? 'bg-red-500' : 'bg-slate-300'}`} />
+                <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-brand-900 dark:text-white">{record.studentName}</p><p className="text-[10px] uppercase tracking-wider text-slate-500">{record.studentId}</p></div>
+                <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-500">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
               </div>
             ))}
           </div>
-        </div>
+        </Surface>
       </div>
 
-      {/* EXPORT MODAL */}
-      {showExportModal && (
-        <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl border-2 border-gold-400 overflow-hidden animate-in zoom-in duration-300">
-            <div className="bg-brand-900 p-6 text-white border-b-2 border-gold-400 flex justify-between items-center">
-               <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                 <Printer size={18} className="text-gold-400" /> Export Configuration
-               </h3>
-               <button onClick={() => setShowExportModal(false)} className="text-white/50 hover:text-white"><XCircle size={20} /></button>
-            </div>
-            <div className="p-6 space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Group Data By</label>
-                <select 
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
-                  value={exportSettings.groupBy}
-                  onChange={(e) => setExportSettings({...exportSettings, groupBy: e.target.value as any})}
-                >
-                  <option value="status">Attendance Status</option>
-                  <option value="section">Section</option>
-                  <option value="level">Level</option>
-                  <option value="program">Program</option>
-                </select>
-              </div>
-              
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-gold-400 transition-all">
-                  <input 
-                    type="checkbox" 
-                    className="w-4 h-4 accent-gold-400"
-                    checked={exportSettings.includeCharts}
-                    onChange={(e) => setExportSettings({...exportSettings, includeCharts: e.target.checked})}
-                  />
-                  <span className="text-xs font-bold text-brand-900 dark:text-slate-100 uppercase tracking-wide">Include Visualizations</span>
-                </label>
-                <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-gold-400 transition-all">
-                  <input 
-                    type="checkbox" 
-                    className="w-4 h-4 accent-gold-400"
-                    checked={exportSettings.includeTables}
-                    onChange={(e) => setExportSettings({...exportSettings, includeTables: e.target.checked})}
-                  />
-                  <span className="text-xs font-bold text-brand-900 dark:text-slate-100 uppercase tracking-wide">Include Detailed Tables</span>
-                </label>
-              </div>
-
-              <button 
-                onClick={handleExportPDF}
-                className="w-full py-4 bg-gold-gradient text-brand-900 text-xs font-black rounded-xl uppercase tracking-widest shadow-lg hover:brightness-110 active:scale-95 transition-all"
-              >
-                Generate PDF Report
-              </button>
-            </div>
-          </div>
+      <Surface aria-labelledby="attendance-records-heading" className="overflow-hidden">
+        <div className="border-b border-slate-200 p-4 dark:border-slate-700 sm:p-6">
+          <h2 id="attendance-records-heading" className="text-sm font-black uppercase tracking-widest text-brand-900 dark:text-white">Detailed Attendance Records</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{attendanceData.length} student attendance entries</p>
         </div>
-      )}
-
-      {/* CUSTOM TIME MODAL */}
-      {showTimeModal && (
-        <div className="fixed inset-0 z-50 bg-brand-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl border-2 border-gold-400 overflow-hidden animate-in zoom-in duration-300">
-            <div className="bg-brand-900 p-6 text-white border-b-2 border-gold-400 flex justify-between items-center">
-               <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
-                 <Calendar size={18} className="text-gold-400" /> Select Date Range
-               </h3>
-               <button onClick={() => setShowTimeModal(false)} className="text-white/50 hover:text-white"><XCircle size={20} /></button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Start Date</label>
-                <input 
-                  type="date" 
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">End Date</label>
-                <input 
-                  type="date" 
-                  className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
-                />
-              </div>
-              <button 
-                onClick={() => setShowTimeModal(false)}
-                className="w-full py-4 bg-gold-gradient text-brand-900 text-xs font-black rounded-xl uppercase tracking-widest shadow-lg hover:brightness-110 active:scale-95 transition-all mt-4"
-              >
-                Apply Range
-              </button>
-            </div>
-          </div>
+        <div className="desktop-data-table overflow-x-auto">
+          <table aria-label="Attendance records" className="w-full min-w-[720px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-900 dark:text-slate-300"><tr><th className="px-5 py-3">Student</th><th className="px-5 py-3">ID</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Section</th><th className="px-5 py-3">Level</th><th className="px-5 py-3">Time In</th></tr></thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {attendanceData.map((record) => <tr key={record.studentId}><td className="px-5 py-3 font-semibold text-brand-900 dark:text-white">{record.studentName}</td><td className="px-5 py-3 font-mono text-xs text-slate-500">{record.studentId}</td><td className="px-5 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.section}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.level}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString() : '-'}</td></tr>)}
+            </tbody>
+          </table>
         </div>
-      )}
-    </div>
+        <div className="space-y-3 p-4 md:hidden">
+          {attendanceData.map((record) => (
+            <article aria-label={`${record.studentName} attendance record`} className="mobile-data-card rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900" key={record.studentId}>
+              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="font-bold text-brand-900 dark:text-white">{record.studentName}</h3><p className="font-mono text-xs text-slate-500">{record.studentId}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></div>
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt className="font-semibold text-slate-500">Section</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.section}</dd></div><div><dt className="font-semibold text-slate-500">Level</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.level}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">Time In</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString() : '-'}</dd></div></dl>
+            </article>
+          ))}
+        </div>
+      </Surface>
+
+      <Modal
+        footer={<Button className="sm:w-auto" onClick={handleExportPDF} variant="gold"><Printer size={16} /> Generate PDF Report</Button>}
+        onClose={() => setShowExportModal(false)}
+        open={showExportModal}
+        size="sm"
+        title="Export Configuration"
+      >
+        <div className="space-y-5">
+          <div className="space-y-2"><label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300" htmlFor="attendance-export-group">Group Data By</label><select className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-brand-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" id="attendance-export-group" onChange={(event) => setExportSettings({ ...exportSettings, groupBy: event.target.value as typeof exportSettings.groupBy })} value={exportSettings.groupBy}><option value="status">Attendance Status</option><option value="section">Section</option><option value="level">Level</option><option value="program">Program</option></select></div>
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900"><input checked={exportSettings.includeCharts} className="h-4 w-4 accent-gold-500" onChange={(event) => setExportSettings({ ...exportSettings, includeCharts: event.target.checked })} type="checkbox" /><span className="text-sm font-bold text-brand-900 dark:text-white">Include Visualizations</span></label>
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900"><input checked={exportSettings.includeTables} className="h-4 w-4 accent-gold-500" onChange={(event) => setExportSettings({ ...exportSettings, includeTables: event.target.checked })} type="checkbox" /><span className="text-sm font-bold text-brand-900 dark:text-white">Include Detailed Tables</span></label>
+        </div>
+      </Modal>
+
+      <Modal footer={<Button className="sm:w-auto" onClick={() => setShowTimeModal(false)} variant="gold">Apply Range</Button>} onClose={() => setShowTimeModal(false)} open={showTimeModal} size="sm" title="Select Date Range">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2"><label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300" htmlFor="attendance-start-date">Start Date</label><input className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-brand-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" id="attendance-start-date" onChange={(event) => setDateRange({ ...dateRange, start: event.target.value })} type="date" value={dateRange.start} /></div>
+          <div className="space-y-2"><label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300" htmlFor="attendance-end-date">End Date</label><input className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-brand-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" id="attendance-end-date" onChange={(event) => setDateRange({ ...dateRange, end: event.target.value })} type="date" value={dateRange.end} /></div>
+        </div>
+      </Modal>
+    </Page>
   );
 };
 

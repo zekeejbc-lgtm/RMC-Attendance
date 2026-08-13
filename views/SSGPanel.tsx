@@ -5,6 +5,8 @@ import { mockData } from '../lib/mockBackend';
 import { Application, AppEvent, UserProfile, SchoolNode, UserStats } from '../types';
 import Button from '../components/ui/Button';
 import CustomSelect from '../components/ui/CustomSelect';
+import { Modal } from '../components/ui/Modal';
+import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { 
   Users, Check, X, Shield, Plus, UserCheck, Search, Filter,
   ChevronRight, School, BookOpen, Grid, List, ShieldAlert,
@@ -27,6 +29,7 @@ const SSGPanel: React.FC = () => {
   const [showNodeModal, setShowNodeModal] = useState<{parent: string | null, type: string} | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [newNodeName, setNewNodeName] = useState('');
+  const [pendingAdjustment, setPendingAdjustment] = useState<{ delta: number; action: string } | null>(null);
   
   // Specific Asset Input State
   const [assetInput, setAssetInput] = useState('');
@@ -82,6 +85,12 @@ const SSGPanel: React.FC = () => {
   const handleAdjustSanctionHours = (uid: string, delta: number) => {
     mockData.adjustSanctionHours(uid, delta, `Administrative Adjustment: ${profile?.name}`);
     refresh();
+  };
+
+  const confirmAdjustment = () => {
+    if (!selectedStudent || !pendingAdjustment) return;
+    handleAdjustSanctionHours(selectedStudent.uid, pendingAdjustment.delta);
+    setPendingAdjustment(null);
   };
 
   useEffect(() => {
@@ -182,6 +191,19 @@ const SSGPanel: React.FC = () => {
   const navigateTo = (node: SchoolNode) => setPath([...path, node]);
   const goBackTo = (index: number) => setPath(index === -1 ? [] : path.slice(0, index + 1));
 
+  const handleCreateNode = () => {
+    if (!showNodeModal || !newNodeName) return;
+    let nextType: SchoolNode['type'] = 'department';
+    if (currentNode?.type === 'department') nextType = 'track';
+    else if (currentNode?.type === 'track') nextType = 'strand';
+    else if (currentNode?.type === 'strand') nextType = 'level';
+    else if (currentNode?.type === 'level') nextType = 'section';
+    mockData.addSchoolNode(showNodeModal.parent, { id: `node_${Date.now()}`, name: newNodeName, type: nextType, children: [] });
+    setShowNodeModal(null);
+    setNewNodeName('');
+    refresh();
+  };
+
   const currentNode = path.length > 0 ? path[path.length - 1] : null;
   const subUnits = currentNode ? (currentNode.children || []) : structure;
   const isAtSection = currentNode?.type === 'section';
@@ -190,9 +212,14 @@ const SSGPanel: React.FC = () => {
   const mapUrl = `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d15844.0!2d${eventData.lng}!3d${eventData.lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2sph!4v1620000000000!5m2!1sen!2sph&maptype=satellite`;
 
   return (
-    <div className="p-4 lg:p-6 space-y-4 max-w-7xl mx-auto">
+    <Page>
+      <PageHeader
+        eyebrow="SSG administration"
+        title="Institution Control Hub"
+        description="Manage the school directory, applications, member records, and attendance events."
+      />
       {/* HUB HEADER */}
-      <header className="bg-brand-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+      <Surface className="relative overflow-hidden bg-brand-900 p-5 text-white shadow-xl sm:p-6">
         <div className="absolute top-0 right-0 w-32 h-32 bg-gold-400/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -206,15 +233,15 @@ const SSGPanel: React.FC = () => {
               <p className="text-emerald-300 text-[8px] font-bold uppercase tracking-widest">Administrative Operations</p>
             </div>
           </div>
-          <div className="flex p-1 bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+          <div className="grid w-full grid-cols-3 gap-1 rounded-xl border border-white/10 bg-white/5 p-1 sm:flex sm:w-auto">
             {['hub', 'applicants', 'events'].map(t => (
-              <button key={t} onClick={() => setTab(t as any)} className={`px-6 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${tab === t ? 'bg-gold-gradient text-brand-900 shadow-md' : 'text-white/40 hover:text-white'}`}>
+              <button key={t} onClick={() => setTab(t as any)} className={`min-w-0 rounded-lg px-2 py-2 text-[9px] font-black uppercase tracking-widest transition-all sm:px-6 ${tab === t ? 'bg-gold-gradient text-brand-900 shadow-md' : 'text-white/60 hover:text-white'}`}>
                 {t}
               </button>
             ))}
           </div>
         </div>
-      </header>
+      </Surface>
 
       {/* HUB CONTENT */}
       <div className="min-h-[60vh]">
@@ -237,13 +264,13 @@ const SSGPanel: React.FC = () => {
             {!isAtSection ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {subUnits.map(node => (
-                  <div key={node.id} onClick={() => navigateTo(node)} className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-gold-400 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col items-center text-center">
+                  <button key={node.id} onClick={() => navigateTo(node)} className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-gold-400 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col items-center text-center">
                     <div className="w-12 h-12 bg-brand-50 dark:bg-brand-900/40 rounded-xl flex items-center justify-center text-brand-900 dark:text-brand-300 border border-brand-100 dark:border-brand-800 group-hover:scale-110 transition-transform mb-3">
                       {node.type === 'school' ? <School size={22} /> : node.type === 'section' ? <LayoutGrid size={22} /> : <BookOpen size={22} />}
                     </div>
                     <h4 className="text-[11px] font-bold text-brand-900 dark:text-slate-100 uppercase tracking-tight line-clamp-2 h-8 flex items-center">{node.name}</h4>
                     <p className="text-[7px] font-black text-slate-300 dark:text-slate-400 uppercase tracking-widest mt-1">{node.type}</p>
-                  </div>
+                  </button>
                 ))}
                 <button onClick={() => setShowNodeModal({ parent: currentNode?.id || null, type: 'unit' })} className="bg-slate-50/50 dark:bg-slate-900/40 p-5 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-gold-400 hover:bg-white dark:hover:bg-slate-800 transition-all group flex flex-col items-center justify-center opacity-60">
                    <Plus size={20} className="text-slate-300 dark:text-slate-500 mb-1" />
@@ -258,19 +285,35 @@ const SSGPanel: React.FC = () => {
                        <span className="bg-white dark:bg-slate-800 px-3 py-1 rounded-lg text-[8px] font-bold text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{students.length} Personnel</span>
                     </div>
                  </div>
-                 <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {students.map(student => (
-                      <div key={student.uid} onClick={() => setSelectedStudent(student)} className="bg-white dark:bg-slate-800 p-3 rounded-xl flex items-center gap-3 border border-slate-100 dark:border-slate-700 hover:border-gold-400 hover:shadow-md transition-all cursor-pointer group">
-                         <img src={student.photo_url} className="w-10 h-10 rounded-lg object-cover shadow-sm grayscale-[0.5] group-hover:grayscale-0 transition-all" />
-                         <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-brand-900 dark:text-slate-100 text-[10px] uppercase tracking-tight truncate">{student.name}</h4>
-                            <div className="flex gap-2 mt-0.5">
-                               <span className="text-[7px] font-black text-red-500 uppercase flex items-center gap-0.5"><Clock size={10} /> {student.stats.sanction_hours}h</span>
-                               <span className="text-[7px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-widest">{student.role}</span>
-                            </div>
-                         </div>
-                      </div>
-                    ))}
+                 <div className="hidden overflow-x-auto p-4 md:block">
+                   <table aria-label={`${currentNode.name} personnel registry`} className="w-full table-fixed text-left text-sm">
+                     <thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-300">
+                       <tr><th className="w-1/4 p-3">Name</th><th className="w-1/4 p-3">Email</th><th className="w-1/5 p-3">Student ID</th><th className="w-1/6 p-3">Role</th><th className="p-3">Actions</th></tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                       {students.map((student) => (
+                         <tr key={student.uid}>
+                           <td className="p-3 font-semibold text-brand-900 [overflow-wrap:anywhere] dark:text-white">{student.name}</td>
+                           <td className="p-3 text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{student.email}</td>
+                           <td className="p-3 font-mono text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{student.student_id}</td>
+                           <td className="p-3 capitalize text-slate-600 dark:text-slate-300">{student.role}</td>
+                           <td className="p-3"><button className="font-semibold text-brand-900 underline-offset-4 hover:underline dark:text-gold-300" onClick={() => setSelectedStudent(student)}>Manage {student.name}</button></td>
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
+                 </div>
+                 <div className="grid gap-3 p-4 md:hidden">
+                   {students.map((student) => (
+                     <article aria-label={student.name} className="mobile-data-card space-y-3" key={student.uid}>
+                       <div className="flex min-w-0 items-center gap-3">
+                         <img alt="" src={student.photo_url || undefined} className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                         <div className="min-w-0"><h4 className="font-bold text-brand-900 [overflow-wrap:anywhere] dark:text-white">{student.name}</h4><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-300">{student.student_id}</p><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-300">{student.email}</p></div>
+                       </div>
+                       <dl className="grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500 dark:text-slate-400">Role</dt><dd className="capitalize text-slate-700 dark:text-slate-200">{student.role}</dd></div><div><dt className="font-semibold text-slate-500 dark:text-slate-400">Sanctions</dt><dd className="text-red-600 dark:text-red-300">{student.stats.sanction_hours}h</dd></div></dl>
+                       <Button variant="secondary" onClick={() => setSelectedStudent(student)}>Manage {student.name}</Button>
+                     </article>
+                   ))}
                  </div>
               </div>
             )}
@@ -281,9 +324,9 @@ const SSGPanel: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in">
             {apps.map(app => (
               <div key={app.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
-                <img src={app.form_data.photo_url} className="w-12 h-12 rounded-xl object-cover shadow-sm border border-slate-100 dark:border-slate-700" />
+                <img alt="" src={app.form_data.photo_url || undefined} className="w-12 h-12 rounded-xl object-cover shadow-sm border border-slate-100 dark:border-slate-700" />
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-brand-900 dark:text-slate-100 text-[11px] uppercase tracking-tight truncate mb-2">{app.form_data.name}</h4>
+                  <h4 className="mb-2 text-[11px] font-bold uppercase tracking-tight text-brand-900 [overflow-wrap:anywhere] dark:text-slate-100">{app.form_data.name}</h4>
                   <div className="flex gap-2">
                     <button onClick={() => handleApprove(app.id)} className="flex-1 py-1.5 bg-green-500 text-white text-[8px] font-black rounded-lg uppercase tracking-widest hover:bg-green-600">Verify</button>
                     <button onClick={() => handleApprove(app.id, true)} className="flex-1 py-1.5 bg-brand-900 text-white text-[8px] font-black rounded-lg uppercase tracking-widest hover:bg-brand-800">Mayor</button>
@@ -296,11 +339,11 @@ const SSGPanel: React.FC = () => {
 
         {tab === 'events' && (
           <div className="space-y-4 animate-in fade-in">
-            <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between">
                <h3 className="text-[10px] font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
                  <Target size={14} className="text-gold-500" /> Operational Log
                </h3>
-               <button onClick={() => setShowEventModal(true)} className="px-4 py-2 bg-gold-gradient text-brand-900 text-[9px] font-black rounded-lg uppercase tracking-widest flex items-center gap-2 shadow-md hover:brightness-110 active:scale-95 transition-all">
+               <button onClick={() => setShowEventModal(true)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-gold-gradient px-4 py-3 text-[9px] font-black uppercase tracking-widest text-brand-900 shadow-md transition-all hover:brightness-110 active:scale-95 sm:w-auto sm:py-2">
                   <CalendarPlus size={14} /> Create Event
                </button>
             </div>
@@ -327,28 +370,33 @@ const SSGPanel: React.FC = () => {
       </div>
 
       {/* CREATE EVENT MODAL - THREADED TARGETING & FULL DESCRIPTION */}
-      {showEventModal && (
-        <div className="fixed inset-0 z-[400] bg-brand-950/90 backdrop-blur-2xl flex items-center justify-center p-4 animate-in fade-in">
-           <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl border-2 border-gold-400 flex flex-col max-h-[95vh] animate-in zoom-in duration-300">
-              <div className="bg-brand-900 p-8 text-white border-b-2 border-gold-400 flex justify-between items-center shrink-0">
-                 <div className="flex items-center gap-4">
-                    <Globe size={28} className="text-gold-400" />
-                    <div>
-                       <h3 className="text-lg font-black uppercase tracking-widest leading-none">Strategic Deployment</h3>
-                       <p className="text-[9px] text-gold-400/50 uppercase font-black tracking-[0.4em] mt-2">Institution Event Engine</p>
-                    </div>
-                 </div>
-                 <button onClick={() => setShowEventModal(false)} className="p-3 hover:bg-white/10 rounded-2xl transition-colors"><X size={24} /></button>
-              </div>
-
-              <div className="p-10 space-y-10 overflow-y-auto no-scrollbar bg-slate-50/40 dark:bg-slate-900/40">
+      <Modal
+        open={showEventModal}
+        onClose={() => setShowEventModal(false)}
+        closeOnBackdrop={false}
+        title="Strategic deployment"
+        description="Create an institution event, define its attendance window, audience, location, and penalty."
+        size="xl"
+        footer={(
+          <Button
+            variant="gold"
+            className="sm:w-auto"
+            onClick={handleCreateEvent}
+            disabled={!eventData.title || !eventData.startTime || !eventData.endTime || (eventData.targetDepth !== 'all' && eventData.targetDepth !== 'specific' && !eventData.selectedDept)}
+          >
+            Authorize deployment protocol
+          </Button>
+        )}
+      >
+              <div className="space-y-10 bg-slate-50/40 dark:bg-slate-900/40">
                  {/* CORE INFO */}
                  <div className="space-y-6">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1 flex items-center gap-2">
+                       <label htmlFor="deployment-title" className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1 flex items-center gap-2">
                          <Target size={14} className="text-gold-500" /> Deployment Title
                        </label>
                        <input 
+                         id="deployment-title"
                          placeholder="e.g. 2nd Semester Institutional Assembly" 
                          className="w-full p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-sm shadow-sm focus:border-gold-400 outline-none" 
                          value={eventData.title}
@@ -357,10 +405,11 @@ const SSGPanel: React.FC = () => {
                     </div>
                     
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1 flex items-center gap-2">
+                       <label htmlFor="deployment-description" className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1 flex items-center gap-2">
                          <FileText size={14} className="text-brand-900 dark:text-slate-100" /> Administrative Description (No Truncation)
                        </label>
                        <textarea 
+                         id="deployment-description"
                          placeholder="Detail the full instructional parameters, objectives, and any prerequisites for this event here..." 
                          rows={5}
                          className="w-full p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl font-bold text-brand-900 dark:text-slate-100 text-sm shadow-sm focus:border-gold-400 outline-none resize-none whitespace-pre-wrap leading-relaxed" 
@@ -369,39 +418,39 @@ const SSGPanel: React.FC = () => {
                        />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Window Open</label>
-                          <input type="datetime-local" className="w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.startTime} onChange={e => setEventData({...eventData, startTime: e.target.value})} />
+                          <label htmlFor="deployment-start" className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Window Open</label>
+                          <input id="deployment-start" type="datetime-local" className="w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.startTime} onChange={e => setEventData({...eventData, startTime: e.target.value})} />
                        </div>
                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Window Close</label>
-                          <input type="datetime-local" className="w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.endTime} onChange={e => setEventData({...eventData, endTime: e.target.value})} />
+                          <label htmlFor="deployment-end" className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Window Close</label>
+                          <input id="deployment-end" type="datetime-local" className="w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.endTime} onChange={e => setEventData({...eventData, endTime: e.target.value})} />
                        </div>
                     </div>
                  </div>
 
                  {/* SATELLITE MAP */}
                  <div className="space-y-4">
-                    <h4 className="text-xs font-black uppercase text-brand-900 tracking-widest flex items-center gap-2">
+                    <h4 className="text-xs font-black uppercase text-brand-900 dark:text-slate-100 tracking-widest flex items-center gap-2">
                        <Map size={16} className="text-gold-500" /> Operational Perimeter
                     </h4>
                     <div className="bg-brand-950 rounded-[3rem] overflow-hidden border-2 border-slate-200 shadow-xl relative aspect-video">
-                       <iframe src={mapUrl} className="w-full h-full opacity-90" style={{ border: 0, filter: 'grayscale(0.1)' }} loading="lazy"></iframe>
+                       <iframe title="Event perimeter map" src={mapUrl} className="w-full h-full opacity-90" style={{ border: 0, filter: 'grayscale(0.1)' }} loading="lazy"></iframe>
                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                           <div className="border-4 border-gold-400/20 bg-gold-400/5 rounded-full animate-pulse" style={{ width: '150px', height: '150px' }}></div>
                           <Crosshair size={40} className="text-gold-400 absolute opacity-40" />
                        </div>
                        <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end pointer-events-none">
-                          <button onClick={handleCaptureLocation} className="p-4 bg-brand-900 text-gold-400 rounded-2xl shadow-xl pointer-events-auto hover:bg-gold-400 hover:text-brand-900 transition-all border border-gold-400/20">
+                          <button aria-label="Capture current event location" onClick={handleCaptureLocation} className="p-4 bg-brand-900 text-gold-400 rounded-2xl shadow-xl pointer-events-auto hover:bg-gold-400 hover:text-brand-900 transition-all border border-gold-400/20">
                              <Crosshair size={24} className={eventData.isLocating ? 'animate-spin' : ''} />
                           </button>
                           <div className="bg-brand-900/90 backdrop-blur-md p-5 rounded-[2rem] border border-white/10 pointer-events-auto min-w-[160px] shadow-2xl">
                              <div className="flex justify-between items-center mb-2">
-                                <label className="text-[8px] font-black text-gold-400/50 uppercase tracking-widest">Radius</label>
+                                <label htmlFor="event-radius" className="text-[8px] font-black text-gold-400/50 uppercase tracking-widest">Radius</label>
                                 <span className="text-[10px] text-white font-black">{eventData.radius}m</span>
                              </div>
-                             <input type="range" min="50" max="2000" step="50" className="w-full accent-gold-400" value={eventData.radius} onChange={e => setEventData({...eventData, radius: parseInt(e.target.value)})} />
+                             <input id="event-radius" type="range" min="50" max="2000" step="50" className="w-full accent-gold-400" value={eventData.radius} onChange={e => setEventData({...eventData, radius: parseInt(e.target.value)})} />
                           </div>
                        </div>
                     </div>
@@ -409,10 +458,10 @@ const SSGPanel: React.FC = () => {
 
                  {/* THREADED TARGETING SYSTEM */}
                  <div className="space-y-6">
-                    <h4 className="text-xs font-black uppercase text-brand-900 tracking-widest flex items-center gap-2">
+                    <h4 className="text-xs font-black uppercase text-brand-900 dark:text-slate-100 tracking-widest flex items-center gap-2">
                        <Users2 size={16} className="text-gold-500" /> Target Population Thread
                     </h4>
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                    <div className="space-y-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
                              <CustomSelect 
@@ -510,23 +559,24 @@ const SSGPanel: React.FC = () => {
                        {/* SPECIFIC ASSET UIDs (MANUAL) */}
                        {eventData.targetDepth === 'specific' && (
                           <div className="space-y-4 animate-in slide-in-from-top-2">
-                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                             <label htmlFor="asset-identifier" className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
                                <Fingerprint size={14} className="text-brand-900 dark:text-slate-100"/> Asset ID Registry
                              </label>
-                             <div className="flex gap-2">
+                             <div className="flex flex-col gap-2 sm:flex-row">
                                 <input 
+                                  id="asset-identifier"
                                   placeholder="Enter Student ID or UID..." 
                                   className="flex-1 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-xs focus:border-gold-400 outline-none" 
                                   value={assetInput}
                                   onChange={e => setAssetInput(e.target.value)}
                                   onKeyDown={e => e.key === 'Enter' && handleAddAsset()}
                                 />
-                                <button onClick={handleAddAsset} className="px-6 bg-brand-900 text-gold-400 rounded-xl font-black text-[10px] uppercase hover:bg-brand-800 transition-colors">Add ID</button>
+                                <button onClick={handleAddAsset} className="rounded-xl bg-brand-900 px-6 py-3 text-[10px] font-black uppercase text-gold-400 transition-colors hover:bg-brand-800">Add ID</button>
                              </div>
                              <div className="flex flex-wrap gap-2 pt-2">
                                 {eventData.specificPeople.map(id => (
                                    <span key={id} className="bg-slate-100 dark:bg-slate-700 text-brand-900 dark:text-slate-100 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tight flex items-center gap-2 border border-slate-200 dark:border-slate-600">
-                                      {id} <button onClick={() => handleRemoveAsset(id)}><X size={12} className="text-red-500" /></button>
+                                      {id} <button aria-label={`Remove asset ${id}`} onClick={() => handleRemoveAsset(id)}><X size={12} className="text-red-500" /></button>
                                    </span>
                                 ))}
                                 {eventData.specificPeople.length === 0 && <p className="text-[8px] text-slate-300 dark:text-slate-500 font-bold uppercase tracking-widest italic p-2">Queue empty: Add identifiers above</p>}
@@ -541,12 +591,12 @@ const SSGPanel: React.FC = () => {
                     <h4 className="text-xs font-black uppercase text-brand-900 dark:text-slate-100 tracking-widest flex items-center gap-2">
                        <AlertTriangle size={16} className="text-red-500" /> Attendance Penalty Logic
                     </h4>
-                    <div className="bg-white dark:bg-slate-800 p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-700 shadow-sm flex items-end gap-4 h-full">
+                    <div className="flex h-full flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-end sm:p-8">
                        <div className="flex-1 space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-slate-400 tracking-widest ml-1">Service Value</label>
-                          <input type="number" min="1" className="w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-sm outline-none" value={eventData.penaltyValue} onChange={e => setEventData({...eventData, penaltyValue: parseInt(e.target.value)})} />
+                          <label htmlFor="service-value" className="text-[9px] font-black uppercase text-slate-400 tracking-widest ml-1">Service Value</label>
+                          <input id="service-value" type="number" min="1" className="w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-sm outline-none" value={eventData.penaltyValue} onChange={e => setEventData({...eventData, penaltyValue: parseInt(e.target.value)})} />
                        </div>
-                       <div className="w-28 space-y-1.5">
+                       <div className="w-full space-y-1.5 sm:w-28">
                           <CustomSelect 
                             label="Temporal Unit"
                             options={[
@@ -560,71 +610,50 @@ const SSGPanel: React.FC = () => {
                     </div>
                  </div>
               </div>
-
-              {/* AUTHORIZATION BUTTON */}
-              <div className="p-10 pt-0 bg-slate-50/50 dark:bg-slate-900/50 shrink-0 border-t border-slate-100 dark:border-slate-800">
-                 <button 
-                   onClick={handleCreateEvent} 
-                   disabled={!eventData.title || !eventData.startTime || !eventData.endTime || (eventData.targetDepth !== 'all' && eventData.targetDepth !== 'specific' && !eventData.selectedDept)} 
-                   className="w-full py-6 bg-gold-gradient text-brand-900 text-sm font-black rounded-3xl uppercase tracking-[0.4em] shadow-[0_20px_40px_rgba(212,175,55,0.3)] hover:brightness-110 active:scale-95 transition-all disabled:opacity-40"
-                 >
-                    Authorize Deployment Protocol
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
+      </Modal>
 
       {/* NODE ESTABLISHMENT MODAL */}
-      {showNodeModal && (
-        <div className="fixed inset-0 z-[500] bg-brand-950/80 backdrop-blur-2xl flex items-center justify-center p-4 animate-in fade-in">
-           <div className="bg-white dark:bg-slate-900 w-full max-w-xs rounded-3xl shadow-2xl border-2 border-gold-400 overflow-hidden">
-              <div className="bg-brand-900 p-6 text-white border-b-2 border-gold-400 flex justify-between items-center">
-                 <h3 className="text-sm font-black uppercase tracking-widest">Establish Unit</h3>
-                 <button onClick={() => setShowNodeModal(null)} className="text-white/30 hover:text-white"><X size={18} /></button>
-              </div>
-              <div className="p-8 space-y-4">
-                 <div className="space-y-1.5">
-                    <label className="text-[8px] font-black uppercase text-slate-400 tracking-widest ml-1">Unit Designation</label>
-                    <input placeholder="e.g. STEM-12-Newton" className="w-full p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-[11px] focus:border-gold-400 outline-none transition-all" value={newNodeName} onChange={e => setNewNodeName(e.target.value)} />
-                 </div>
-                 <button disabled={!newNodeName} onClick={() => {
-                     let nextType: any = 'department';
-                     if (currentNode) {
-                        if (currentNode.type === 'department') nextType = 'track';
-                        else if (currentNode.type === 'track') nextType = 'strand';
-                        else if (currentNode.type === 'strand') nextType = 'level';
-                        else if (currentNode.type === 'level') nextType = 'section';
-                     }
-                     mockData.addSchoolNode(showNodeModal.parent, { id: `node_${Date.now()}`, name: newNodeName, type: nextType, children: [] });
-                     setShowNodeModal(null); setNewNodeName(''); refresh();
-                   }} className="w-full py-4 bg-gold-gradient text-brand-900 text-[10px] font-black rounded-xl uppercase tracking-widest shadow-md hover:brightness-110">
-                    Establish Unit
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
+      <Modal
+        open={Boolean(showNodeModal)}
+        onClose={() => setShowNodeModal(null)}
+        title="Establish unit"
+        description="Add the next organizational unit in the current directory path."
+        size="sm"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setShowNodeModal(null)}>Cancel</Button>
+            <Button variant="gold" disabled={!newNodeName} onClick={handleCreateNode}>Establish unit</Button>
+          </>
+        )}
+      >
+        <label className="space-y-1.5" htmlFor="unit-designation">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Unit designation</span>
+          <input id="unit-designation" placeholder="e.g. STEM-12-Newton" className="w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-sm focus:border-gold-400 outline-none transition-all" value={newNodeName} onChange={e => setNewNodeName(e.target.value)} />
+        </label>
+      </Modal>
 
       {/* REGAL USER DETAIL MODAL */}
-      {selectedStudent && (
-        <div className="fixed inset-0 z-[200] bg-brand-950/80 backdrop-blur-2xl flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-xl rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col sm:flex-row border-2 border-gold-400 animate-in zoom-in duration-300 relative">
-            <button onClick={() => setSelectedStudent(null)} className="absolute top-4 right-4 p-2 bg-slate-100/50 dark:bg-slate-800/80 rounded-lg text-slate-400 hover:text-brand-900 dark:hover:text-slate-100 z-50 transition-all hover:bg-slate-200 dark:hover:bg-slate-700">
-              <X size={16} />
-            </button>
+      <Modal
+        open={Boolean(selectedStudent)}
+        onClose={() => setSelectedStudent(null)}
+        title={`Member details: ${selectedStudent?.name || ''}`}
+        description="Review attendance standing and manage authorized member actions."
+        size="lg"
+      >
+        {selectedStudent ? (
+          <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 sm:flex-row">
             <div className="sm:w-[42%] bg-brand-900 p-6 flex flex-col items-center text-center border-b-2 sm:border-b-0 sm:border-r-2 border-gold-400/20">
                <div className="relative mb-5 mt-4">
-                  <img src={selectedStudent.photo_url} className="w-28 h-28 rounded-2xl object-cover border-4 border-gold-400/30 shadow-lg" />
+                  <img alt={`${selectedStudent.name} profile`} src={selectedStudent.photo_url || undefined} className="w-28 h-28 rounded-2xl object-cover border-4 border-gold-400/30 shadow-lg" />
                   <div className="absolute -bottom-2 -right-2 bg-gold-400 p-2 rounded-lg border-2 border-brand-900 shadow-lg text-brand-900">
                      <Shield size={16} />
                   </div>
                </div>
-               <h3 className="text-white text-lg font-black uppercase tracking-tight mb-1 leading-tight">{selectedStudent.name}</h3>
-               <p className="text-gold-400/50 text-[8px] font-bold uppercase tracking-[0.4em] mb-8">ID-{selectedStudent.student_id}</p>
+               <h3 className="text-white text-lg font-black uppercase tracking-tight mb-1 leading-tight [overflow-wrap:anywhere]">{selectedStudent.name}</h3>
+               <p className="text-gold-300 text-xs font-bold uppercase tracking-widest mb-8 [overflow-wrap:anywhere]">ID-{selectedStudent.student_id}</p>
                <div className="w-full space-y-2">
-                  <div className="flex items-center gap-2 bg-white/5 px-3 py-2.5 rounded-lg text-white/40 text-[7px] font-bold uppercase tracking-widest border border-white/5 overflow-hidden">
-                     <Mail size={12} className="text-gold-400/70 shrink-0" /> <span className="truncate">{selectedStudent.email}</span>
+                  <div className="flex items-center gap-2 bg-white/5 px-3 py-2.5 rounded-lg text-white/70 text-xs font-bold border border-white/5 overflow-hidden">
+                     <Mail size={12} className="text-gold-400/70 shrink-0" /> <span className="min-w-0 [overflow-wrap:anywhere]">{selectedStudent.email}</span>
                   </div>
                   <div className="flex items-center gap-2 bg-white/5 px-3 py-2.5 rounded-lg text-white/40 text-[7px] font-bold uppercase tracking-widest border border-white/5">
                      <Phone size={12} className="text-gold-400/70 shrink-0" /> {selectedStudent.phone || 'UNLINKED'}
@@ -647,10 +676,10 @@ const SSGPanel: React.FC = () => {
                     <ShieldAlert size={12} /> Hour Modification
                   </h4>
                   <div className="grid grid-cols-2 gap-3">
-                     <button onClick={() => handleAdjustSanctionHours(selectedStudent.uid, 1)} className="py-4 bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-red-200 dark:hover:bg-red-900 transition-all flex items-center justify-center gap-1.5 shadow-sm">
+                     <button aria-label="Add one sanction hour" onClick={() => setPendingAdjustment({ delta: 1, action: 'add hour' })} className="py-4 bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-red-200 dark:hover:bg-red-900 transition-all flex items-center justify-center gap-1.5 shadow-sm">
                         <Plus size={16} /> Add Hour
                      </button>
-                     <button disabled={!isPresident} onClick={() => handleAdjustSanctionHours(selectedStudent.uid, -1)} className={`py-4 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-sm ${isPresident ? 'bg-green-50 dark:bg-green-950/80 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900 border border-green-200 dark:border-green-800' : 'bg-slate-50 dark:bg-slate-900 text-slate-300 dark:text-slate-600 opacity-40 cursor-not-allowed'}`}>
+                     <button aria-label="Clear one sanction hour" disabled={!isPresident} onClick={() => setPendingAdjustment({ delta: -1, action: 'clear hour' })} className={`py-4 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-sm ${isPresident ? 'bg-green-50 dark:bg-green-950/80 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900 border border-green-200 dark:border-green-800' : 'bg-slate-50 dark:bg-slate-900 text-slate-300 dark:text-slate-600 opacity-40 cursor-not-allowed'}`}>
                         {isPresident ? <Minus size={16} /> : <Lock size={12} />} Clear Hour
                      </button>
                   </div>
@@ -666,9 +695,26 @@ const SSGPanel: React.FC = () => {
                </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(pendingAdjustment)}
+        onClose={() => setPendingAdjustment(null)}
+        closeOnBackdrop={false}
+        title="Confirm sanction change"
+        description={`This will ${pendingAdjustment?.action || 'change sanctions'} for ${selectedStudent?.name || 'the selected member'}.`}
+        size="sm"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setPendingAdjustment(null)}>Cancel</Button>
+            <Button variant="gold" onClick={confirmAdjustment}>Confirm {pendingAdjustment?.action}</Button>
+          </>
+        )}
+      >
+        <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">The adjustment is recorded as an administrative action and updates the member's service-hour total immediately.</p>
+      </Modal>
+    </Page>
   );
 };
 

@@ -79,11 +79,11 @@ const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-950 flex flex-col items-center justify-center p-4 relative">
+    <div className="relative flex min-h-dvh flex-col items-center justify-start bg-brand-950 px-4 py-6 pt-20 sm:px-6 lg:justify-center lg:py-10">
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
       </div>
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden animate-in fade-in duration-500 border border-white/10">
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl animate-in fade-in duration-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
         <div className="bg-brand-gradient p-6 text-white flex justify-between items-center border-b-2 border-emerald-500">
           <div className="flex items-center gap-3">
             <img 
@@ -103,11 +103,13 @@ const Register: React.FC = () => {
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
               <div className="flex flex-col items-center mb-4">
                 <button 
+                  aria-label="Upload profile photo"
+                  type="button"
                   onClick={() => handleFileUpload('profilePic')}
-                  className="w-24 h-24 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 hover:bg-gold-50 transition-all overflow-hidden relative group"
+                  className="group relative flex h-24 w-24 flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-400 transition-all hover:border-gold-400 hover:bg-gold-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-gold-400 dark:hover:bg-slate-700"
                 >
                   {formData.profilePic ? (
-                    <img src={formData.profilePic} className="w-full h-full object-cover" />
+                    <img src={formData.profilePic} alt="Uploaded profile" className="w-full h-full object-cover" />
                   ) : (
                     <>
                       <UserCircle size={28} />
@@ -118,28 +120,28 @@ const Register: React.FC = () => {
                     <Camera size={20} className="text-white" />
                   </div>
                 </button>
-                <p className="text-[7px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Digital Identity Picture</p>
+                <p className="mt-2 text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-400">Digital Identity Picture</p>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Legal Full Name</label>
-                <input placeholder="Ex. Juan Dela Cruz" className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-100 focus:border-gold-400 outline-none font-bold text-xs" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                <label htmlFor="register-name" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Legal Full Name</label>
+                <input id="register-name" placeholder="Ex. Juan Dela Cruz" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
               </div>
               
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Username</label>
-                  <input placeholder="Choose alias" className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-100 focus:border-gold-400 outline-none font-bold text-xs" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
+                  <label htmlFor="register-username" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Username</label>
+                  <input id="register-username" placeholder="Choose alias" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Email Address</label>
-                  <input placeholder="name@email.com" type="email" className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-100 focus:border-gold-400 outline-none font-bold text-xs" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                  <label htmlFor="register-email" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Email Address</label>
+                  <input id="register-email" placeholder="name@email.com" type="email" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Security Key</label>
-                <input placeholder="••••••••" type="password" className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-100 focus:border-gold-400 outline-none font-bold text-xs" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                <label htmlFor="register-password" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Security Key</label>
+                <input id="register-password" placeholder="••••••••" type="password" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
               </div>
             </div>
           )}
@@ -147,8 +149,8 @@ const Register: React.FC = () => {
           {step === 2 && (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
               <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Official Student ID #</label>
-                <input placeholder="2024-XXXXX" className="w-full p-3.5 bg-slate-50 rounded-xl border border-slate-100 focus:border-gold-400 outline-none font-bold text-xs" value={formData.student_id} onChange={e => setFormData({...formData, student_id: e.target.value})} />
+                <label htmlFor="register-student-id" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Official Student ID #</label>
+                <input id="register-student-id" placeholder="2024-XXXXX" className="w-full min-w-0 break-words rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.student_id} onChange={e => setFormData({...formData, student_id: e.target.value})} />
               </div>
 
               <div className="grid grid-cols-1 gap-2">
@@ -179,7 +181,7 @@ const Register: React.FC = () => {
                 )}
 
                 {isSHS && selectedDept && (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <CustomSelect 
                       label="Track"
                       options={selectedDept.children?.map(t => ({ value: t.id, label: t.name })) || []}
@@ -206,7 +208,7 @@ const Register: React.FC = () => {
                 )}
 
                 {((!isSHS && selectedDept) || (isSHS && selectedStrand)) && (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <CustomSelect 
                       label="Year Level"
                       options={(isSHS ? selectedStrand : selectedDept)?.children?.map(l => ({ value: l.id, label: l.name })) || []}
@@ -234,12 +236,12 @@ const Register: React.FC = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <button onClick={() => handleFileUpload('idFront')} className="p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 hover:bg-gold-50 transition-all aspect-video">
-                   {formData.idFront ? <img src={formData.idFront} className="w-full h-full object-cover rounded-lg" /> : <><CreditCard size={20} /><span className="text-[7px] font-black uppercase mt-1">ID Front Capture</span></>}
+              <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2">
+                <button aria-label="Capture student ID front" type="button" onClick={() => handleFileUpload('idFront')} className="flex aspect-video flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-slate-400 transition-all hover:border-gold-400 hover:bg-gold-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-gold-400 dark:hover:bg-slate-700">
+                   {formData.idFront ? <img src={formData.idFront} alt="Student ID front" className="w-full h-full object-cover rounded-lg" /> : <><CreditCard size={20} /><span className="text-[10px] font-black uppercase mt-1">ID Front Capture</span></>}
                 </button>
-                <button onClick={() => handleFileUpload('idBack')} className="p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 hover:bg-gold-50 transition-all aspect-video">
-                   {formData.idBack ? <img src={formData.idBack} className="w-full h-full object-cover rounded-lg" /> : <><CreditCard size={20} /><span className="text-[7px] font-black uppercase mt-1">ID Back Capture</span></>}
+                <button aria-label="Capture student ID back" type="button" onClick={() => handleFileUpload('idBack')} className="flex aspect-video flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-slate-400 transition-all hover:border-gold-400 hover:bg-gold-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-gold-400 dark:hover:bg-slate-700">
+                   {formData.idBack ? <img src={formData.idBack} alt="Student ID back" className="w-full h-full object-cover rounded-lg" /> : <><CreditCard size={20} /><span className="text-[10px] font-black uppercase mt-1">ID Back Capture</span></>}
                 </button>
               </div>
             </div>
@@ -247,29 +249,29 @@ const Register: React.FC = () => {
 
           {step === 3 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex items-center gap-4">
-                  <Shield size={32} className="text-brand-900" />
+               <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-800">
+                  <Shield size={32} className="text-brand-900 dark:text-gold-400" />
                   <div>
-                    <h4 className="text-[10px] font-black text-brand-900 uppercase">Guardian Protocol</h4>
-                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Institutional Safety Directive</p>
+                    <h4 className="text-[10px] font-black text-brand-900 uppercase dark:text-slate-100">Guardian Protocol</h4>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest dark:text-slate-400">Institutional Safety Directive</p>
                   </div>
                </div>
                <div className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Guardian Name</label>
-                    <input placeholder="Legal Full Name" className="w-full p-4 bg-slate-50 rounded-xl border border-slate-100 font-bold text-xs" value={formData.guardianName} onChange={e => setFormData({...formData, guardianName: e.target.value})} />
+                    <label htmlFor="register-guardian-name" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Guardian Name</label>
+                    <input id="register-guardian-name" placeholder="Legal Full Name" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-base font-bold text-brand-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.guardianName} onChange={e => setFormData({...formData, guardianName: e.target.value})} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Emergency Contact #</label>
-                    <input placeholder="+63 9XX XXX XXXX" className="w-full p-4 bg-slate-50 rounded-xl border border-slate-100 font-bold text-xs" value={formData.guardianPhone} onChange={e => setFormData({...formData, guardianPhone: e.target.value})} />
+                    <label htmlFor="register-guardian-phone" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Emergency Contact #</label>
+                    <input id="register-guardian-phone" placeholder="+63 9XX XXX XXXX" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-base font-bold text-brand-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.guardianPhone} onChange={e => setFormData({...formData, guardianPhone: e.target.value})} />
                   </div>
                </div>
             </div>
           )}
 
-          <div className="flex gap-4 pt-4">
+          <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:gap-4">
             {step > 1 && (
-              <Button variant="secondary" className="!w-16 !p-0 !rounded-xl" onClick={() => setStep(step - 1)}>
+              <Button variant="secondary" aria-label="Previous registration phase" className="!w-full !rounded-xl sm:!w-16 sm:!p-0" onClick={() => setStep(step - 1)}>
                 <ChevronLeft size={20} />
               </Button>
             )}
@@ -285,7 +287,7 @@ const Register: React.FC = () => {
           </div>
 
           <div className="text-center pt-2">
-            <button onClick={() => navigate('/login')} className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] hover:text-brand-900 transition-colors">
+            <button onClick={() => navigate('/login')} className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] hover:text-brand-900 transition-colors dark:text-slate-400 dark:hover:text-gold-400">
               Already have an account? <span className="text-gold-500 underline decoration-2">Log in here!</span>
             </button>
           </div>

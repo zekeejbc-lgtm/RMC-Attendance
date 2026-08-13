@@ -91,15 +91,15 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-brand-950 relative overflow-hidden">
+    <div className="relative flex min-h-dvh items-start justify-center overflow-x-hidden bg-brand-950 px-4 py-6 pt-20 sm:items-center sm:px-6 sm:py-10">
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
       </div>
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-gold-600/10 rounded-full blur-3xl"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-gold-400/10 rounded-full blur-3xl"></div>
+      <div className="pointer-events-none absolute left-0 top-0 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold-600/10 blur-3xl"></div>
+      <div className="pointer-events-none absolute bottom-0 right-0 h-48 w-48 translate-x-1/2 translate-y-1/2 rounded-full bg-gold-400/10 blur-3xl"></div>
 
       <div className="w-full max-w-sm space-y-4 relative z-10 animate-in fade-in zoom-in duration-500">
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-white/10">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
           <div className="bg-brand-gradient p-6 text-center border-b-2 border-emerald-500/20">
             <img 
               src="https://i.imgur.com/K3T5yIT.jpeg" 
@@ -110,41 +110,44 @@ const Login: React.FC = () => {
             <p className="text-gold-300 text-[9px] font-black mt-2 uppercase tracking-[0.3em]">Identity Verification</p>
           </div>
 
-          <div className="p-6">
+          <div className="bg-white p-6 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
             {error && (
-              <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg border border-red-100 flex items-center gap-2 text-[10px] font-bold uppercase">
+              <div aria-live="polite" role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-red-100 bg-red-50 p-3 text-[10px] font-bold uppercase text-red-600 dark:border-red-900/70 dark:bg-red-950/50 dark:text-red-300">
                 <ShieldAlert size={14} /> {error}
               </div>
             )}
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Asset Identifier</label>
+                <label htmlFor="login-identifier" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Asset Identifier</label>
                 <input
+                  id="login-identifier"
                   type="text"
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-lg focus:border-gold-400 focus:outline-none transition-all font-bold text-xs"
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 transition-all placeholder:text-slate-400 focus:border-gold-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
                   placeholder="Username / Email"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Security Key</label>
+                <label htmlFor="login-password" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Security Key</label>
                 <div className="relative">
                   <input
+                    id="login-password"
                     type={showPassword ? "text" : "password"}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-lg focus:border-gold-400 focus:outline-none transition-all font-bold text-xs"
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3.5 pr-12 text-base font-bold text-brand-900 transition-all placeholder:text-slate-400 focus:border-gold-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
                     placeholder="••••••••"
                   />
                   <button
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-brand-900"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-900 dark:text-slate-400 dark:hover:text-gold-400"
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -156,16 +159,17 @@ const Login: React.FC = () => {
               </Button>
             </form>
 
-            <div className="mt-6 pt-5 border-t border-slate-50 space-y-4 text-center">
-              <button onClick={() => navigate('/register')} className="w-full py-3 bg-slate-50 text-brand-900 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all border border-slate-100">
+            <div className="mt-6 space-y-4 border-t border-slate-200 pt-5 text-center dark:border-slate-800">
+              <button onClick={() => navigate('/register')} className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 text-[9px] font-black uppercase tracking-widest text-brand-900 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
                 Register New Asset
               </button>
               
               <div className="flex flex-col gap-3 items-center">
-                 <button onClick={() => alert("Administrative intervention required for key recovery. Contact SSG Unit.")} className="text-[8px] font-black text-slate-400 hover:text-brand-900 uppercase tracking-[0.3em] transition-colors">
+                 <button onClick={() => alert("Administrative intervention required for key recovery. Contact SSG Unit.")} className="text-[8px] font-black text-slate-400 hover:text-brand-900 uppercase tracking-[0.3em] transition-colors dark:text-slate-400 dark:hover:text-gold-400">
                    Forgot Password?
                  </button>
                  <button 
+                   aria-expanded={showTestPanel}
                    onClick={() => setShowTestPanel(!showTestPanel)}
                    className="text-[8px] font-black text-gold-600 hover:text-gold-500 uppercase tracking-widest flex items-center gap-1.5"
                  >
@@ -177,7 +181,7 @@ const Login: React.FC = () => {
         </div>
 
         {showTestPanel && (
-          <div className="bg-brand-900/90 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-bottom-2 duration-300">
+          <div className="rounded-2xl border border-white/10 bg-brand-900/90 p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-2 duration-300 dark:border-slate-700 dark:bg-slate-900/95">
             <h3 className="text-gold-400 text-[8px] font-black uppercase tracking-[0.2em] mb-3 flex items-center gap-1.5">
               <Sparkles size={10}/> Credential Vault
             </h3>
@@ -189,6 +193,7 @@ const Login: React.FC = () => {
                     <p className="text-[7px] text-gold-500 font-black uppercase mt-0.5 tracking-widest opacity-60">{acc.role}</p>
                   </div>
                   <button 
+                    aria-label={`Copy username ${acc.user}`}
                     onClick={(e) => { e.stopPropagation(); copyToClipboard(acc.user); }}
                     className="p-1.5 text-slate-500 hover:text-gold-400 transition-colors bg-brand-950 rounded-md border border-white/5"
                   >

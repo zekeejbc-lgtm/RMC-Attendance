@@ -1,6 +1,5 @@
-
-import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Search, CheckCircle, X } from 'lucide-react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle, ChevronDown, Search, X } from 'lucide-react';
 
 export interface Option {
   value: string;
@@ -18,6 +17,8 @@ interface CustomSelectProps {
   className?: string;
 }
 
+const selectAllKey = '__select_all__';
+
 const CustomSelect: React.FC<CustomSelectProps> = ({
   label,
   options,
@@ -26,46 +27,121 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   placeholder = 'Select...',
   multi = false,
   searchable = false,
-  className = ''
+  className = '',
 }) => {
+  const labelId = useId();
+  const valueId = useId();
+  const listboxId = useId();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeKey, setActiveKey] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef(new Map<string, HTMLButtonElement>());
 
-  // Close when clicking outside
+  const filteredOptions = useMemo(() => options.filter((option) =>
+    option.label.toLowerCase().includes(search.toLowerCase())), [options, search]);
+  const optionKeys = useMemo(
+    () => [...(multi ? [selectAllKey] : []), ...filteredOptions.map((option) => option.value)],
+    [filteredOptions, multi],
+  );
+
+  const selectedKey = multi
+    ? selectAllKey
+    : typeof value === 'string' && options.some((option) => option.value === value)
+      ? value
+      : null;
+
+  const focusOption = (key: string | undefined) => {
+    if (!key) return;
+    setActiveKey(key);
+    const option = optionRefs.current.get(key);
+    if (option) option.focus();
+  };
+
+  useLayoutEffect(() => {
+    if (isOpen && activeKey) optionRefs.current.get(activeKey)?.focus();
+  }, [activeKey, isOpen]);
+
+  const openListbox = (preferredKey?: string) => {
+    const nextKey = preferredKey && optionKeys.includes(preferredKey)
+      ? preferredKey
+      : selectedKey && optionKeys.includes(selectedKey)
+        ? selectedKey
+        : optionKeys[0];
+    setIsOpen(true);
+    focusOption(nextKey);
+  };
+
+  const closeListbox = (restoreFocus = false) => {
+    setIsOpen(false);
+    setSearch('');
+    setActiveKey(null);
+    if (restoreFocus) triggerRef.current?.focus();
+  };
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        closeListbox();
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(opt => 
-    opt.label.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    if (!isOpen || optionKeys.length === 0 || (activeKey && optionKeys.includes(activeKey))) return;
+    setActiveKey(optionKeys[0]);
+  }, [activeKey, isOpen, optionKeys]);
 
-  const handleSelect = (optValue: string) => {
+  const handleSelect = (optionValue: string) => {
     if (multi) {
       const currentValues = Array.isArray(value) ? value : [];
-      if (currentValues.includes(optValue)) {
-        onChange(currentValues.filter(v => v !== optValue));
-      } else {
-        onChange([...currentValues, optValue]);
-      }
-    } else {
-      onChange(optValue);
-      setIsOpen(false);
+      onChange(currentValues.includes(optionValue)
+        ? currentValues.filter((currentValue) => currentValue !== optionValue)
+        : [...currentValues, optionValue]);
+      return;
     }
+
+    onChange(optionValue);
+    closeListbox(true);
   };
 
   const handleSelectAll = () => {
-    if (Array.isArray(value) && value.length === options.length) {
-      onChange([]);
-    } else {
-      onChange(options.map(o => o.value));
+    if (Array.isArray(value) && value.length === options.length) onChange([]);
+    else onChange(options.map((option) => option.value));
+  };
+
+  const handleOptionKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeListbox(true);
+      return;
+    }
+
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    if (optionKeys.length === 0) return;
+
+    const currentIndex = Math.max(0, optionKeys.indexOf(activeKey || optionKeys[0]));
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? optionKeys.length - 1
+        : event.key === 'ArrowDown'
+          ? (currentIndex + 1) % optionKeys.length
+          : (currentIndex - 1 + optionKeys.length) % optionKeys.length;
+    focusOption(optionKeys[nextIndex]);
+  };
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeListbox(true);
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      focusOption(event.key === 'ArrowDown' ? optionKeys[0] : optionKeys.at(-1));
     }
   };
 
@@ -74,111 +150,154 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
       const currentValues = Array.isArray(value) ? value : [];
       if (currentValues.length === 0) return placeholder;
       if (currentValues.length === options.length && options.length > 0) return 'All Selected';
-      if (currentValues.length === 1) return options.find(o => o.value === currentValues[0])?.label || placeholder;
+      if (currentValues.length === 1) {
+        return options.find((option) => option.value === currentValues[0])?.label || placeholder;
+      }
       return `${currentValues.length} Selected`;
-    } else {
-      const selected = options.find(o => o.value === value);
-      return selected ? selected.label : placeholder;
     }
+
+    const selected = options.find((option) => option.value === value);
+    return selected ? selected.label : placeholder;
   };
 
-  return (
-    <div className={`space-y-1.5 relative ${className}`} ref={containerRef}>
-      {label && (
-        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-          {label}
-        </label>
-      )}
-      
-      <div 
-        className={`w-full p-3 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 cursor-pointer flex justify-between items-center transition-all ${isOpen ? 'border-gold-400 ring-1 ring-gold-400/20' : 'border-slate-200 dark:border-slate-700 hover:border-gold-400'}`}
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <span className="truncate select-none">{getDisplayValue()}</span>
-        <ChevronDown size={14} className={`text-slate-400 dark:text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-      </div>
+  const searchName = label ? `Search ${label} options` : 'Search selection options';
 
-      {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 z-50 overflow-hidden animate-in zoom-in-95 duration-200 origin-top">
-          {(searchable || options.length > 10) && (
-            <div className="p-2 border-b border-slate-100 dark:border-slate-700">
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-lg">
-                <Search size={14} className="text-slate-400 dark:text-slate-500" />
-                <input 
-                  type="text" 
-                  placeholder="Search..." 
-                  className="bg-transparent text-xs font-bold text-brand-900 dark:text-slate-100 outline-none w-full placeholder:text-slate-400 dark:placeholder:text-slate-500"
+  return (
+    <div
+      className={`relative space-y-1.5 ${className}`}
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget;
+        if (isOpen && (!nextTarget || !event.currentTarget.contains(nextTarget))) {
+          closeListbox();
+        }
+      }}
+      ref={containerRef}
+    >
+      {label ? (
+        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400" id={labelId}>
+          {label}
+        </span>
+      ) : null}
+
+      <button
+        aria-controls={isOpen ? listboxId : undefined}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-labelledby={label ? `${labelId} ${valueId}` : valueId}
+        className={`flex w-full cursor-pointer items-center justify-between rounded-xl border bg-slate-50 p-3 text-xs font-bold text-brand-900 transition-all dark:bg-slate-800 dark:text-slate-100 ${isOpen ? 'border-gold-400 ring-1 ring-gold-400/20' : 'border-slate-200 hover:border-gold-400 dark:border-slate-700'}`}
+        onClick={() => isOpen ? closeListbox() : openListbox()}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            openListbox(event.key === 'ArrowUp' ? optionKeys.at(-1) : undefined);
+          } else if (event.key === 'Escape' && isOpen) {
+            event.preventDefault();
+            closeListbox(true);
+          }
+        }}
+        ref={triggerRef}
+        type="button"
+      >
+        <span className="select-none truncate" id={valueId}>{getDisplayValue()}</span>
+        <ChevronDown className={`text-slate-400 transition-transform duration-200 dark:text-slate-500 ${isOpen ? 'rotate-180' : ''}`} size={14} />
+      </button>
+
+      {isOpen ? (
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 origin-top overflow-hidden rounded-xl border border-slate-100 bg-white shadow-xl animate-in zoom-in-95 duration-200 dark:border-slate-700 dark:bg-slate-800">
+          {searchable || options.length > 10 ? (
+            <div className="border-b border-slate-100 p-2 dark:border-slate-700">
+              <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900">
+                <Search className="text-slate-400 dark:text-slate-500" size={14} />
+                <input
+                  aria-controls={listboxId}
+                  aria-label={searchName}
+                  className="w-full bg-transparent text-xs font-bold text-brand-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  onChange={(event) => setSearch(event.target.value)}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search..."
+                  type="text"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
                 />
-                {search && (
-                  <button onClick={(e) => { e.stopPropagation(); setSearch(''); }} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                {search ? (
+                  <button
+                    aria-label={`Clear ${label || 'selection'} options search`}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    onClick={(event) => { event.stopPropagation(); setSearch(''); }}
+                    type="button"
+                  >
                     <X size={12} />
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
-          )}
+          ) : null}
 
-          <div className="max-h-[200px] overflow-y-auto p-1 custom-scrollbar">
-            {multi && (
-              <button 
-                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold mb-1 flex items-center justify-between transition-colors ${
-                  Array.isArray(value) && value.length === options.length && options.length > 0
-                  ? 'bg-gold-50 dark:bg-gold-950/60 text-brand-900 dark:text-gold-400' 
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/60'
-                }`}
+          <div
+            aria-label={label ? `${label} options` : 'Selection options'}
+            aria-multiselectable={multi || undefined}
+            className="max-h-[200px] overflow-y-auto p-1 custom-scrollbar"
+            id={listboxId}
+            role="listbox"
+          >
+            {multi ? (
+              <button
+                aria-selected={Array.isArray(value) && value.length === options.length && options.length > 0}
+                className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-bold transition-colors ${Array.isArray(value) && value.length === options.length && options.length > 0 ? 'bg-gold-50 text-brand-900 dark:bg-gold-950/60 dark:text-gold-400' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700/60'}`}
                 onClick={handleSelectAll}
+                onFocus={() => setActiveKey(selectAllKey)}
+                onKeyDown={handleOptionKeyDown}
+                ref={(element) => { if (element) optionRefs.current.set(selectAllKey, element); else optionRefs.current.delete(selectAllKey); }}
+                role="option"
+                tabIndex={activeKey === selectAllKey ? 0 : -1}
+                type="button"
               >
                 <span>Select All</span>
-                {Array.isArray(value) && value.length === options.length && options.length > 0 && <CheckCircle size={14} className="text-gold-500" />}
+                {Array.isArray(value) && value.length === options.length && options.length > 0 ? <CheckCircle className="text-gold-500" size={14} /> : null}
               </button>
-            )}
+            ) : null}
 
             {filteredOptions.length === 0 ? (
-              <div className="p-3 text-center text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+              <div className="p-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500" role="status">
                 No options found
               </div>
-            ) : (
-              filteredOptions.map(opt => {
-                const isSelected = multi 
-                  ? (Array.isArray(value) && value.includes(opt.value))
-                  : value === opt.value;
+            ) : filteredOptions.map((option) => {
+              const isSelected = multi
+                ? Array.isArray(value) && value.includes(option.value)
+                : value === option.value;
 
-                return (
-                  <button 
-                    key={opt.value}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold mb-1 flex items-center justify-between transition-colors ${
-                      isSelected 
-                      ? 'bg-brand-50 dark:bg-slate-700 text-brand-900 dark:text-gold-400' 
-                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                    }`}
-                    onClick={() => handleSelect(opt.value)}
-                  >
-                    <span className="truncate">{opt.label}</span>
-                    {isSelected && <CheckCircle size={14} className="text-brand-900 dark:text-gold-400" />}
-                  </button>
-                );
-              })
-            )}
+              return (
+                <button
+                  aria-selected={isSelected}
+                  className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-bold transition-colors ${isSelected ? 'bg-brand-50 text-brand-900 dark:bg-slate-700 dark:text-gold-400' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700/50'}`}
+                  key={option.value}
+                  onClick={() => handleSelect(option.value)}
+                  onFocus={() => setActiveKey(option.value)}
+                  onKeyDown={handleOptionKeyDown}
+                  ref={(element) => { if (element) optionRefs.current.set(option.value, element); else optionRefs.current.delete(option.value); }}
+                  role="option"
+                  tabIndex={activeKey === option.value ? 0 : -1}
+                  type="button"
+                >
+                  <span className="truncate">{option.label}</span>
+                  {isSelected ? <CheckCircle className="text-brand-900 dark:text-gold-400" size={14} /> : null}
+                </button>
+              );
+            })}
           </div>
-          
-          {multi && (
-            <div className="p-2 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
-              <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+
+          {multi ? (
+            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-900">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 {Array.isArray(value) ? value.length : 0} selected
               </span>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="text-[9px] font-black text-brand-900 dark:text-gold-400 uppercase tracking-widest hover:text-gold-500 transition-colors"
-              >
+              <button className="text-[9px] font-black uppercase tracking-widest text-brand-900 transition-colors hover:text-gold-500 dark:text-gold-400" onClick={() => closeListbox(true)} type="button">
                 Done
               </button>
             </div>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

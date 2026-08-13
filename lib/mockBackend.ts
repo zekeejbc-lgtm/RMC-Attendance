@@ -222,11 +222,7 @@ export const mockAuth = {
   }
 };
 
-export const mockSeed = () => {
-  const db = getDB();
-  db.users = {};
-  db.usernames = {};
-  
+const createReferenceSchoolStructure = (): SchoolNode[] => {
   const defaultSchool: SchoolNode = {
     id: 'school_rmc',
     name: 'Rizal Memorial Colleges',
@@ -309,7 +305,47 @@ export const mockSeed = () => {
       }
     ]
   };
-  db.school_structure = [defaultSchool];
+  return [defaultSchool];
+};
+
+const createReferenceEvent = (): AppEvent => ({
+  id: 'e1',
+  title: "General Assembly",
+  description: "Institutional objective details for the annual assembly focusing on second semester directives and school-wide improvements.",
+  status: 'active',
+  created_by: 'system',
+  startTime: Date.now(),
+  endTime: Date.now() + 3600000,
+  penaltyValue: 5,
+  penaltyUnit: 'hours',
+  participantsType: 'all',
+  target: { all: true },
+  location: { lat: 7.0736, lng: 125.6126, radius_meters: 5000 },
+  timestamp: Date.now()
+} as AppEvent);
+
+export const ensureMockReferenceData = () => {
+  const db = getDB();
+  let updated = false;
+
+  if (db.school_structure.length === 0) {
+    db.school_structure = createReferenceSchoolStructure();
+    updated = true;
+  }
+  if (Object.keys(db.events).length === 0) {
+    db.events.e1 = createReferenceEvent();
+    updated = true;
+  }
+
+  if (updated) saveDB(db);
+  return db;
+};
+
+export const mockSeed = () => {
+  const db = getDB();
+  db.users = {};
+  db.usernames = {};
+  db.school_structure = createReferenceSchoolStructure();
 
   TEST_ACCOUNTS.forEach(acc => {
     const uid = `mock_uid_${acc.user}`;
@@ -463,21 +499,7 @@ export const mockSeed = () => {
     }
   };
   
-  db.events['e1'] = {
-    id: 'e1',
-    title: "General Assembly",
-    description: "Institutional objective details for the annual assembly focusing on second semester directives and school-wide improvements.",
-    status: 'active',
-    created_by: 'system',
-    startTime: Date.now(),
-    endTime: Date.now() + 3600000,
-    penaltyValue: 5,
-    penaltyUnit: 'hours',
-    participantsType: 'all',
-    target: { all: true },
-    location: { lat: 7.0736, lng: 125.6126, radius_meters: 5000 },
-    timestamp: Date.now()
-  } as AppEvent;
+  db.events.e1 = createReferenceEvent();
   
   saveDB(db);
 };
