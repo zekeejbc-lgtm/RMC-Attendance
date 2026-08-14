@@ -36,6 +36,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: string[] }> 
     return <Navigate to="/register/status" replace />;
   }
 
+  // Administrators have the highest access level. Student-only navigation is
+  // hidden from their sidebar, but direct access remains available for support.
+  if (profile.role === 'admin') return <Layout>{children}</Layout>;
+
   // Handle OSSA role routing
   if (profile.role === 'ossa') {
     if (!roles || !roles.includes('ossa')) {
@@ -66,25 +70,25 @@ const App: React.FC = () => {
           } />
 
           <Route path="/student/qr" element={
-            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
+            <ProtectedRoute roles={['student', 'mayor']}>
               <StudentQR />
             </ProtectedRoute>
           } />
 
           <Route path="/student/events" element={
-            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
+            <ProtectedRoute roles={['student', 'mayor']}>
               <StudentEvents />
             </ProtectedRoute>
           } />
 
           <Route path="/student/ceremonies" element={
-            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
+            <ProtectedRoute roles={['student', 'mayor']}>
               <StudentCeremonies />
             </ProtectedRoute>
           } />
 
           <Route path="/student/records" element={
-            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
+            <ProtectedRoute roles={['student', 'mayor']}>
               <StudentRecords />
             </ProtectedRoute>
           } />
@@ -108,7 +112,7 @@ const App: React.FC = () => {
           } />
 
           <Route path="/admin/attendance" element={
-            <ProtectedRoute roles={['ssg', 'admin', 'mayor', 'ossa']}>
+            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
               <AttendanceDashboard />
             </ProtectedRoute>
           } />

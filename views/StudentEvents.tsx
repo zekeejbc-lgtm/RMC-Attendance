@@ -4,9 +4,11 @@ import { AppEvent } from '../types';
 import { mockData } from '../lib/mockBackend';
 import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
+import { Collapsible } from '../components/ui/Collapsible';
+import CustomSelect from '../components/ui/CustomSelect';
 import { 
   Calendar, Search, Filter, MapPin, Clock, AlertTriangle, 
-  ChevronDown, ChevronUp, FileUp, CheckCircle2, ArrowRight,
+  ChevronDown, FileUp, CheckCircle2, ArrowRight,
   Send, FileText
 } from 'lucide-react';
 
@@ -136,6 +138,11 @@ const StudentEvents: React.FC = () => {
   const scheduledEvents = useMemo(() => filteredEvents.filter(e => e.status === 'scheduled'), [filteredEvents]);
   const archivedEvents = useMemo(() => filteredEvents.filter(e => e.status === 'ended' || e.status === 'cancelled'), [filteredEvents]);
 
+  const canFileExcuse = (event: AppEvent) => (
+    event.endTime > Date.now()
+    && !['done', 'ended', 'cancelled'].includes(event.status)
+  );
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -146,7 +153,7 @@ const StudentEvents: React.FC = () => {
 
   const handleExcuseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!excuseDetails) return;
+    if (!selectedEvent || !canFileExcuse(selectedEvent) || !excuseDetails) return;
     setSubmittedExcuse(true);
     setTimeout(() => {
       setSubmittedExcuse(false);
@@ -184,19 +191,7 @@ const StudentEvents: React.FC = () => {
 
           <div className="flex min-w-0 items-center gap-1.5 sm:w-56">
             <Filter className="text-slate-400 shrink-0" size={14} />
-            <label className="sr-only" htmlFor="event-status-filter">Filter events by status</label>
-            <select
-              id="event-status-filter"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="input-field select-field py-1.5 shadow-xs cursor-pointer text-xs"
-            >
-              <option value="all">All Statuses</option>
-              <option value="active">Active Only</option>
-              <option value="scheduled">Scheduled Only</option>
-              <option value="ended">Ended Only</option>
-              <option value="cancelled">Cancelled Only</option>
-            </select>
+            <CustomSelect className="min-w-0 flex-1" label="Status" onChange={(value) => setStatusFilter(value as typeof statusFilter)} options={[{ value: 'all', label: 'All Statuses' }, { value: 'active', label: 'Active Only' }, { value: 'scheduled', label: 'Scheduled Only' }, { value: 'ended', label: 'Ended Only' }, { value: 'cancelled', label: 'Cancelled Only' }]} value={statusFilter} />
           </div>
       </Surface>
 
@@ -204,8 +199,10 @@ const StudentEvents: React.FC = () => {
       <Surface className="space-y-3 p-4 sm:p-5">
         <div className="flex flex-col items-start gap-2 border-b border-slate-200 pb-3 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 -ml-4.5"></span>
+            <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+              <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500 opacity-75" />
+              <span className="relative h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            </span>
             <h2 className="text-xs font-bold text-brand-900 dark:text-slate-100 uppercase tracking-wider">Active & Ongoing ({activeEvents.length})</h2>
           </div>
           <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-full uppercase">Check-In Open</span>
@@ -250,7 +247,7 @@ const StudentEvents: React.FC = () => {
                   </div>
 
                   <span className="text-[9px] font-bold text-gold-400 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    View Details & Map <ArrowRight size={10} />
+                Details <ArrowRight size={10} />
                   </span>
                 </div>
               </button>
@@ -266,6 +263,9 @@ const StudentEvents: React.FC = () => {
       {/* 2. SCHEDULED EVENTS (COLLAPSED BY DEFAULT WITH ANIMATION) */}
       <Surface className="overflow-hidden shadow-sm transition-all">
         <button
+          aria-controls="scheduled-events-panel"
+          aria-expanded={isScheduledOpen}
+          type="button"
           onClick={() => setIsScheduledOpen(!isScheduledOpen)}
           className="flex w-full items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100/80 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-900 sm:p-5"
         >
@@ -278,13 +278,12 @@ const StudentEvents: React.FC = () => {
               <p className="text-slate-400 dark:text-slate-400 text-[10px] font-medium">Click to expand or collapse future assemblies</p>
             </div>
           </div>
-          <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-2 text-brand-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
-            {isScheduledOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <div className="app-disclosure-chevron shrink-0 rounded-xl border border-slate-200 bg-white p-2 text-brand-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+            <ChevronDown size={18} />
           </div>
         </button>
 
-        {isScheduledOpen && (
-          <div className="animate-in space-y-4 p-4 duration-300 slide-in-from-top-2 sm:p-6">
+        <Collapsible id="scheduled-events-panel" open={isScheduledOpen} innerClassName="space-y-4 p-4 sm:p-6">
             {scheduledEvents.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {scheduledEvents.map(event => (
@@ -317,13 +316,15 @@ const StudentEvents: React.FC = () => {
             ) : (
               <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-wider py-4">No scheduled events found.</p>
             )}
-          </div>
-        )}
+        </Collapsible>
       </Surface>
 
       {/* 3. ARCHIVED EVENTS (ENDED OR CANCELLED - COLLAPSED BY DEFAULT) */}
       <Surface className="overflow-hidden shadow-sm transition-all">
         <button
+          aria-controls="archived-events-panel"
+          aria-expanded={isArchivedOpen}
+          type="button"
           onClick={() => setIsArchivedOpen(!isArchivedOpen)}
           className="flex w-full items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100/80 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:bg-slate-900 sm:p-5"
         >
@@ -336,13 +337,12 @@ const StudentEvents: React.FC = () => {
               <p className="text-slate-400 dark:text-slate-400 text-[10px] font-medium">Past and cancelled campus events</p>
             </div>
           </div>
-          <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-2 text-brand-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
-            {isArchivedOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <div className="app-disclosure-chevron shrink-0 rounded-xl border border-slate-200 bg-white p-2 text-brand-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+            <ChevronDown size={18} />
           </div>
         </button>
 
-        {isArchivedOpen && (
-          <div className="animate-in space-y-4 p-4 duration-300 slide-in-from-top-2 sm:p-6">
+        <Collapsible id="archived-events-panel" open={isArchivedOpen} innerClassName="space-y-4 p-4 sm:p-6">
             {archivedEvents.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {archivedEvents.map(event => (
@@ -372,8 +372,7 @@ const StudentEvents: React.FC = () => {
             ) : (
               <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-wider py-4">No archived events.</p>
             )}
-          </div>
-        )}
+        </Collapsible>
       </Surface>
 
       {/* EVENT DETAIL MODAL PANEL */}
@@ -384,20 +383,21 @@ const StudentEvents: React.FC = () => {
           title={selectedEvent.title}
           description={`Review this ${selectedEvent.status} event's schedule, sanction, and geofence.`}
           size="lg"
-          footer={(
+          footer={canFileExcuse(selectedEvent) ? (
             <>
               <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 sm:mr-auto sm:self-center">
                 Unable to attend this assembly?
               </p>
               <button
+                aria-label="File for excuse"
                 onClick={() => setShowExcuseModal(true)}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gold-gradient px-6 py-3 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition-all hover:brightness-110 active:scale-95 sm:w-auto"
                 type="button"
               >
-                <FileUp size={16} /> File for Excuse
+              <FileUp size={16} /> Excuse
               </button>
             </>
-          )}
+          ) : undefined}
         >
           <div className="space-y-5">
             <span className="inline-flex rounded-full border border-gold-300 bg-gold-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-gold-700 dark:border-gold-400/30 dark:bg-gold-400/10 dark:text-gold-300">
@@ -472,7 +472,7 @@ const StudentEvents: React.FC = () => {
       ) : null}
 
       {/* EXCUSE FILING SECONDARY MODAL PANEL */}
-      {selectedEvent ? (
+      {selectedEvent && canFileExcuse(selectedEvent) ? (
         <Modal
           open={showExcuseModal}
           onClose={() => setShowExcuseModal(false)}
@@ -482,11 +482,12 @@ const StudentEvents: React.FC = () => {
           closeOnBackdrop={!submittedExcuse}
           footer={!submittedExcuse ? (
             <button
+              aria-label="Submit formal excuse"
               type="submit"
               form="event-excuse-form"
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gold-400/30 bg-brand-900 px-5 py-3.5 text-xs font-black uppercase tracking-widest text-white shadow-lg transition-all hover:bg-brand-800 active:scale-98 sm:w-auto"
             >
-              <Send size={16} className="text-gold-400" /> Submit Formal Excuse
+            <Send size={16} className="text-gold-400" /> Submit
             </button>
           ) : undefined}
         >
@@ -509,20 +510,7 @@ const StudentEvents: React.FC = () => {
                 </div>
 
                 {/* Reason Select */}
-                <div className="space-y-1">
-                  <label htmlFor="event-excuse-reason" className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Excuse Reason</label>
-                  <select
-                    id="event-excuse-reason"
-                    value={excuseReason}
-                    onChange={(e) => setExcuseReason(e.target.value)}
-                    className="input-field select-field"
-                  >
-                    <option value="Medical / Health Condition">Medical / Health Condition</option>
-                    <option value="Academic Conflict / Exam">Academic Conflict / Official Exam</option>
-                    <option value="Family Emergency">Family Emergency</option>
-                    <option value="Official Representation (Off-Campus)">Official School Off-Campus Event</option>
-                  </select>
-                </div>
+                <CustomSelect label="Excuse Reason" onChange={(value) => setExcuseReason(value as string)} options={[{ value: 'Medical / Health Condition', label: 'Medical / Health Condition' }, { value: 'Academic Conflict / Exam', label: 'Academic Conflict / Official Exam' }, { value: 'Family Emergency', label: 'Family Emergency' }, { value: 'Official Representation (Off-Campus)', label: 'Official School Off-Campus Event' }]} value={excuseReason} />
 
                 {/* Details textarea */}
                 <div className="space-y-1">

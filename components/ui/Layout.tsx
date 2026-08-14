@@ -1,14 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Award, BarChart3, Bell, Building2, Calendar, ChevronDown, FileText,
-  LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, QrCode,
+  Award, BarChart3, Bell, Building2, Calendar, ChevronDown, ChevronRight, FileText,
+  LayoutDashboard, Menu, PanelLeftClose, QrCode,
   ScanLine, ShieldCheck, User, Users, X,
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
-import { auth as firebaseAuth } from '../../firebase';
-import { mockAuth } from '../../lib/mockBackend';
 import { ThemeToggle } from './ThemeToggle';
+import { Collapsible } from './Collapsible';
 
 const mobileDrawerId = 'mobile-main-navigation';
 
@@ -59,22 +58,6 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   }, [isMobileMenuOpen]);
 
-  const handleLogout = async () => {
-    try {
-      if (isMock) {
-        mockAuth.signOut();
-        navigate('/login');
-      } else {
-        await firebaseAuth.signOut();
-        navigate('/login');
-      }
-    } catch (err) {
-      console.error("Logout failed", err);
-      // Force navigation anyway
-      navigate('/login');
-    }
-  };
-
   const trapDrawerFocus = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Tab') return;
 
@@ -95,18 +78,19 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   const navItems = [
-    { label: 'OSSA Hub', icon: Building2, path: '/ossa/dashboard', roles: ['ossa', 'admin', 'ssg'] },
+    { label: 'OSSA Hub', icon: Building2, path: '/ossa/dashboard', roles: ['ossa', 'admin'] },
     { label: 'Home', icon: LayoutDashboard, path: '/dashboard', roles: ['student', 'mayor', 'ssg', 'admin', 'ossa'] },
-    { label: 'My QR', icon: QrCode, path: '/student/qr', roles: ['student', 'mayor', 'ssg', 'admin', 'ossa'] },
-    { label: 'Events', icon: Calendar, path: '/student/events', roles: ['student', 'mayor', 'ssg', 'admin', 'ossa'] },
-    { label: 'Ceremonies', icon: Award, path: '/student/ceremonies', roles: ['student', 'mayor', 'ssg', 'admin', 'ossa'] },
-    { label: 'Records', icon: FileText, path: '/student/records', roles: ['student', 'mayor', 'ssg', 'admin', 'ossa'] },
-    { label: 'Scanner', icon: ScanLine, path: '/mayor/scan', roles: ['mayor', 'ssg', 'admin', 'ossa'] },
+    { label: 'My QR', icon: QrCode, path: '/student/qr', roles: ['student', 'mayor'] },
+    { label: 'Events', icon: Calendar, path: '/student/events', roles: ['student', 'mayor'] },
+    { label: 'Ceremonies', icon: Award, path: '/student/ceremonies', roles: ['student', 'mayor'] },
+    { label: 'Records', icon: FileText, path: '/student/records', roles: ['student', 'mayor'] },
+    { label: 'Mayor Hub', icon: ScanLine, path: '/mayor/scan', roles: ['mayor', 'ssg', 'admin', 'ossa'] },
     { label: 'SSG Panel', icon: ShieldCheck, path: '/ssg/panel', roles: ['ssg', 'admin', 'ossa'] },
   ];
   const role = profile?.role || '';
+  const identityLabel = role === 'student' || role === 'mayor' ? 'Student ID' : 'Official ID';
   const allowedNavItems = navItems.filter((item) => item.roles.includes(role));
-  const hasDirectory = ['ssg', 'admin', 'mayor', 'ossa'].includes(role);
+  const hasDirectory = ['ssg', 'admin', 'ossa'].includes(role);
   const canManageMembers = ['ssg', 'admin', 'ossa'].includes(role);
 
   const navigateAndClose = (path: string) => {
@@ -139,11 +123,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           onClick={() => setIsDirectoryOpen((open) => !open)}
           className="w-full min-h-11 flex items-center justify-between px-3 py-3 text-gold-400/70 hover:text-gold-400 transition-colors uppercase text-[10px] font-black tracking-widest"
         >
-          <span>Directory</span>
-          <ChevronDown size={14} className={`transition-transform duration-200 ${isDirectoryOpen ? 'rotate-180' : ''}`} />
+          <span>Admin</span>
+          <ChevronDown size={14} className="app-disclosure-chevron" />
         </button>
-        {isDirectoryOpen && (
-          <div id={controlsId} className="space-y-1 pl-2">
+        <Collapsible id={controlsId} open={isDirectoryOpen} innerClassName="space-y-1 pl-2">
             <button
               type="button"
               aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined}
@@ -151,7 +134,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               className={itemClass('/admin/attendance')}
             >
               <BarChart3 size={18} />
-              <span className="text-xs">Attendance Dashboard</span>
+              <span className="text-xs">Attendance</span>
             </button>
             {canManageMembers && (
               <button
@@ -161,11 +144,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 className={itemClass('/admin/members')}
               >
                 <Users size={18} />
-                <span className="text-xs">Manage Members</span>
+                <span className="text-xs">Members</span>
               </button>
             )}
-          </div>
-        )}
+        </Collapsible>
       </div>
     );
   };
@@ -242,17 +224,20 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-widest text-gold-400/80">Appearance</span><ThemeToggle size="sm" className="min-h-11 min-w-11" /></div>
             <button type="button" aria-label="View profile" onClick={() => navigateAndClose('/student/profile')} className="w-full min-h-14 group flex items-center gap-3 p-3 rounded-2xl bg-brand-950/80 border border-gold-400/30 hover:border-gold-400/60 transition-all text-left">
               <img src={profile?.photo_url || 'https://i.pravatar.cc/150'} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400" />
-              <span className="min-w-0 flex-1"><span className="block text-xs font-bold text-white truncate">{profile?.name || 'Student Account'}</span><span className="block text-[10px] text-gold-400 font-mono font-bold truncate">ID: {profile?.student_id || '2024-0001'}</span></span><User size={18} className="text-gold-400 shrink-0" />
+              <span className="min-w-0 flex-1"><span className="block text-xs font-bold text-white truncate">{profile?.name || 'Account'}</span><span className="block text-[10px] text-gold-400 font-mono font-bold truncate">{identityLabel}: {profile?.student_id || 'Not assigned'}</span></span><User size={18} className="text-gold-400 shrink-0" />
             </button>
-            <button type="button" onClick={handleLogout} className="w-full min-h-11 flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold"><LogOut size={16} /><span>Sign Out</span></button>
           </div>
         </aside>
       )}
 
       <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 z-30 bg-brand-900 text-white border-r border-brand-800 shadow-2xl transition-[width] duration-300 ease-in-out ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}>
-        <div className="shrink-0 p-4 border-b border-brand-800 flex items-center justify-between overflow-hidden">
+        <div className={`relative shrink-0 p-4 border-b border-brand-800 flex items-center justify-between ${isSidebarCollapsed ? 'overflow-visible' : 'overflow-hidden'}`}>
           <div className="flex items-center gap-3 min-w-0"><img src="https://i.imgur.com/K3T5yIT.jpeg" alt="IARS Academic Seal" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/60 shadow-md shrink-0" />{!isSidebarCollapsed && <div className="min-w-0 truncate"><h2 className="font-extrabold text-lg leading-tight">IARS</h2><p className="text-emerald-400 text-[10px] font-semibold uppercase tracking-wider truncate">Attendance &amp; Records</p></div>}</div>
-          <button type="button" aria-label="Collapse sidebar" onClick={() => setIsSidebarCollapsed(true)} className={`min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-gold-200 hover:text-white hover:bg-brand-800 ${isSidebarCollapsed ? 'hidden' : 'inline-flex'}`}><PanelLeftClose size={18} /></button>
+          {!isSidebarCollapsed ? (
+            <button type="button" aria-label="Collapse sidebar" onClick={() => setIsSidebarCollapsed(true)} className="min-h-11 min-w-11 shrink-0 inline-flex items-center justify-center rounded-lg text-gold-200 hover:text-white hover:bg-brand-800"><PanelLeftClose size={18} /></button>
+          ) : (
+            <button type="button" aria-label="Expand sidebar" onClick={() => setIsSidebarCollapsed(false)} className="absolute right-0 top-1/2 z-10 inline-flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-gold-400/50 bg-brand-900 text-gold-300 shadow-md transition-colors hover:bg-brand-800 hover:text-white"><ChevronRight size={15} strokeWidth={2.5} /></button>
+          )}
         </div>
         <nav aria-label="Desktop navigation" className="min-h-0 flex-1 p-3 mt-2 space-y-2 overflow-y-auto custom-scrollbar">
           {allowedNavItems.map((item) => {
@@ -263,7 +248,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           {isSidebarCollapsed && hasDirectory ? <div className="pt-4 mt-4 border-t border-brand-800/80 space-y-2"><button type="button" aria-label="Attendance dashboard" aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined} onClick={() => navigate('/admin/attendance')} className={navButtonClass(location.pathname === '/admin/attendance', true)}><BarChart3 size={22} /></button>{canManageMembers && <button type="button" aria-label="Manage members" aria-current={location.pathname === '/admin/members' ? 'page' : undefined} onClick={() => navigate('/admin/members')} className={navButtonClass(location.pathname === '/admin/members', true)}><Users size={22} /></button>}</div> : renderDirectory()}
         </nav>
         <div className="shrink-0 p-3 border-t border-brand-800 space-y-2.5">
-          {!isSidebarCollapsed ? <><div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-widest text-gold-400/80">Theme Mode</span><ThemeToggle size="sm" className="min-h-11 min-w-11" /></div><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="w-full min-h-14 group flex items-center gap-3 p-2.5 rounded-2xl bg-brand-950/80 hover:bg-brand-800/90 border border-gold-400/30 hover:border-gold-400/60 transition-all text-left"><img src={profile?.photo_url || 'https://i.pravatar.cc/150'} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/70" /><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-white truncate">{profile?.name || 'Student Account'}</span><span className="block text-[10px] font-mono font-bold text-gold-400/90 truncate">ID: {profile?.student_id || '2024-0001'}</span></span><User size={16} className="text-gold-400/80 shrink-0" /></button><button type="button" onClick={handleLogout} className="w-full min-h-11 flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold"><LogOut size={16} /><span>Sign Out</span></button></> : <div className="flex flex-col items-center gap-2.5"><button type="button" aria-label="Expand sidebar" onClick={() => setIsSidebarCollapsed(false)} className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg text-gold-200 hover:text-white hover:bg-brand-800"><PanelLeftOpen size={18} /></button><ThemeToggle size="sm" className="min-h-11 min-w-11" /><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="min-h-11 min-w-11 relative rounded-full ring-2 ring-gold-400/70"><img src={profile?.photo_url || 'https://i.pravatar.cc/150'} alt="" className="w-10 h-10 rounded-full object-cover" /></button><button type="button" aria-label="Sign out" onClick={handleLogout} className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20"><LogOut size={18} /></button></div>}
+          {!isSidebarCollapsed ? <><div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-widest text-gold-400/80">Theme Mode</span><ThemeToggle size="sm" className="min-h-11 min-w-11" /></div><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="w-full min-h-14 group flex items-center gap-3 p-2.5 rounded-2xl bg-brand-950/80 hover:bg-brand-800/90 border border-gold-400/30 hover:border-gold-400/60 transition-all text-left"><img src={profile?.photo_url || 'https://i.pravatar.cc/150'} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/70" /><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-white truncate">{profile?.name || 'Account'}</span><span className="block text-[10px] font-mono font-bold text-gold-400/90 truncate">{identityLabel}: {profile?.student_id || 'Not assigned'}</span></span><User size={16} className="text-gold-400/80 shrink-0" /></button></> : <div className="flex flex-col items-center gap-2.5"><ThemeToggle size="sm" className="min-h-11 min-w-11" /><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="min-h-11 min-w-11 relative rounded-full ring-2 ring-gold-400/70"><img src={profile?.photo_url || 'https://i.pravatar.cc/150'} alt="" className="w-10 h-10 rounded-full object-cover" /></button></div>}
         </div>
       </aside>
 

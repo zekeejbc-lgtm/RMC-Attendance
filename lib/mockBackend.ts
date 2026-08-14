@@ -13,6 +13,7 @@ interface MockDB {
   attendance_logs: Record<string, Record<string, any>>;
   sanction_logs: Record<string, any[]>;
   school_structure: SchoolNode[];
+  application_credentials?: Record<string, string>;
 }
 
 export const getDB = (): MockDB => {
@@ -33,6 +34,8 @@ export const getDB = (): MockDB => {
     db = { users: {}, usernames: {}, applications: {}, excuse_applications: {}, events: {}, attendance_logs: {}, sanction_logs: {}, school_structure: [] };
   }
 
+  if (!db.application_credentials) db.application_credentials = {};
+
   // Ensure all TEST_ACCOUNTS exist in db.users & db.usernames
   let updated = false;
   TEST_ACCOUNTS.forEach(acc => {
@@ -48,8 +51,16 @@ export const getDB = (): MockDB => {
           username: acc.user.toLowerCase(),
           email: acc.email,
           role: acc.role as any,
+          account_status: 'active',
           student_id: acc.user === 'student' ? '2024-00123' : (acc.user === 'ossa' ? 'OSSA-DIR-01' : `ID-${Math.floor(Math.random() * 9000) + 1000}`),
           photo_url: acc.user === 'ossa' ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' : `https://i.pravatar.cc/150?u=${uid}`,
+          official_data: acc.role === 'ssg'
+            ? { body: 'SSG', position: 'Officer', scope: 'Institution' }
+            : acc.role === 'ossa'
+              ? { body: 'OSSA', position: 'Director', scope: 'Institution' }
+              : acc.role === 'admin'
+                ? { body: 'Administration', position: 'System Administrator', scope: 'All' }
+                : undefined,
           school_data: {
             type: acc.user === 'student' ? 'High School' : 'College',
             department: acc.user === 'student' ? "Senior High School" : 'Office of Student Services and Affairs',
@@ -88,6 +99,7 @@ export const getDB = (): MockDB => {
           username: s.name.toLowerCase().replace(/\s+/g, '.'),
           email: s.email,
           role: 'student',
+          account_status: 'active',
           student_id: s.student_id,
           photo_url: `https://i.pravatar.cc/150?u=${s.uid}`,
           school_data: {
@@ -201,6 +213,9 @@ export const mockAuth = {
     }
     
     if (userEntry) {
+      if ((userEntry.profile.account_status || 'active') !== 'active') {
+        throw new Error('This account is not active. Contact an authorized school official.');
+      }
       if (userEntry.password === pass || pass === 'password123') {
         localStorage.setItem('rmc_mock_session', userEntry.profile.uid);
         notifyAuthChange();
@@ -324,6 +339,76 @@ const createReferenceEvent = (): AppEvent => ({
   timestamp: Date.now()
 } as AppEvent);
 
+const createMayorHubDemoEvents = (now = Date.now()): Record<string, AppEvent> => {
+  const base = {
+    created_by: 'demo_system',
+    penaltyValue: 2,
+    penaltyUnit: 'hours' as const,
+    participantsType: 'all' as const,
+    target: { all: true },
+    location: { lat: 7.0736, lng: 125.6126, radius_meters: 200 },
+    timestamp: now,
+  };
+  return {
+    mayor_demo_homeroom: {
+      ...base,
+      id: 'mayor_demo_homeroom',
+      title: 'Morning Homeroom Check-in',
+      description: 'Demo ongoing event for testing a Present attendance record during the first fifteen minutes.',
+      status: 'active',
+      startTime: now - 5 * 60 * 1000,
+      endTime: now + 55 * 60 * 1000,
+    },
+    mayor_demo_assembly: {
+      ...base,
+      id: 'mayor_demo_assembly',
+      title: 'Institutional Assembly',
+      description: 'Demo ongoing event that began earlier, allowing the Late attendance state to be tested.',
+      status: 'active',
+      startTime: now - 45 * 60 * 1000,
+      endTime: now + 75 * 60 * 1000,
+      location: { lat: 7.0739, lng: 125.6128, radius_meters: 250 },
+    },
+    mayor_demo_club_fair: {
+      ...base,
+      id: 'mayor_demo_club_fair',
+      title: 'Student Club Fair',
+      description: 'A scheduled demo event opening tomorrow at the activity center.',
+      status: 'upcoming',
+      startTime: now + 24 * 60 * 60 * 1000,
+      endTime: now + 27 * 60 * 60 * 1000,
+      location: { lat: 7.0741, lng: 125.6131, radius_meters: 180 },
+    },
+    mayor_demo_flag_raising: {
+      ...base,
+      id: 'mayor_demo_flag_raising',
+      title: 'Monday Flag Ceremony',
+      description: 'A scheduled school-wide ceremony for testing the upcoming event view.',
+      status: 'upcoming',
+      startTime: now + 3 * 24 * 60 * 60 * 1000,
+      endTime: now + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000,
+    },
+    mayor_demo_foundation: {
+      ...base,
+      id: 'mayor_demo_foundation',
+      title: 'Foundation Day Opening',
+      description: 'Completed demo event retained for attendance history and archive testing.',
+      status: 'done',
+      startTime: now - 7 * 24 * 60 * 60 * 1000,
+      endTime: now - 7 * 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000,
+    },
+    mayor_demo_orientation: {
+      ...base,
+      id: 'mayor_demo_orientation',
+      title: 'Student Leadership Orientation',
+      description: 'A second archived event for validating the Mayor Hub history list.',
+      status: 'done',
+      startTime: now - 14 * 24 * 60 * 60 * 1000,
+      endTime: now - 14 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000,
+    },
+  };
+};
+
 export const ensureMockReferenceData = () => {
   const db = getDB();
   let updated = false;
@@ -336,6 +421,12 @@ export const ensureMockReferenceData = () => {
     db.events.e1 = createReferenceEvent();
     updated = true;
   }
+  Object.entries(createMayorHubDemoEvents()).forEach(([id, event]) => {
+    if (!db.events[id]) {
+      db.events[id] = event;
+      updated = true;
+    }
+  });
 
   if (updated) saveDB(db);
   return db;
@@ -358,8 +449,16 @@ export const mockSeed = () => {
         username: acc.user.toLowerCase(),
         email: acc.email,
         role: acc.role as any,
+        account_status: 'active',
         student_id: acc.user === 'student' ? '2024-00123' : (acc.user === 'ossa' ? 'OSSA-DIR-01' : `ID-${Math.floor(Math.random() * 9000) + 1000}`),
         photo_url: acc.user === 'ossa' ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' : `https://i.pravatar.cc/150?u=${uid}`,
+        official_data: acc.role === 'ssg'
+          ? { body: 'SSG', position: 'Officer', scope: 'Institution' }
+          : acc.role === 'ossa'
+            ? { body: 'OSSA', position: 'Director', scope: 'Institution' }
+            : acc.role === 'admin'
+              ? { body: 'Administration', position: 'System Administrator', scope: 'All' }
+              : undefined,
         school_data: {
           type: acc.user === 'student' ? 'High School' : 'College',
           department: acc.user === 'student' ? "Senior High School" : 'Office of Student Services and Affairs',
@@ -445,6 +544,7 @@ export const mockSeed = () => {
         username: s.name.toLowerCase().replace(/\s+/g, '.'),
         email: s.email,
         role: 'student',
+        account_status: 'active',
         student_id: s.student_id,
         photo_url: `https://i.pravatar.cc/150?u=${s.uid}`,
         school_data: {
@@ -499,13 +599,13 @@ export const mockSeed = () => {
     }
   };
   
-  db.events.e1 = createReferenceEvent();
+  db.events = { e1: createReferenceEvent(), ...createMayorHubDemoEvents() };
   
   saveDB(db);
 };
 
 export const mockData = {
-  getEvents: () => Object.values(getDB().events),
+  getEvents: () => Object.values(ensureMockReferenceData().events),
   getApplications: () => Object.values(getDB().applications),
   getExcuseApplications: () => Object.values(getDB().excuse_applications || {}),
   getSchoolStructure: () => getDB().school_structure,
@@ -528,8 +628,9 @@ export const mockData = {
   getUserProfile: (studentIdentifier: string) => {
     const db = getDB();
     return Object.values(db.users).find(u => 
-      u.profile.uid === studentIdentifier || 
-      u.profile.student_id === studentIdentifier
+      (u.profile.uid === studentIdentifier || u.profile.student_id === studentIdentifier) &&
+      (u.profile.role === 'student' || u.profile.role === 'mayor') &&
+      (u.profile.account_status || 'active') === 'active'
     )?.profile;
   },
   getUserDetail: (uid: string) => {
@@ -550,6 +651,7 @@ export const mockData = {
       password,
       profile: {
         ...profile,
+        account_status: profile.account_status || 'active',
         uid,
         photo_url: `https://i.pravatar.cc/150?u=${uid}`,
       } as UserProfile,
@@ -590,6 +692,20 @@ export const mockData = {
       saveDB(db);
       notifyAuthChange();
     }
+  },
+  updateContactDetails: (uid: string, changes: { phone?: string; guardianName?: string; guardianContact?: string }) => {
+    const db = getDB();
+    if (!db.users[uid]) return false;
+    if ('phone' in changes) db.users[uid].profile.phone = changes.phone?.trim() || undefined;
+    if ('guardianName' in changes || 'guardianContact' in changes) {
+      const guardian = { ...(db.users[uid].profile.guardian || { name: '', contact: '' }) };
+      if ('guardianName' in changes) guardian.name = changes.guardianName?.trim() || '';
+      if ('guardianContact' in changes) guardian.contact = changes.guardianContact?.trim() || '';
+      db.users[uid].profile.guardian = guardian.name || guardian.contact ? guardian : undefined;
+    }
+    saveDB(db);
+    notifyAuthChange();
+    return true;
   },
   adjustSanctionHours: (uid: string, hoursDelta: number, reason: string = "Manual Adjustment") => {
     const db = getDB();
@@ -677,15 +793,29 @@ export const mockData = {
     notifyAuthChange();
     return newApp;
   },
-  submitApplication: (data: UserProfile) => {
+  submitApplication: (data: UserProfile, password = 'password123') => {
     const db = getDB();
+    const studentId = data.student_id.trim().toLowerCase();
+    const email = data.email.trim().toLowerCase();
+    const username = data.username.trim().toLowerCase();
+    const profiles = [
+      ...Object.values(db.users).map(user => user.profile),
+      ...Object.values(db.applications).map(application => application.form_data),
+    ].filter(profile => profile.uid !== data.uid);
+    if (profiles.some(profile => profile.student_id.trim().toLowerCase() === studentId)) {
+      throw new Error('That student ID already has an account or pending application.');
+    }
+    if (profiles.some(profile => profile.email.trim().toLowerCase() === email || profile.username.trim().toLowerCase() === username)) {
+      throw new Error('That email or username is already in use.');
+    }
     db.applications[data.uid] = {
       id: data.uid,
       status: 'pending',
       submission_date: Date.now(),
       rejection_count: 0,
-      form_data: data
+      form_data: { ...data, account_status: 'pending' }
     };
+    db.application_credentials![data.uid] = password;
     saveDB(db);
   },
   approveApplication: (id: string, role: any = 'student') => {
@@ -693,11 +823,13 @@ export const mockData = {
     const app = db.applications[id];
     if (app) {
       db.users[id] = {
-        password: 'password123',
-        profile: { ...app.form_data, role },
+        password: db.application_credentials?.[id] || 'password123',
+        profile: { ...app.form_data, role, account_status: 'active' },
         stats: { attendance_rate: 100, sanction_hours: 0, events_attended: 0, events_missed: 0 }
       };
+      db.usernames[app.form_data.username.toLowerCase()] = app.form_data.email.toLowerCase();
       delete db.applications[id];
+      if (db.application_credentials) delete db.application_credentials[id];
       saveDB(db);
     }
   },
@@ -707,17 +839,32 @@ export const mockData = {
     db.events[id] = { ...ev, id } as AppEvent;
     saveDB(db);
   },
-  logAttendance: (eventId: string, studentUid: string, loggerUid: string, loggerName: string) => {
+  logAttendance: (eventId: string, studentUid: string, loggerUid: string, loggerName: string, recordTime?: number) => {
     const db = getDB();
     if (!db.attendance_logs[eventId]) db.attendance_logs[eventId] = {};
-    db.attendance_logs[eventId][studentUid] = {
-      time_in: Date.now(),
+    const existingRecord = db.attendance_logs[eventId][studentUid];
+    if (existingRecord) return { ...existingRecord, already_recorded: true };
+
+    const recordedAt = recordTime || Date.now();
+    const event = db.events[eventId];
+    const rawStartTime = event?.startTime;
+    const parsedStartTime = typeof rawStartTime === 'number' ? rawStartTime : Date.parse(String(rawStartTime || ''));
+    const gracePeriodMs = 15 * 60 * 1000;
+    const status: 'present' | 'late' = Number.isFinite(parsedStartTime) && recordedAt > parsedStartTime + gracePeriodMs
+      ? 'late'
+      : 'present';
+    const record = {
+      time_in: recordedAt,
+      status,
+      already_recorded: false,
       scanned_by_uid: loggerUid,
       scanned_by_name: loggerName
     };
+    db.attendance_logs[eventId][studentUid] = record;
     if (db.users[studentUid]) {
       db.users[studentUid].stats.events_attended++;
     }
     saveDB(db);
+    return record;
   }
 };

@@ -1,5 +1,6 @@
 
 export type UserRole = 'student' | 'mayor' | 'ssg' | 'admin' | 'ossa';
+export type AccountStatus = 'pending' | 'active' | 'suspended' | 'inactive' | 'graduated';
 
 export interface ExcuseApplication {
   id: string;
@@ -25,6 +26,7 @@ export interface UserProfile {
   name: string;
   username: string;
   role: UserRole;
+  account_status?: AccountStatus;
   student_id: string;
   photo_url: string;
   email: string;
@@ -32,7 +34,12 @@ export interface UserProfile {
   guardian?: {
     name: string;
     contact: string;
-    email: string;
+    email?: string;
+  };
+  official_data?: {
+    body: 'SSG' | 'OSSA' | 'Administration';
+    position?: string;
+    scope?: string;
   };
   school_data: {
     type: 'High School' | 'College';

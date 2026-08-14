@@ -36,7 +36,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(mockUser.profile);
       setStats(mockUser.stats);
     } else {
-      setUser(null);
+      const pendingUid = localStorage.getItem('rmc_mock_session');
+      setUser(pendingUid ? { uid: pendingUid, email: null } : null);
       setProfile(null);
       setStats(null);
     }

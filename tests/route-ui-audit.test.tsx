@@ -75,6 +75,7 @@ const staffState = vi.hoisted(() => ({
   logAttendance: vi.fn(),
   resolveStudentSanctions: vi.fn(),
   reviewExcuseApplication: vi.fn(),
+  updateContactDetails: vi.fn(),
 }));
 
 const scannerState = vi.hoisted(() => ({
@@ -84,9 +85,14 @@ const scannerState = vi.hoisted(() => ({
   resume: vi.fn(),
   start: vi.fn((_camera: unknown, _config: unknown, onSuccess: (value: string) => void) => {
     scannerState.decoded = onSuccess;
+    const mount = document.getElementById('mayor-camera-reader');
+    if (mount) mount.replaceChildren(document.createElement('video'));
     return scannerState.startPromise;
   }),
-  stop: vi.fn(() => Promise.resolve()),
+  stop: vi.fn(() => {
+    document.getElementById('mayor-camera-reader')?.replaceChildren();
+    return Promise.resolve();
+  }),
 }));
 
 vi.mock('../components/AuthContext', () => ({
@@ -122,6 +128,7 @@ vi.mock('../lib/mockBackend', () => ({
     logAttendance: staffState.logAttendance,
     resolveStudentSanctions: staffState.resolveStudentSanctions,
     reviewExcuseApplication: staffState.reviewExcuseApplication,
+    updateContactDetails: staffState.updateContactDetails,
     submitApplication: vi.fn(),
   },
   mockSeed: backendState.mockSeed,
@@ -129,6 +136,7 @@ vi.mock('../lib/mockBackend', () => ({
 
 vi.mock('html5-qrcode', () => ({
   Html5Qrcode: class {
+    isScanning = true;
     pause = scannerState.pause;
     resume = scannerState.resume;
     start = scannerState.start;
@@ -162,6 +170,7 @@ afterEach(() => {
   staffState.logAttendance.mockReset();
   staffState.resolveStudentSanctions.mockReset();
   staffState.reviewExcuseApplication.mockReset();
+  staffState.updateContactDetails.mockReset();
   scannerState.decoded = null;
   scannerState.startPromise = Promise.resolve();
   scannerState.pause.mockReset();
@@ -238,16 +247,11 @@ describe('public route UI behavior', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: /portal login/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /student enrollment/i }));
+    await user.click(screen.getByRole('button', { name: /^register$/i }));
     expect(screen.getByRole('dialog', { name: /system enrollment/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /close dialog/i })).toHaveFocus();
-    expect(screen.getByRole('textbox', { name: /legal full name/i })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /next phase/i }));
-    await user.click(screen.getByRole('button', { name: /capture student id front/i }));
-    await user.click(screen.getByRole('button', { name: /capture student id back/i }));
-    expect(screen.getByRole('img', { name: /student id front/i })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /student id back/i })).toBeInTheDocument();
+    expect(screen.getByText(/only essential information is required/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /continue to enrollment/i })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: /system enrollment/i })).not.toBeInTheDocument();
@@ -275,16 +279,20 @@ describe('public route UI behavior', () => {
     expect(screen.getByRole('button', { name: /upload profile photo/i })).toBeInTheDocument();
   });
 
-  it('exposes accessible student ID capture actions in registration phase two', async () => {
+  it('requires identity details before showing academic enrollment fields', async () => {
     const user = userEvent.setup();
     renderRoute(<Register />);
 
-    await user.click(screen.getByRole('button', { name: /proceed to phase ii/i }));
+    const next = screen.getByRole('button', { name: /^next$/i });
+    expect(next).toBeDisabled();
+    await user.type(screen.getByRole('textbox', { name: /legal full name/i }), 'Juan Dela Cruz');
+    await user.type(screen.getByRole('textbox', { name: /email address/i }), 'juan@rmc.edu.ph');
+    await user.type(screen.getByLabelText(/security key/i), 'secure123');
+    expect(next).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: /^next$/i }));
     expect(screen.getByRole('textbox', { name: /official student id/i })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /capture student id front/i }));
-    await user.click(screen.getByRole('button', { name: /capture student id back/i }));
-    expect(screen.getByRole('img', { name: /student id front/i })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /student id back/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /capture student id/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/id image uploads are not needed/i)).toBeInTheDocument();
   });
 
   it.each([
@@ -392,7 +400,9 @@ describe('student route UI behavior', () => {
     renderRoute(<StudentProfile />);
 
     expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: /student mobile contact/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save contact details/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /edit contact details/i }));
+    expect(screen.getByRole('textbox', { name: /mobile contact/i })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /parent \/ guardian name/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /enable two-factor authentication/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /change password/i }).parentElement).toHaveClass(
@@ -411,6 +421,48 @@ describe('student route UI behavior', () => {
     expect(newPassword).toHaveAttribute('type', 'text');
     expect(confirmPassword).toHaveAttribute('type', 'text');
     expect(screen.getByRole('button', { name: /sign out of portal/i })).toBeInTheDocument();
+  });
+
+  it('opens Google Authenticator enrollment in a cancelable modal panel', async () => {
+    const user = userEvent.setup();
+    useStudent();
+    renderRoute(<StudentProfile />);
+
+    const enrollmentTrigger = screen.getByRole('button', { name: /enable two-factor authentication/i });
+    await user.click(enrollmentTrigger);
+
+    const dialog = screen.getByRole('dialog', { name: /enroll google authenticator/i });
+    expect(within(dialog).getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /enroll/i })).toBeDisabled();
+
+    await user.type(within(dialog).getByLabelText(/six-digit authentication code/i), '123456');
+    expect(within(dialog).getByRole('button', { name: /enroll/i })).toBeEnabled();
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    expect(screen.queryByRole('dialog', { name: /enroll google authenticator/i })).not.toBeInTheDocument();
+    expect(enrollmentTrigger).toHaveFocus();
+  });
+
+  it('shows contact edit actions only while editing and saves only changed fields', async () => {
+    const user = userEvent.setup();
+    routeState.auth = {
+      isMock: true,
+      profile: { ...studentProfile, phone: '0917 000 0000', guardian: { name: 'Original Guardian', contact: '0918 000 0000' } },
+      stats: { attendance_rate: 94, sanction_hours: 2, events_attended: 12, events_missed: 1 },
+      user: { uid: studentProfile.uid },
+    };
+    renderRoute(<StudentProfile />);
+
+    expect(screen.getByRole('button', { name: /edit contact details/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save contact details/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /edit contact details/i }));
+    const phone = screen.getByRole('textbox', { name: /mobile contact/i });
+    await user.clear(phone);
+    await user.type(phone, '0999 111 2222');
+    await user.click(screen.getByRole('button', { name: /save contact details/i }));
+
+    expect(staffState.updateContactDetails).toHaveBeenCalledWith(studentProfile.uid, { phone: '0999 111 2222' });
+    expect(screen.getByRole('button', { name: /edit contact details/i })).toBeInTheDocument();
   });
 
   it('keeps event details and excuse filing as named, stacked modal workflows', async () => {
@@ -479,6 +531,26 @@ describe('student route UI behavior', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: /excuse letter submission/i })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: /weekly institutional flag raising ceremony/i })).toBeInTheDocument();
+  });
+
+  it('does not offer excuse filing for ended events or archived ceremonies', async () => {
+    const user = userEvent.setup();
+    useStudent();
+    const { unmount } = renderRoute(<StudentEvents />);
+
+    await user.click(screen.getByRole('button', { name: /archived events/i }));
+    await user.click(screen.getByRole('button', { name: /first semester general assembly 2025/i }));
+    expect(screen.getByRole('dialog', { name: /first semester general assembly 2025/i })).toBeInTheDocument();
+    expect(screen.queryByText(/unable to attend this assembly/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /file for excuse/i })).not.toBeInTheDocument();
+
+    unmount();
+    renderRoute(<StudentCeremonies />);
+    await user.click(screen.getByRole('button', { name: /archived ceremonies/i }));
+    await user.click(screen.getByRole('button', { name: /annual founders day thanksgiving mass/i }));
+    expect(screen.getByRole('dialog', { name: /annual founders day thanksgiving mass/i })).toBeInTheDocument();
+    expect(screen.queryByText(/cannot participate in this official ceremony/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /file for excuse/i })).not.toBeInTheDocument();
   });
 });
 
@@ -576,36 +648,37 @@ describe('staff route UI behavior', () => {
       status: 'active',
       location: { lat: 7, lng: 125, radius_meters: 100 },
     }];
+    staffState.logAttendance.mockReturnValue({ time_in: Date.now(), status: 'present', already_recorded: false });
 
     renderRoute(<MayorScanner />);
 
     expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: /camera selection/i })).toHaveValue('environment');
-    const start = screen.getByRole('button', { name: /initiate optical scan/i });
-    expect(start).toBeDisabled();
     await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
-    await user.click(start);
+    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    await user.click(screen.getByRole('button', { name: /start scanning/i }));
+
+    expect(screen.getByRole('heading', { name: /attendance recording/i })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /attendance scanner/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /camera selection/i })).toHaveTextContent(/rear-facing camera/i);
+    expect(document.getElementById('mayor-camera-reader')).toBeEmptyDOMElement();
+    await user.click(screen.getByRole('button', { name: /start scanner/i }));
 
     expect(await screen.findByRole('region', { name: /camera scanner/i })).toHaveClass(
       'aspect-square',
       'sm:aspect-video',
-      'max-w-2xl',
+      'w-full',
       'overflow-hidden',
     );
     expect(screen.getByRole('button', { name: /stop scanner/i })).toBeInTheDocument();
     await waitFor(() => expect(scannerState.start).toHaveBeenCalledTimes(1));
 
     scannerState.decoded?.('student-1');
-    expect(await screen.findByRole('dialog', { name: /confirm attendance scan/i })).toBeInTheDocument();
-    expect(screen.getByText(studentProfile.student_id)).toHaveClass('[overflow-wrap:anywhere]');
-    await user.click(screen.getByRole('button', { name: /authorize attendance/i }));
-    expect(staffState.logAttendance).toHaveBeenCalledWith('event-1', 'student-1', 'staff-1', 'SSG President');
-
-    await waitFor(
-      () => expect(screen.queryByRole('dialog', { name: /confirm attendance scan/i })).not.toBeInTheDocument(),
-      { timeout: 2500 },
-    );
-    await waitFor(() => expect(document.body).not.toHaveClass('app-scroll-lock'));
+    expect(await screen.findByRole('dialog', { name: /verify student identity/i })).toBeInTheDocument();
+    expect(staffState.logAttendance).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /^record$/i }));
+    expect(staffState.logAttendance).toHaveBeenCalledWith('event-1', 'student-1', 'staff-1', 'SSG President', expect.any(Number));
+    expect(await screen.findByRole('dialog', { name: /attendance recorded/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /scan next student/i }));
     await user.click(screen.getByRole('button', { name: /stop scanner/i }));
     await waitFor(() => expect(scannerState.stop).toHaveBeenCalledTimes(1));
   });
@@ -619,52 +692,83 @@ describe('staff route UI behavior', () => {
     renderRoute(<MayorScanner />);
 
     await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
-    await user.click(screen.getByRole('button', { name: /initiate optical scan/i }));
+    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    await user.click(screen.getByRole('button', { name: /start scanning/i }));
+    await user.click(screen.getByRole('button', { name: /start scanner/i }));
 
-    const loadingAction = screen.getByRole('button', { name: /initiate optical scan/i });
+    expect(screen.queryByRole('button', { name: /start scanner/i })).not.toBeInTheDocument();
+    const loadingAction = screen.getByRole('button', { name: /stop scanner/i });
     expect(loadingAction).toBeDisabled();
-    expect(loadingAction).toHaveAttribute('aria-busy', 'true');
-    expect(screen.queryByRole('region', { name: /camera scanner/i })).not.toBeInTheDocument();
 
     resolveStart();
     expect(await screen.findByRole('region', { name: /camera scanner/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /stop scanner/i })).toBeEnabled();
   });
 
-  it('keeps the restricted sanctions callback reachable and visibly labeled', async () => {
+  it('waives an identified student without saving attendance', async () => {
     const user = userEvent.setup();
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
     routeState.auth = {
       isMock: true,
       profile: { ...studentProfile, uid: 'mayor-1', name: 'Section Mayor', role: 'mayor' } as typeof studentProfile,
       stats: null,
       user: { uid: 'mayor-1' },
     };
+    staffState.students = [{ ...studentProfile, uid: 'mock_uid_student' }];
+    staffState.events = [{ id: 'event-1', title: 'Institutional Assembly', status: 'active', location: { lat: 7, lng: 125, radius_meters: 100 } }];
     renderRoute(<MayorScanner />);
 
-    const restricted = screen.getByRole('button', { name: /sanction clear.*restricted to ssg president/i });
-    expect(restricted).not.toBeDisabled();
-    await user.click(restricted);
-    expect(alertSpy).toHaveBeenCalledWith('Restricted to SSG President Authorization');
-    expect(screen.getByRole('button', { name: /attendance/i })).toHaveAttribute('aria-pressed', 'true');
-    alertSpy.mockRestore();
+    await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
+    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    await user.click(screen.getByRole('button', { name: /start scanning/i }));
+    await user.click(screen.getByRole('button', { name: /pedro/i }));
+    expect(await screen.findByRole('dialog', { name: /verify student identity/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /waive/i }));
+    expect(staffState.logAttendance).not.toHaveBeenCalled();
   });
 
-  it('reports invalid QR passports in a named scanner error dialog', async () => {
+  it('checks an exact student ID manually before recording attendance', async () => {
+    const user = userEvent.setup();
+    routeState.auth = {
+      isMock: true,
+      profile: { ...studentProfile, uid: 'mayor-1', name: 'Section Mayor', role: 'mayor' } as typeof studentProfile,
+      stats: null,
+      user: { uid: 'mayor-1' },
+    };
+    staffState.students = [studentProfile];
+    staffState.events = [{ id: 'event-1', title: 'Institutional Assembly', status: 'active', location: { lat: 7, lng: 125, radius_meters: 100 } }];
+    staffState.logAttendance.mockReturnValue({ time_in: Date.now(), status: 'present', already_recorded: false });
+    renderRoute(<MayorScanner />);
+
+    await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
+    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    await user.click(screen.getByRole('button', { name: /start scanning/i }));
+    const studentIdInput = screen.getByRole('textbox', { name: /student id/i });
+    expect(studentIdInput).toHaveAttribute('autocomplete', 'off');
+    await user.type(studentIdInput, studentProfile.student_id);
+    await user.click(screen.getByRole('button', { name: /check student/i }));
+
+    expect(await screen.findByRole('dialog', { name: /verify student identity/i })).toBeInTheDocument();
+    expect(screen.getByText(studentProfile.student_id)).toBeInTheDocument();
+    expect(staffState.logAttendance).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /^record$/i }));
+    expect(staffState.logAttendance).toHaveBeenCalledWith('event-1', 'student-1', 'mayor-1', 'Section Mayor', expect.any(Number));
+  });
+
+  it('reports invalid QR passports without recording attendance', async () => {
     const user = userEvent.setup();
     useStaff();
     staffState.events = [{ id: 'event-1', title: 'Institutional Assembly', status: 'active' }];
     renderRoute(<MayorScanner />);
 
     await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
-    await user.click(screen.getByRole('button', { name: /initiate optical scan/i }));
+    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    await user.click(screen.getByRole('button', { name: /start scanning/i }));
+    await user.click(screen.getByRole('button', { name: /start scanner/i }));
     await waitFor(() => expect(scannerState.decoded).toBeTypeOf('function'));
     scannerState.decoded?.('not-a-student');
 
-    const errorDialog = await screen.findByRole('dialog', { name: /scan unsuccessful/i });
-    expect(within(errorDialog).getByText(/unauthorized or invalid asset qr/i)).toHaveClass('[overflow-wrap:anywhere]');
-    await user.click(within(errorDialog).getByRole('button', { name: /return to scanner/i }));
-    expect(screen.queryByRole('dialog', { name: /scan unsuccessful/i })).not.toBeInTheDocument();
+    expect(await screen.findByText(/does not belong to an active student account/i)).toBeInTheDocument();
+    expect(staffState.logAttendance).not.toHaveBeenCalled();
   });
 
   it('renders section members as equivalent searchable desktop rows and labeled mobile cards', async () => {
@@ -919,13 +1023,13 @@ describe('staff route UI behavior', () => {
     renderRoute(<OSSADashboard />);
 
     await user.click(screen.getByRole('tab', { name: /excuse applications/i }));
-    await user.click(screen.getByRole('button', { name: /review & decide excuse/i }));
+    await user.click(screen.getByRole('button', { name: /review/i }));
     const dialog = screen.getByRole('dialog', { name: /review excuse submission/i });
     const waiveHours = within(dialog).getByRole('spinbutton', { name: /sanction hours to waive/i });
     await user.clear(waiveHours);
     await user.type(waiveHours, '4');
     await user.type(within(dialog).getByRole('textbox', { name: /director's decision note/i }), 'Medical certificate verified.');
-    await user.click(within(dialog).getByRole('button', { name: /approve & waive hours/i }));
+    await user.click(within(dialog).getByRole('button', { name: /approve/i }));
 
     expect(staffState.reviewExcuseApplication).toHaveBeenCalledWith(
       'excuse-1',

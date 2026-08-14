@@ -11,6 +11,8 @@ import { TEST_ACCOUNTS } from '../lib/seed';
 import { SchoolNode } from '../types';
 import Button from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
+import CustomSelect from '../components/ui/CustomSelect';
+import { Collapsible } from '../components/ui/Collapsible';
 import { 
   ArrowRight, Shield, Target, Users, 
   MapPin, Mail, Phone, Facebook, Instagram,
@@ -315,7 +317,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
              <ThemeToggle />
              <button onClick={() => setShowLoginModal(true)} className="px-3 py-2.5 bg-brand-900 dark:bg-gold-500 text-white dark:text-brand-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-800 dark:hover:bg-gold-400 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 sm:px-6">
-                Portal Login
+                Log In
              </button>
           </div>
         </div>
@@ -327,83 +329,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
       <Modal
         open={showLoginModal}
         onClose={() => { setShowLoginModal(false); if (defaultOpenLogin) navigate('/'); }}
-        size="xl"
+        size="md"
         title="Portal Login"
         description="Enter your credentials to connect to your academic workspace"
       >
-           <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 md:grid md:grid-cols-12">
-
-              {/* MOBILE TOP COMPACT BANNER (Mobile Only) */}
-              <div className="md:hidden bg-brand-gradient p-5 text-white flex items-center gap-3 border-b border-gold-400/20 shrink-0 pr-14">
-                <img 
-                  src="https://i.imgur.com/K3T5yIT.jpeg" 
-                  alt="IARS Academic Seal" 
-                  className="w-12 h-12 rounded-full object-cover shadow-lg ring-2 ring-gold-400/50 shrink-0" 
-                />
-                <div className="min-w-0">
-                  <h2 className="text-base font-black uppercase tracking-tight leading-none text-white truncate">IARS Portal</h2>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gold-300 mt-1 truncate">Attendance & Records Verification</p>
-                </div>
-              </div>
-
-              {/* LEFT BRAND PANEL (Desktop / Tablet) */}
-              <div className="hidden md:flex md:col-span-5 bg-brand-gradient p-8 md:p-10 text-white flex-col justify-between relative overflow-hidden border-r border-gold-400/20 h-full min-h-0 max-h-full">
-                <div className="absolute top-0 right-0 w-48 h-48 bg-gold-400/10 rounded-full blur-2xl -mr-16 -mt-16 pointer-events-none"></div>
-                <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl -ml-16 -mb-16 pointer-events-none"></div>
-
-                <div className="relative z-10 space-y-6 overflow-y-auto custom-scrollbar pr-1">
-                   <div className="flex items-center gap-3">
-                      <img 
-                        src="https://i.imgur.com/K3T5yIT.jpeg" 
-                        alt="IARS Academic Seal" 
-                        className="w-14 h-14 rounded-full object-cover shadow-xl ring-4 ring-gold-400/50" 
-                      />
-                      <div>
-                         <h2 className="text-xl font-black uppercase tracking-tighter leading-none text-white">IARS</h2>
-                         <p className="text-[10px] font-bold uppercase tracking-widest text-gold-300 mt-1">Attendance & Records</p>
-                      </div>
-                   </div>
-
-                   <div className="space-y-2 pt-2">
-                      <h3 className="text-base font-black text-white leading-tight uppercase tracking-tight">
-                         Institutional Portal Identity Hub
-                      </h3>
-                      <p className="text-xs text-slate-200 font-medium leading-relaxed">
-                         Secure single sign-on access for Students, Section Mayors, SSG Governance Officers, and Administrators.
-                      </p>
-                   </div>
-
-                   <div className="space-y-2.5 pt-2">
-                      <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/10">
-                         <ShieldCheck size={18} className="text-emerald-400 shrink-0" />
-                         <div className="text-left">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-white">Encrypted Verification</p>
-                            <p className="text-[10px] text-slate-300">Protected student QR token authentication</p>
-                         </div>
-                      </div>
-                      <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/10">
-                         <MapPin size={18} className="text-gold-400 shrink-0" />
-                         <div className="text-left">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-white">Geofenced Scanning</p>
-                            <p className="text-[10px] text-slate-300">GPS validated ceremony check-ins</p>
-                         </div>
-                      </div>
-                   </div>
-                </div>
-
-                <div className="relative z-10 pt-4 mt-4 border-t border-white/15 text-[10px] text-slate-300 font-medium shrink-0">
-                   Authorized Institutional Access Only • v2.4
-                </div>
-              </div>
-
-              {/* RIGHT FORM PANEL */}
-              <div className="md:col-span-7 p-6 sm:p-8 md:p-10 overflow-y-auto custom-scrollbar flex flex-col justify-between bg-white dark:bg-slate-900 h-full min-h-0 max-h-full">
+           <div className="min-w-0">
+              <div className="flex flex-col justify-between">
                 <div>
-                   <div className="mb-5 sm:mb-6">
-                      <h2 className="text-xl sm:text-2xl font-black text-brand-900 dark:text-white uppercase tracking-tight">Portal Login</h2>
-                      <p className="text-slate-500 dark:text-slate-400 text-xs font-medium mt-1">Enter your credentials to connect to your academic workspace</p>
-                   </div>
-
                    {loginError && (
                      <div className="mb-4 sm:mb-5 p-3.5 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl border border-red-200 dark:border-red-800 flex items-center gap-3 text-xs font-bold uppercase animate-in shake">
                        <ShieldAlert size={18} className="shrink-0" /> 
@@ -453,7 +385,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                      </div>
 
                      <Button type="submit" disabled={isLoggingIn} className="!rounded-2xl text-xs font-black uppercase tracking-widest py-4 mt-2 shadow-lg hover:shadow-xl transition-all">
-                       {isLoggingIn ? <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={18}/> Authenticating...</span> : 'Connect to Portal Hub'}
+                       {isLoggingIn ? <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={18}/> Logging in...</span> : 'Log In'}
                      </Button>
                    </form>
                 </div>
@@ -463,24 +395,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                     onClick={() => { setShowLoginModal(false); setShowRegisterModal(true); }} 
                     className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-brand-900 dark:text-slate-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2"
                   >
-                    <span>Register New Student Asset</span>
+                    <span>Register</span>
                     <ArrowRight size={14} />
                   </button>
 
                   {isMock && (
                      <div className="space-y-2 pt-1">
                        <button 
+                         aria-controls="landing-test-accounts"
                          aria-expanded={showTestPanel}
                          type="button"
                          onClick={() => setShowTestPanel(!showTestPanel)} 
                          className="w-full text-[10px] font-black text-gold-600 dark:text-gold-400 uppercase tracking-widest flex items-center justify-between p-2.5 rounded-xl bg-gold-50/60 dark:bg-gold-950/30 border border-gold-200/60 dark:border-gold-900/40 hover:bg-gold-100/60 transition-colors"
                        >
-                         <span className="flex items-center gap-1.5"><Zap size={13}/> Quick Role Access Accounts</span>
-                         {showTestPanel ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                         <span className="flex items-center gap-1.5"><Zap size={13}/> Tests</span>
+                         <ChevronDown className="app-disclosure-chevron" size={14}/>
                        </button>
 
-                       {showTestPanel && (
-                          <div className="bg-slate-50 dark:bg-slate-800/90 rounded-2xl p-2.5 space-y-1.5 border border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-2">
+                       <Collapsible id="landing-test-accounts" open={showTestPanel} innerClassName="bg-slate-50 dark:bg-slate-800/90 rounded-2xl p-2.5 space-y-1.5 border border-slate-200 dark:border-slate-700">
                             <p className="text-[10px] text-slate-400 dark:text-slate-400 font-bold px-1 uppercase tracking-wider">Click to auto-fill test credentials:</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                               {TEST_ACCOUNTS.map((acc) => (
@@ -500,8 +432,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                                 </button>
                               ))}
                             </div>
-                          </div>
-                       )}
+                       </Collapsible>
                      </div>
                   )}
                 </div>
@@ -518,7 +449,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
         title="System Enrollment"
         description={`Stage ${regStep} of 3 • Protocol`}
       >
-           <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
+           <>
+             <div className="space-y-5">
+               <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 dark:border-blue-900 dark:bg-blue-950/40">
+                 <h3 className="font-black text-brand-900 dark:text-white">Only essential information is required</h3>
+                 <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Prepare your legal name, school email, official student ID, password, and current academic assignment. A profile photo and emergency contact are optional; ID document images are not collected.</p>
+               </div>
+               <Button variant="gold" onClick={() => { setShowRegisterModal(false); navigate('/register'); }}>Continue to enrollment</Button>
+             </div>
+             <div className="hidden min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
 
               <div className="bg-brand-gradient p-6 flex justify-between items-center border-b-2 border-emerald-500 shrink-0">
                  <div className="flex items-center gap-3">
@@ -570,13 +509,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                           <input id="landing-register-student-id" placeholder="2024-XXXXX" className="w-full min-w-0 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-base dark:text-white" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
                        </div>
                        <div className="grid grid-cols-1 gap-2">
-                         <select aria-label="Campus Location" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-brand-900 dark:text-white text-base" onChange={e => {
-                             const s = structure.find(x => x.id === e.target.value); setSelectedSchool(s || null); setSelectedDept(null);
-                           }}><option value="">Campus Location</option>{structure.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+                         <CustomSelect label="Campus Location" onChange={(value) => { const school = structure.find((item) => item.id === value); setSelectedSchool(school || null); setSelectedDept(null); }} options={structure.map((school) => ({ value: school.id, label: school.name }))} placeholder="Choose campus" value={selectedSchool?.id || ''} />
                          {selectedSchool && (
-                           <select aria-label="Department" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-brand-900 dark:text-white text-base" onChange={e => {
-                               const d = selectedSchool.children?.find(x => x.id === e.target.value); setSelectedDept(d || null);
-                             }}><option value="">Department</option>{selectedSchool.children?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+                           <CustomSelect label="Department" onChange={(value) => { const department = selectedSchool.children?.find((item) => item.id === value); setSelectedDept(department || null); }} options={selectedSchool.children?.map((department) => ({ value: department.id, label: department.name })) || []} placeholder="Choose department" value={selectedDept?.id || ''} />
                          )}
                          {selectedDept && (
                            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 text-center text-xs text-slate-400 font-medium">
@@ -615,11 +550,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
               <div className="flex shrink-0 flex-col gap-3 border-t border-slate-100 p-4 dark:border-slate-800 sm:flex-row sm:p-6">
                   {regStep > 1 && <Button variant="secondary" aria-label="Previous registration phase" className="!w-full sm:!w-14" onClick={() => setRegStep(regStep-1)}>←</Button>}
                   {regStep < 3 ? 
-                    <Button onClick={() => setRegStep(regStep+1)} className="!text-xs font-black uppercase">Next Phase</Button> :
-                    <Button variant="gold" onClick={handleRegisterSubmit} disabled={isRegistering} className="!text-xs font-black uppercase">{isRegistering ? 'Processing...' : 'Submit Application'}</Button>
+                    <Button onClick={() => setRegStep(regStep+1)} className="!text-xs font-black uppercase">Next</Button> :
+                    <Button variant="gold" onClick={handleRegisterSubmit} disabled={isRegistering} className="!text-xs font-black uppercase">{isRegistering ? 'Submitting...' : 'Submit'}</Button>
                   }
               </div>
-           </div>
+             </div>
+           </>
       </Modal>
 
       {/* HERO SECTION */}
@@ -639,10 +575,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
               <button onClick={() => setShowLoginModal(true)} className="w-full sm:w-auto px-8 py-4 bg-brand-900 dark:bg-gold-500 text-white dark:text-brand-950 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-800 dark:hover:bg-gold-400 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-3">
-                 Access Portal <ArrowRight size={16} />
+                 Log In <ArrowRight size={16} />
               </button>
               <button onClick={() => setShowRegisterModal(true)} className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-slate-800 text-brand-900 dark:text-white border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-gold-400 hover:text-gold-600 dark:hover:text-gold-400 transition-all flex items-center justify-center gap-3 shadow-sm">
-                 Student Enrollment
+                 Register
               </button>
            </div>
         </div>

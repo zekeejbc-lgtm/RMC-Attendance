@@ -168,7 +168,7 @@ export function Modal({
   return createPortal(
     <div data-modal-root="true">
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm sm:p-6"
+        className="app-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm sm:p-6"
         data-testid="modal-backdrop"
         onClick={closeOnBackdrop ? requestClose : undefined}
       >
@@ -176,7 +176,7 @@ export function Modal({
           aria-describedby={description ? descriptionId : undefined}
           aria-labelledby={titleId}
           aria-modal="true"
-          className={`relative flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl border border-gold-400/30 bg-white shadow-modal dark:bg-slate-800 sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl ${sizeClasses[size]}`}
+          className={`app-modal-panel relative flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl border border-gold-400/30 bg-white shadow-modal dark:bg-slate-800 sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl ${sizeClasses[size]}`}
           onClick={(event) => event.stopPropagation()}
           ref={dialogRef}
           role="dialog"

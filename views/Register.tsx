@@ -16,6 +16,7 @@ import {
 const Register: React.FC = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const [structure, setStructure] = useState<SchoolNode[]>([]);
@@ -44,6 +45,7 @@ const Register: React.FC = () => {
   }, []);
 
   const isSHS = selectedDept?.name.toLowerCase().includes('senior');
+  const isCollege = selectedDept?.name.toLowerCase().includes('college');
 
   const handleFileUpload = (field: string) => {
     // Mocking file capture for this environment
@@ -51,31 +53,49 @@ const Register: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password || !formData.student_id.trim() || !selectedSchool || !selectedDept || (!isCollege && !selectedLvl) || !selectedSec) {
+      setError('Complete all required identity and academic fields.');
+      return;
+    }
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
     setLoading(true);
     const uid = `user_${Date.now()}`;
     const profile: any = {
       uid,
-      name: formData.name,
-      username: formData.username,
-      email: formData.email,
-      student_id: formData.student_id,
+      name: formData.name.trim(),
+      username: formData.username.trim() || formData.email.trim().toLowerCase(),
+      email: formData.email.trim().toLowerCase(),
+      student_id: formData.student_id.trim(),
       role: 'student',
+      account_status: 'pending',
       photo_url: formData.profilePic || `https://i.pravatar.cc/150?u=${uid}`,
+      guardian: formData.guardianName.trim() || formData.guardianPhone.trim()
+        ? { name: formData.guardianName.trim(), contact: formData.guardianPhone.trim() }
+        : undefined,
       school_data: {
         type: selectedDept?.name.toLowerCase().includes('high') ? 'High School' : 'College',
-        department: selectedDept?.name,
+        department: isCollege ? selectedTrack?.name : selectedDept?.name,
         track: selectedTrack?.name,
         strand: selectedStrand?.name,
-        level: selectedLvl?.name,
+        program: isCollege ? selectedStrand?.name : undefined,
+        level: selectedLvl?.name || (isCollege ? 'College' : ''),
         section: selectedSec?.name,
         school_id: selectedSchool?.id
       }
     };
 
-    mockData.submitApplication(profile);
-    localStorage.setItem('rmc_mock_session', uid);
-    window.dispatchEvent(new Event('rmc_auth_update'));
-    navigate('/register/status');
+    try {
+      mockData.submitApplication(profile, formData.password);
+      localStorage.setItem('rmc_mock_session', uid);
+      window.dispatchEvent(new Event('rmc_auth_update'));
+      navigate('/register/status');
+    } catch (submissionError) {
+      setError(submissionError instanceof Error ? submissionError.message : 'Unable to submit the application.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -130,8 +150,8 @@ const Register: React.FC = () => {
               
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <label htmlFor="register-username" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Username</label>
-                  <input id="register-username" placeholder="Choose alias" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
+                  <label htmlFor="register-username" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Username <span className="normal-case text-slate-400">(optional)</span></label>
+                  <input id="register-username" placeholder="Defaults to email" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
                 </div>
                 <div className="space-y-1">
                   <label htmlFor="register-email" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Email Address</label>
@@ -207,7 +227,39 @@ const Register: React.FC = () => {
                   </div>
                 )}
 
-                {((!isSHS && selectedDept) || (isSHS && selectedStrand)) && (
+                {isCollege && selectedDept && (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <CustomSelect
+                      label="College"
+                      options={selectedDept.children?.map(node => ({ value: node.id, label: node.name })) || []}
+                      value={selectedTrack?.id || ''}
+                      onChange={val => {
+                        const college = selectedDept.children?.find(node => node.id === val);
+                        setSelectedTrack(college || null); setSelectedStrand(null); setSelectedLvl(null); setSelectedSec(null);
+                      }}
+                      placeholder="Select College"
+                    />
+                    {selectedTrack && <CustomSelect
+                      label="Program"
+                      options={selectedTrack.children?.map(node => ({ value: node.id, label: node.name })) || []}
+                      value={selectedStrand?.id || ''}
+                      onChange={val => {
+                        const program = selectedTrack.children?.find(node => node.id === val);
+                        setSelectedStrand(program || null); setSelectedLvl(null); setSelectedSec(null);
+                      }}
+                      placeholder="Select Program"
+                    />}
+                    {selectedStrand && <CustomSelect
+                      label="Class Section"
+                      options={selectedStrand.children?.map(node => ({ value: node.id, label: node.name })) || []}
+                      value={selectedSec?.id || ''}
+                      onChange={val => setSelectedSec(selectedStrand.children?.find(node => node.id === val) || null)}
+                      placeholder="Select Section"
+                    />}
+                  </div>
+                )}
+
+                {((!isSHS && !isCollege && selectedDept) || (isSHS && selectedStrand)) && (
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <CustomSelect 
                       label="Year Level"
@@ -236,14 +288,7 @@ const Register: React.FC = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 gap-4 pt-2 sm:grid-cols-2">
-                <button aria-label="Capture student ID front" type="button" onClick={() => handleFileUpload('idFront')} className="flex aspect-video flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-slate-400 transition-all hover:border-gold-400 hover:bg-gold-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-gold-400 dark:hover:bg-slate-700">
-                   {formData.idFront ? <img src={formData.idFront} alt="Student ID front" className="w-full h-full object-cover rounded-lg" /> : <><CreditCard size={20} /><span className="text-[10px] font-black uppercase mt-1">ID Front Capture</span></>}
-                </button>
-                <button aria-label="Capture student ID back" type="button" onClick={() => handleFileUpload('idBack')} className="flex aspect-video flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-slate-400 transition-all hover:border-gold-400 hover:bg-gold-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-gold-400 dark:hover:bg-slate-700">
-                   {formData.idBack ? <img src={formData.idBack} alt="Student ID back" className="w-full h-full object-cover rounded-lg" /> : <><CreditCard size={20} /><span className="text-[10px] font-black uppercase mt-1">ID Back Capture</span></>}
-                </button>
-              </div>
+              <p className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">Your ID number and academic assignment will be verified against school records. ID image uploads are not needed.</p>
             </div>
           )}
 
@@ -252,8 +297,8 @@ const Register: React.FC = () => {
                <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-800">
                   <Shield size={32} className="text-brand-900 dark:text-gold-400" />
                   <div>
-                    <h4 className="text-[10px] font-black text-brand-900 uppercase dark:text-slate-100">Guardian Protocol</h4>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest dark:text-slate-400">Institutional Safety Directive</p>
+                    <h4 className="text-[10px] font-black text-brand-900 uppercase dark:text-slate-100">Optional Emergency Contact</h4>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest dark:text-slate-400">Not required for attendance enrollment</p>
                   </div>
                </div>
                <div className="space-y-4">
@@ -269,6 +314,8 @@ const Register: React.FC = () => {
             </div>
           )}
 
+          {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">{error}</p>}
+
           <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:gap-4">
             {step > 1 && (
               <Button variant="secondary" aria-label="Previous registration phase" className="!w-full !rounded-xl sm:!w-16 sm:!p-0" onClick={() => setStep(step - 1)}>
@@ -276,19 +323,19 @@ const Register: React.FC = () => {
               </Button>
             )}
             {step < 3 ? (
-              <Button className="!rounded-xl text-[10px] uppercase font-black tracking-widest" onClick={() => setStep(step + 1)} disabled={step === 2 && (!selectedSec || !formData.idFront || !formData.idBack)}>
-                Proceed to Phase {step === 1 ? 'II' : 'III'}
+              <Button className="!rounded-xl text-[10px] uppercase font-black tracking-widest" onClick={() => { setError(''); setStep(step + 1); }} disabled={(step === 1 && (!formData.name.trim() || !formData.email.trim() || formData.password.length < 6)) || (step === 2 && (!formData.student_id.trim() || (!isCollege && !selectedLvl) || !selectedSec))}>
+                Next
               </Button>
             ) : (
-              <Button variant="gold" className="!rounded-xl text-[10px] uppercase font-black tracking-widest" onClick={handleSubmit} disabled={loading || !formData.guardianName || !formData.guardianPhone}>
-                {loading ? 'Submitting...' : 'Establish Registry'}
+              <Button variant="gold" className="!rounded-xl text-[10px] uppercase font-black tracking-widest" onClick={handleSubmit} disabled={loading}>
+                {loading ? 'Submitting...' : 'Register'}
               </Button>
             )}
           </div>
 
           <div className="text-center pt-2">
             <button onClick={() => navigate('/login')} className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] hover:text-brand-900 transition-colors dark:text-slate-400 dark:hover:text-gold-400">
-              Already have an account? <span className="text-gold-500 underline decoration-2">Log in here!</span>
+              <span className="text-gold-500 underline decoration-2">Log In</span>
             </button>
           </div>
         </div>

@@ -28,17 +28,17 @@ export default function Button({
     }
   }, [ariaLabel, iconOnly]);
 
-  const baseStyle = 'relative flex items-center justify-center gap-2 rounded-xl font-semibold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60';
+  const baseStyle = 'relative inline-flex items-center justify-center rounded-lg font-semibold transition-colors duration-150 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60';
 
   const variants = {
-    primary: 'bg-brand-900 text-white shadow-md hover:bg-brand-800',
-    secondary: 'border-2 border-brand-900 bg-white text-brand-900 hover:bg-brand-50',
-    gold: 'bg-gold-gradient text-brand-900 shadow-lg hover:brightness-110',
+    primary: 'bg-brand-900 text-white shadow-sm hover:bg-brand-800',
+    secondary: 'border border-brand-900/70 bg-white text-brand-900 hover:bg-brand-50',
+    gold: 'bg-gold-gradient text-brand-900 shadow-sm hover:brightness-105',
   };
   const sizes = {
-    sm: 'h-9 px-3 text-sm',
-    md: 'h-11 px-4',
-    lg: 'h-12 px-5 text-lg',
+    sm: 'h-8 px-3 text-xs',
+    md: 'h-10 px-4 text-sm',
+    lg: 'h-11 px-5 text-base',
   };
   const width = iconOnly ? 'w-auto aspect-square px-0' : 'w-full';
 
@@ -57,7 +57,7 @@ export default function Button({
           className="absolute h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent"
         />
       ) : null}
-      <span className={loading ? 'invisible' : undefined}>{children}</span>
+      <span className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap ${loading ? 'invisible' : ''}`}>{children}</span>
     </button>
   );
 }

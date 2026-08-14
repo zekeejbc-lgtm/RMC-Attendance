@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
+import CustomSelect from '../components/ui/CustomSelect';
 
 interface AttendanceRecord {
   id: string;
@@ -250,7 +251,7 @@ const StudentRecords: React.FC = () => {
         actions={
           <div className="w-[calc(100vw-2rem)] max-w-full sm:w-auto">
             <Button onClick={handleExportPDF} className="border border-gold-400/30 uppercase tracking-wider sm:w-auto">
-              <Download size={15} className="text-gold-400" /> Export PDF Transcript
+              <Download size={15} className="text-gold-400" /> Export
             </Button>
           </div>
         }
@@ -280,31 +281,8 @@ const StudentRecords: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <label htmlFor="record-category" className="sr-only">Filter by category</label>
-          <select
-            id="record-category"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="input-field select-field cursor-pointer py-2 text-base sm:text-sm"
-          >
-            <option value="all">All Categories</option>
-            <option value="Event">Events Only</option>
-            <option value="Ceremony">Ceremonies Only</option>
-          </select>
-
-          <label htmlFor="record-status" className="sr-only">Filter by status</label>
-          <select
-            id="record-status"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="input-field select-field cursor-pointer py-2 text-base sm:text-sm"
-          >
-            <option value="all">All Statuses</option>
-            <option value="present">Present</option>
-            <option value="late">Late</option>
-            <option value="absent">Absent</option>
-            <option value="excused">Excused</option>
-          </select>
+          <CustomSelect ariaLabel="Filter by category" combobox label="Category" onChange={(value) => setCategoryFilter(value as string)} options={[{ value: 'all', label: 'All Categories' }, { value: 'Event', label: 'Events Only' }, { value: 'Ceremony', label: 'Ceremonies Only' }]} value={categoryFilter} />
+          <CustomSelect ariaLabel="Filter by status" combobox label="Status" onChange={(value) => setStatusFilter(value as string)} options={[{ value: 'all', label: 'All Statuses' }, { value: 'present', label: 'Present' }, { value: 'late', label: 'Late' }, { value: 'absent', label: 'Absent' }, { value: 'excused', label: 'Excused' }]} value={statusFilter} />
         </div>
       </Surface>
 

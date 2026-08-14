@@ -174,7 +174,7 @@ const StudentQR: React.FC = () => {
             className="mb-4 w-full max-w-[min(17rem,calc(100vw-4rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-inner transition-all hover:border-gold-400/60 dark:border-slate-700"
           >
             <QRCode 
-              value={profile.student_id || profile.uid} 
+              value={profile.uid}
               size={170} 
               fgColor="#0E1B42" 
               level="H"
@@ -184,21 +184,22 @@ const StudentQR: React.FC = () => {
 
           {/* Download Action Button */}
           <Button
+            aria-label="Download card as PNG"
             onClick={handleDownloadPNG}
             disabled={downloading}
             className="w-full border border-gold-400/30 uppercase tracking-wider sm:w-auto"
           >
             {downloading ? (
-              <span className="animate-pulse">Generating Minimalist PNG...</span>
+              <span className="animate-pulse">Working...</span>
             ) : downloadSuccess ? (
               <>
                 <CheckCircle2 size={16} className="text-emerald-400" />
-                <span>Card Saved to Photos/Downloads!</span>
+                <span>Saved</span>
               </>
             ) : (
               <>
                 <Download size={16} className="text-gold-400 group-hover:translate-y-0.5 transition-transform" />
-                <span>Download Card as PNG</span>
+                <span>Download</span>
               </>
             )}
           </Button>
@@ -209,8 +210,8 @@ const StudentQR: React.FC = () => {
                 <ShieldCheck size={15} />
              </div>
              <div className="min-w-0 text-left">
-                <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200">Cryptographically Secured</p>
-                <p className="text-[9px] text-emerald-700 font-medium [overflow-wrap:anywhere] dark:text-emerald-300">Linked to student record #{profile.student_id}</p>
+                <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200">System-verified account</p>
+                <p className="text-[9px] text-emerald-700 font-medium [overflow-wrap:anywhere] dark:text-emerald-300">Linked to student record #{profile.student_id}; the QR uses an internal key and requires active student status.</p>
              </div>
           </div>
         </div>

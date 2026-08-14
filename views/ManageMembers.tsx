@@ -129,6 +129,7 @@ const ManageMembers: React.FC = () => {
         username: officerData.username,
         role: role,
         student_id: `OFF-${Date.now()}`,
+        official_data: role === 'ssg' ? { body: 'SSG', position: 'Officer', scope: newNode.name } : undefined,
         school_data: deriveSchoolData([...currentPath, newNode]),
       });
     }
@@ -219,7 +220,7 @@ const ManageMembers: React.FC = () => {
             }}
             className="sm:w-auto"
           >
-            <Plus size={16} /> Add {needsTypeSelection ? 'Item' : childType.replace('_', ' ')}
+            <Plus size={16} /> Add
           </Button>
         ) : undefined}
       />
@@ -265,21 +266,9 @@ const ManageMembers: React.FC = () => {
                     value={memberSearch}
                   />
                 </label>
-                <label className="min-w-0">
-                  <span className="sr-only">Filter members by role</span>
-                  <select
-                    aria-label="Filter members by role"
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                    onChange={(event) => setMemberRole(event.target.value as typeof memberRole)}
-                    value={memberRole}
-                  >
-                    <option value="all">All roles</option>
-                    <option value="student">Students</option>
-                    <option value="mayor">Mayors</option>
-                  </select>
-                </label>
-                <Button variant="gold" className="sm:col-span-2 lg:w-auto" onClick={() => setShowMemberModal(true)}>
-                  <UserPlus size={16} /> Add member
+                <CustomSelect ariaLabel="Filter members by role" className="min-w-0" combobox label="Role" onChange={(value) => setMemberRole(value as typeof memberRole)} options={[{ value: 'all', label: 'All roles' }, { value: 'student', label: 'Students' }, { value: 'mayor', label: 'Mayors' }]} value={memberRole} />
+                <Button aria-label="Add member" variant="gold" className="sm:col-span-2 lg:w-auto" onClick={() => setShowMemberModal(true)}>
+                <UserPlus size={16} /> Add
                 </Button>
               </div>
             </div>
@@ -349,7 +338,7 @@ const ManageMembers: React.FC = () => {
                   onClick={() => setShowCreateModal(true)}
                   className="mt-4 text-brand-900 dark:text-gold-400 text-xs font-black uppercase tracking-widest hover:text-gold-600 dark:hover:text-gold-300"
                 >
-                  Create First {childType}
+                  Create
                 </button>
               </div>
             )}
@@ -367,7 +356,7 @@ const ManageMembers: React.FC = () => {
           <>
             <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Cancel</Button>
             <Button variant="gold" onClick={handleCreate} disabled={!newItemName || (childType === 'department' && !newItemType)}>
-              Create {childType.replace('_', ' ')}
+              Create
             </Button>
           </>
         )}
@@ -509,11 +498,12 @@ const ManageMembers: React.FC = () => {
           <>
             <Button variant="secondary" onClick={() => setShowMemberModal(false)}>Cancel</Button>
             <Button
+              aria-label="Create member"
               variant="gold"
               onClick={handleCreateMember}
               disabled={!memberData.name || !memberData.email || !memberData.username || !memberData.studentId}
             >
-              Create member
+              Create
             </Button>
           </>
         )}
@@ -537,18 +527,7 @@ const ManageMembers: React.FC = () => {
               />
             </label>
           ))}
-          <label className="space-y-1.5 sm:col-span-2" htmlFor="member-role">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Initial role</span>
-            <select
-              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-              id="member-role"
-              onChange={(event) => setMemberData({ ...memberData, role: event.target.value as UserProfile['role'] })}
-              value={memberData.role}
-            >
-              <option value="student">Student</option>
-              <option value="mayor">Mayor / attendance officer</option>
-            </select>
-          </label>
+          <CustomSelect className="sm:col-span-2" label="Initial role" onChange={(value) => setMemberData({ ...memberData, role: value as UserProfile['role'] })} options={[{ value: 'student', label: 'Student' }, { value: 'mayor', label: 'Mayor / attendance officer' }]} value={memberData.role} />
         </div>
       </Modal>
     </Page>

@@ -74,7 +74,7 @@ const RegisterStatus: React.FC = () => {
             <AlertCircle size={64} className="mx-auto text-gold-500" />
             <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">No Application Found</h2>
             <p className="break-words text-slate-500 dark:text-slate-400">You haven't submitted a registration application yet.</p>
-            <Button onClick={() => navigate('/register')}>Apply Now</Button>
+            <Button onClick={() => navigate('/register')}>Apply</Button>
             <Button variant="secondary" onClick={handleLogout}>Sign Out</Button>
           </div>
         ) : application.status === 'pending' ? (
@@ -104,7 +104,7 @@ const RegisterStatus: React.FC = () => {
                 Form locked. Max rejection limit reached.
               </div>
             ) : (
-              <Button onClick={() => navigate('/register')}>Re-apply (Trial {application.rejection_count + 1})</Button>
+              <Button aria-label={`Re-apply (trial ${application.rejection_count + 1})`} onClick={() => navigate('/register')}>Re-apply</Button>
             )}
             <Button variant="secondary" onClick={handleLogout}>Sign Out</Button>
           </div>
@@ -113,7 +113,7 @@ const RegisterStatus: React.FC = () => {
             <CheckCircle2 size={64} className="mx-auto text-green-500" />
             <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Account Approved!</h2>
             <p className="text-slate-500 dark:text-slate-400">Welcome to the Regal system. Your profile is now active.</p>
-            <Button variant="gold" onClick={() => window.location.reload()}>Go to Dashboard</Button>
+            <Button variant="gold" onClick={() => window.location.reload()}>Dashboard</Button>
           </div>
         )}
       </div>

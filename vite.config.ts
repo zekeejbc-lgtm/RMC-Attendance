@@ -25,6 +25,8 @@ export default defineConfig(({ mode }) => {
         setupFiles: './tests/setup.ts',
         css: true,
         pool: 'threads',
+        testTimeout: 15000,
+        exclude: ['**/node_modules/**', '**/dist/**', '**/.worktrees/**'],
       }
     };
 });

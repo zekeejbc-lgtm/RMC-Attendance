@@ -165,7 +165,7 @@ it('keeps focus in the drawer and restores it to the opener when closed', async 
   expect(closeButton).toHaveFocus();
 
   await user.tab({ shift: true });
-  expect(within(drawer).getByRole('button', { name: 'Sign Out' })).toHaveFocus();
+  expect(within(drawer).getByRole('button', { name: 'View profile' })).toHaveFocus();
   await user.tab();
   expect(closeButton).toHaveFocus();
 
@@ -188,4 +188,26 @@ it('closes the drawer when its backdrop is clicked', async () => {
   await user.click(screen.getByRole('button', { name: 'Close navigation backdrop' }));
 
   expect(screen.queryByRole('dialog', { name: /main navigation/i })).not.toBeInTheDocument();
+});
+
+it('moves logout to the profile page and expands from the arrow beside the logo', async () => {
+  const user = userEvent.setup();
+
+  render(
+    <ThemeProvider>
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Layout><p>Dashboard content</p></Layout>
+      </MemoryRouter>
+    </ThemeProvider>,
+  );
+
+  expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: /collapse sidebar/i }));
+
+  const expandButton = screen.getByRole('button', { name: /expand sidebar/i });
+  expect(expandButton).toHaveClass('absolute', 'right-0', 'top-1/2');
+  expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument();
+
+  await user.click(expandButton);
+  expect(screen.getByRole('button', { name: /collapse sidebar/i })).toBeInTheDocument();
 });

@@ -275,8 +275,8 @@ const AttendanceDashboard: React.FC = () => {
       <PageHeader
         actions={(
           <>
-            <Button className="sm:w-auto" onClick={() => setShowExportModal(true)} size="sm">
-              <Printer size={16} /> Export Report
+            <Button aria-label="Export report" className="sm:w-auto" onClick={() => setShowExportModal(true)} size="sm">
+              <Printer size={16} /> Export
             </Button>
             <Button className="sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-white" onClick={handleExportCSV} size="sm" variant="secondary">
               <Download size={16} /> CSV
@@ -438,20 +438,20 @@ const AttendanceDashboard: React.FC = () => {
       </Surface>
 
       <Modal
-        footer={<Button className="sm:w-auto" onClick={handleExportPDF} variant="gold"><Printer size={16} /> Generate PDF Report</Button>}
+        footer={<Button aria-label="Generate PDF report" className="sm:w-auto" onClick={handleExportPDF} variant="gold"><Printer size={16} /> PDF</Button>}
         onClose={() => setShowExportModal(false)}
         open={showExportModal}
         size="sm"
         title="Export Configuration"
       >
         <div className="space-y-5">
-          <div className="space-y-2"><label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300" htmlFor="attendance-export-group">Group Data By</label><select className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-brand-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" id="attendance-export-group" onChange={(event) => setExportSettings({ ...exportSettings, groupBy: event.target.value as typeof exportSettings.groupBy })} value={exportSettings.groupBy}><option value="status">Attendance Status</option><option value="section">Section</option><option value="level">Level</option><option value="program">Program</option></select></div>
+          <CustomSelect ariaLabel="Group data by" combobox label="Group Data By" onChange={(value) => setExportSettings({ ...exportSettings, groupBy: value as typeof exportSettings.groupBy })} options={[{ value: 'status', label: 'Attendance Status' }, { value: 'section', label: 'Section' }, { value: 'level', label: 'Level' }, { value: 'program', label: 'Program' }]} value={exportSettings.groupBy} />
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900"><input checked={exportSettings.includeCharts} className="h-4 w-4 accent-gold-500" onChange={(event) => setExportSettings({ ...exportSettings, includeCharts: event.target.checked })} type="checkbox" /><span className="text-sm font-bold text-brand-900 dark:text-white">Include Visualizations</span></label>
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900"><input checked={exportSettings.includeTables} className="h-4 w-4 accent-gold-500" onChange={(event) => setExportSettings({ ...exportSettings, includeTables: event.target.checked })} type="checkbox" /><span className="text-sm font-bold text-brand-900 dark:text-white">Include Detailed Tables</span></label>
         </div>
       </Modal>
 
-      <Modal footer={<Button className="sm:w-auto" onClick={() => setShowTimeModal(false)} variant="gold">Apply Range</Button>} onClose={() => setShowTimeModal(false)} open={showTimeModal} size="sm" title="Select Date Range">
+      <Modal footer={<Button aria-label="Apply range" className="sm:w-auto" onClick={() => setShowTimeModal(false)} variant="gold">Apply</Button>} onClose={() => setShowTimeModal(false)} open={showTimeModal} size="sm" title="Select Date Range">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2"><label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300" htmlFor="attendance-start-date">Start Date</label><input className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-brand-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" id="attendance-start-date" onChange={(event) => setDateRange({ ...dateRange, start: event.target.value })} type="date" value={dateRange.start} /></div>
           <div className="space-y-2"><label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300" htmlFor="attendance-end-date">End Date</label><input className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-brand-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" id="attendance-end-date" onChange={(event) => setDateRange({ ...dateRange, end: event.target.value })} type="date" value={dateRange.end} /></div>

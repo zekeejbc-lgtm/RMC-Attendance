@@ -23,6 +23,7 @@ import {
 import { TEST_ACCOUNTS } from '../lib/seed';
 import { mockAuth, mockSeed, getDB } from '../lib/mockBackend';
 import ThemeToggle from '../components/ui/ThemeToggle';
+import { Collapsible } from '../components/ui/Collapsible';
 
 const Login: React.FC = () => {
   const { isMock, user } = useAuth();
@@ -155,33 +156,33 @@ const Login: React.FC = () => {
               </div>
 
               <Button type="submit" disabled={loading} className="!rounded-lg text-[10px] font-black uppercase tracking-widest py-3.5 mt-2 shadow-lg">
-                {loading ? <Loader2 className="animate-spin" size={16}/> : 'Connect to Hub'}
+                {loading ? <Loader2 className="animate-spin" size={16}/> : 'Log In'}
               </Button>
             </form>
 
             <div className="mt-6 space-y-4 border-t border-slate-200 pt-5 text-center dark:border-slate-800">
               <button onClick={() => navigate('/register')} className="w-full rounded-lg border border-slate-200 bg-slate-50 py-3 text-[9px] font-black uppercase tracking-widest text-brand-900 transition-all hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
-                Register New Asset
+                Register
               </button>
               
               <div className="flex flex-col gap-3 items-center">
                  <button onClick={() => alert("Administrative intervention required for key recovery. Contact SSG Unit.")} className="text-[8px] font-black text-slate-400 hover:text-brand-900 uppercase tracking-[0.3em] transition-colors dark:text-slate-400 dark:hover:text-gold-400">
-                   Forgot Password?
+                  Forgot?
                  </button>
                  <button 
+                   aria-controls="login-test-accounts"
                    aria-expanded={showTestPanel}
                    onClick={() => setShowTestPanel(!showTestPanel)}
                    className="text-[8px] font-black text-gold-600 hover:text-gold-500 uppercase tracking-widest flex items-center gap-1.5"
                  >
-                   Deployment Access {showTestPanel ? <ChevronUp size={10}/> : <ChevronDown size={10}/>}
+                  Tests <ChevronDown className="app-disclosure-chevron" size={10}/>
                  </button>
               </div>
             </div>
           </div>
         </div>
 
-        {showTestPanel && (
-          <div className="rounded-2xl border border-white/10 bg-brand-900/90 p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-2 duration-300 dark:border-slate-700 dark:bg-slate-900/95">
+        <Collapsible id="login-test-accounts" open={showTestPanel} innerClassName="rounded-2xl border border-white/10 bg-brand-900/90 p-4 shadow-2xl backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/95">
             <h3 className="text-gold-400 text-[8px] font-black uppercase tracking-[0.2em] mb-3 flex items-center gap-1.5">
               <Sparkles size={10}/> Credential Vault
             </h3>
@@ -202,8 +203,7 @@ const Login: React.FC = () => {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+        </Collapsible>
       </div>
     </div>
   );
