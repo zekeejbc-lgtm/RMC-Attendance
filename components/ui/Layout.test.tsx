@@ -10,6 +10,10 @@ const authMocks = vi.hoisted(() => ({
   mockSignOut: vi.fn(),
 }));
 
+const layoutAuth = vi.hoisted(() => ({
+  role: 'student',
+}));
+
 let restoreMatchMedia: (() => void) | undefined;
 
 function installViewportController() {
@@ -48,7 +52,7 @@ vi.mock('../AuthContext', () => ({
   useAuth: () => ({
     profile: {
       name: 'Test Student',
-      role: 'student',
+      role: layoutAuth.role,
       student_id: '2024-0001',
       photo_url: '',
     },
@@ -70,6 +74,7 @@ afterEach(() => {
   restoreMatchMedia?.();
   restoreMatchMedia = undefined;
   vi.clearAllMocks();
+  layoutAuth.role = 'student';
 });
 
 it('opens and closes the mobile navigation drawer accessibly', async () => {
@@ -188,6 +193,31 @@ it('closes the drawer when its backdrop is clicked', async () => {
   await user.click(screen.getByRole('button', { name: 'Close navigation backdrop' }));
 
   expect(screen.queryByRole('dialog', { name: /main navigation/i })).not.toBeInTheDocument();
+});
+
+it('shows SSG member tools without the mayor label or attendance administration', async () => {
+  const user = userEvent.setup();
+  layoutAuth.role = 'ssg';
+
+  render(
+    <ThemeProvider>
+      <MemoryRouter initialEntries={['/ssg/panel']}>
+        <Layout><p>SSG content</p></Layout>
+      </MemoryRouter>
+    </ThemeProvider>,
+  );
+
+  const navigation = screen.getByRole('navigation', { name: /desktop navigation/i });
+  expect(within(navigation).getByRole('button', { name: /attendance scanner/i })).toBeInTheDocument();
+  expect(within(navigation).getByRole('button', { name: /event management/i })).toBeInTheDocument();
+  expect(within(navigation).queryByRole('button', { name: /mayor hub/i })).not.toBeInTheDocument();
+  expect(within(navigation).queryByText(/^admin$/i)).not.toBeInTheDocument();
+  expect(within(navigation).queryByRole('button', { name: /attendance dashboard/i })).not.toBeInTheDocument();
+  expect(within(navigation).getByRole('button', { name: /manage members/i })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: /collapse sidebar/i }));
+  expect(within(navigation).queryByRole('button', { name: /attendance dashboard/i })).not.toBeInTheDocument();
+  expect(within(navigation).getByRole('button', { name: /manage members/i })).toBeInTheDocument();
 });
 
 it('moves logout to the profile page and expands from the arrow beside the logo', async () => {

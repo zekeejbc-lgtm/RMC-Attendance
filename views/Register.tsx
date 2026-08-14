@@ -5,8 +5,9 @@ import { useAuth } from '../components/AuthContext';
 import Button from '../components/ui/Button';
 import { mockData } from '../lib/mockBackend';
 import { SchoolNode } from '../types';
-import CustomSelect from '../components/ui/CustomSelect';
 import ThemeToggle from '../components/ui/ThemeToggle';
+import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
+import { serializeAcademicAssignment } from '../lib/academicDirectory';
 import { 
   User, School, Shield, ChevronRight, ChevronLeft, 
   Camera, CheckCircle2, AlertCircle, ImageIcon, Upload, CreditCard,
@@ -20,12 +21,7 @@ const Register: React.FC = () => {
   const navigate = useNavigate();
 
   const [structure, setStructure] = useState<SchoolNode[]>([]);
-  const [selectedSchool, setSelectedSchool] = useState<SchoolNode | null>(null);
-  const [selectedDept, setSelectedDept] = useState<SchoolNode | null>(null);
-  const [selectedTrack, setSelectedTrack] = useState<SchoolNode | null>(null);
-  const [selectedStrand, setSelectedStrand] = useState<SchoolNode | null>(null);
-  const [selectedLvl, setSelectedLvl] = useState<SchoolNode | null>(null);
-  const [selectedSec, setSelectedSec] = useState<SchoolNode | null>(null);
+  const [academicPath, setAcademicPath] = useState<SchoolNode[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -44,16 +40,14 @@ const Register: React.FC = () => {
     setStructure(mockData.getSchoolStructure());
   }, []);
 
-  const isSHS = selectedDept?.name.toLowerCase().includes('senior');
-  const isCollege = selectedDept?.name.toLowerCase().includes('college');
-
   const handleFileUpload = (field: string) => {
     // Mocking file capture for this environment
     setFormData(prev => ({ ...prev, [field]: `https://picsum.photos/400/400?sig=${field}_${Math.random()}` }));
   };
 
   const handleSubmit = async () => {
-    if (!formData.name.trim() || !formData.email.trim() || !formData.password || !formData.student_id.trim() || !selectedSchool || !selectedDept || (!isCollege && !selectedLvl) || !selectedSec) {
+    const terminal = academicPath[academicPath.length - 1];
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password || !formData.student_id.trim() || !terminal || !['section', 'block'].includes(terminal.type)) {
       setError('Complete all required identity and academic fields.');
       return;
     }
@@ -63,6 +57,7 @@ const Register: React.FC = () => {
     }
     setLoading(true);
     const uid = `user_${Date.now()}`;
+    const serialized = serializeAcademicAssignment(academicPath);
     const profile: any = {
       uid,
       name: formData.name.trim(),
@@ -75,16 +70,7 @@ const Register: React.FC = () => {
       guardian: formData.guardianName.trim() || formData.guardianPhone.trim()
         ? { name: formData.guardianName.trim(), contact: formData.guardianPhone.trim() }
         : undefined,
-      school_data: {
-        type: selectedDept?.name.toLowerCase().includes('high') ? 'High School' : 'College',
-        department: isCollege ? selectedTrack?.name : selectedDept?.name,
-        track: selectedTrack?.name,
-        strand: selectedStrand?.name,
-        program: isCollege ? selectedStrand?.name : undefined,
-        level: selectedLvl?.name || (isCollege ? 'College' : ''),
-        section: selectedSec?.name,
-        school_id: selectedSchool?.id
-      }
+      school_data: { ...serialized.schoolData, school_id: serialized.assignment.campusId, academic_assignment: serialized.assignment }
     };
 
     try {
@@ -173,120 +159,7 @@ const Register: React.FC = () => {
                 <input id="register-student-id" placeholder="2024-XXXXX" className="w-full min-w-0 break-words rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.student_id} onChange={e => setFormData({...formData, student_id: e.target.value})} />
               </div>
 
-              <div className="grid grid-cols-1 gap-2">
-                <CustomSelect 
-                  label="Campus Location"
-                  options={structure.map(s => ({ value: s.id, label: s.name }))}
-                  value={selectedSchool?.id || ''}
-                  onChange={val => {
-                    const s = structure.find(x => x.id === val);
-                    setSelectedSchool(s || null);
-                    setSelectedDept(null); setSelectedTrack(null); setSelectedStrand(null); setSelectedLvl(null); setSelectedSec(null);
-                  }}
-                  placeholder="Select Campus"
-                />
-
-                {selectedSchool && (
-                  <CustomSelect 
-                    label="Academic Department"
-                    options={selectedSchool.children?.map(d => ({ value: d.id, label: d.name })) || []}
-                    value={selectedDept?.id || ''}
-                    onChange={val => {
-                      const d = selectedSchool.children?.find(x => x.id === val);
-                      setSelectedDept(d || null);
-                      setSelectedTrack(null); setSelectedStrand(null); setSelectedLvl(null); setSelectedSec(null);
-                    }}
-                    placeholder="Select Department"
-                  />
-                )}
-
-                {isSHS && selectedDept && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <CustomSelect 
-                      label="Track"
-                      options={selectedDept.children?.map(t => ({ value: t.id, label: t.name })) || []}
-                      value={selectedTrack?.id || ''}
-                      onChange={val => {
-                        const t = selectedDept.children?.find(x => x.id === val);
-                        setSelectedTrack(t || null); setSelectedStrand(null); setSelectedLvl(null); setSelectedSec(null);
-                      }}
-                      placeholder="Select Track"
-                    />
-                    {selectedTrack && (
-                      <CustomSelect 
-                        label="Strand"
-                        options={selectedTrack.children?.map(s => ({ value: s.id, label: s.name })) || []}
-                        value={selectedStrand?.id || ''}
-                        onChange={val => {
-                          const s = selectedTrack.children?.find(x => x.id === val);
-                          setSelectedStrand(s || null); setSelectedLvl(null); setSelectedSec(null);
-                        }}
-                        placeholder="Select Strand"
-                      />
-                    )}
-                  </div>
-                )}
-
-                {isCollege && selectedDept && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <CustomSelect
-                      label="College"
-                      options={selectedDept.children?.map(node => ({ value: node.id, label: node.name })) || []}
-                      value={selectedTrack?.id || ''}
-                      onChange={val => {
-                        const college = selectedDept.children?.find(node => node.id === val);
-                        setSelectedTrack(college || null); setSelectedStrand(null); setSelectedLvl(null); setSelectedSec(null);
-                      }}
-                      placeholder="Select College"
-                    />
-                    {selectedTrack && <CustomSelect
-                      label="Program"
-                      options={selectedTrack.children?.map(node => ({ value: node.id, label: node.name })) || []}
-                      value={selectedStrand?.id || ''}
-                      onChange={val => {
-                        const program = selectedTrack.children?.find(node => node.id === val);
-                        setSelectedStrand(program || null); setSelectedLvl(null); setSelectedSec(null);
-                      }}
-                      placeholder="Select Program"
-                    />}
-                    {selectedStrand && <CustomSelect
-                      label="Class Section"
-                      options={selectedStrand.children?.map(node => ({ value: node.id, label: node.name })) || []}
-                      value={selectedSec?.id || ''}
-                      onChange={val => setSelectedSec(selectedStrand.children?.find(node => node.id === val) || null)}
-                      placeholder="Select Section"
-                    />}
-                  </div>
-                )}
-
-                {((!isSHS && !isCollege && selectedDept) || (isSHS && selectedStrand)) && (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <CustomSelect 
-                      label="Year Level"
-                      options={(isSHS ? selectedStrand : selectedDept)?.children?.map(l => ({ value: l.id, label: l.name })) || []}
-                      value={selectedLvl?.id || ''}
-                      onChange={val => {
-                        const parent = isSHS ? selectedStrand : selectedDept;
-                        const l = parent?.children?.find(x => x.id === val);
-                        setSelectedLvl(l || null); setSelectedSec(null);
-                      }}
-                      placeholder="Select Level"
-                    />
-                    {selectedLvl && (
-                      <CustomSelect 
-                        label="Class Section"
-                        options={selectedLvl.children?.map(s => ({ value: s.id, label: s.name })) || []}
-                        value={selectedSec?.id || ''}
-                        onChange={val => {
-                          const s = selectedLvl.children?.find(x => x.id === val);
-                          setSelectedSec(s || null);
-                        }}
-                        placeholder="Select Section"
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
+              <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
 
               <p className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">Your ID number and academic assignment will be verified against school records. ID image uploads are not needed.</p>
             </div>

@@ -6,8 +6,9 @@ import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { Collapsible } from '../components/ui/Collapsible';
 import CustomSelect from '../components/ui/CustomSelect';
+import SearchInput from '../components/ui/SearchInput';
 import { 
-  Calendar, Search, Filter, MapPin, Clock, AlertTriangle, 
+  Calendar, Filter, MapPin, Clock, AlertTriangle,
   ChevronDown, FileUp, CheckCircle2, ArrowRight,
   Send, FileText
 } from 'lucide-react';
@@ -176,18 +177,7 @@ const StudentEvents: React.FC = () => {
 
       {/* SEARCH & FILTER BAR */}
       <Surface aria-label="Event filters" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <label className="sr-only" htmlFor="event-search">Search events</label>
-            <input 
-              id="event-search"
-              type="text" 
-              placeholder="Search event name..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-9 pr-3 py-1.5 shadow-xs"
-            />
-          </div>
+          <SearchInput ariaLabel="Search events" className="flex-1" onChange={setSearchTerm} placeholder="Search event name..." value={searchTerm} />
 
           <div className="flex min-w-0 items-center gap-1.5 sm:w-56">
             <Filter className="text-slate-400 shrink-0" size={14} />

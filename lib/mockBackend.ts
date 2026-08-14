@@ -1,6 +1,7 @@
 
 import { TEST_ACCOUNTS } from './seed';
 import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication } from '../types';
+import { migrateAcademicDirectory } from './academicDirectory';
 
 const STORAGE_KEY = 'rmc_regalia_db';
 
@@ -13,8 +14,69 @@ interface MockDB {
   attendance_logs: Record<string, Record<string, any>>;
   sanction_logs: Record<string, any[]>;
   school_structure: SchoolNode[];
+  schema_version?: number;
   application_credentials?: Record<string, string>;
 }
+
+type NewUserProfile = Omit<UserProfile, 'uid' | 'photo_url'>;
+
+const accountEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const normalizeNewUserProfile = (profile: NewUserProfile): NewUserProfile => ({
+  ...profile,
+  name: profile.name.trim(),
+  username: profile.username.trim(),
+  email: profile.email.trim().toLowerCase(),
+  student_id: profile.student_id.trim(),
+  phone: profile.phone?.trim() || undefined,
+  guardian: profile.guardian ? {
+    name: profile.guardian.name.trim(),
+    contact: profile.guardian.contact.trim(),
+    ...(profile.guardian.email?.trim() ? { email: profile.guardian.email.trim().toLowerCase() } : {}),
+  } : undefined,
+});
+
+const getAccountProfiles = (db: MockDB): UserProfile[] => [
+  ...Object.values(db.users).map(({ profile }) => profile),
+  ...Object.values(db.applications).map(({ form_data }) => form_data),
+];
+
+const assertNewUserProfile = (db: MockDB, profile: NewUserProfile, additional: NewUserProfile[] = []) => {
+  if (!profile.name) throw new Error('Name is required.');
+  if (!profile.email || !accountEmailPattern.test(profile.email)) throw new Error('A valid email address is required.');
+  if (!profile.username) throw new Error('Username is required.');
+  if (!profile.student_id) throw new Error('Student ID is required.');
+  if (profile.guardian?.email && !accountEmailPattern.test(profile.guardian.email)) throw new Error('Guardian email must be valid.');
+
+  const candidates = [...getAccountProfiles(db), ...additional];
+  const uniqueFields: Array<{ field: 'email' | 'username' | 'student_id'; label: string }> = [
+    { field: 'email', label: 'Email' },
+    { field: 'username', label: 'Username' },
+    { field: 'student_id', label: 'Student ID' },
+  ];
+  uniqueFields.forEach(({ field, label }) => {
+    const normalizedValue = profile[field].trim().toLowerCase();
+    if (candidates.some((candidate) => candidate[field].trim().toLowerCase() === normalizedValue)) {
+      throw new Error(`${label} already exists.`);
+    }
+  });
+};
+
+const addUserToDB = (db: MockDB, profile: NewUserProfile, password: string, suffix = '') => {
+  const uid = `u_${Date.now()}_${suffix}${Math.random().toString(36).slice(2, 11)}`;
+  db.usernames[profile.username.toLowerCase()] = profile.email.toLowerCase();
+  db.users[uid] = {
+    password,
+    profile: {
+      ...profile,
+      account_status: profile.account_status || 'active',
+      uid,
+      photo_url: `https://i.pravatar.cc/150?u=${uid}`,
+    } as UserProfile,
+    stats: { attendance_rate: 100, sanction_hours: 0, events_attended: 0, events_missed: 0 },
+  };
+  return uid;
+};
 
 export const getDB = (): MockDB => {
   let db: MockDB;
@@ -36,8 +98,19 @@ export const getDB = (): MockDB => {
 
   if (!db.application_credentials) db.application_credentials = {};
 
-  // Ensure all TEST_ACCOUNTS exist in db.users & db.usernames
   let updated = false;
+  if ('directory_backups' in db) {
+    delete (db as MockDB & { directory_backups?: unknown }).directory_backups;
+    updated = true;
+  }
+  if ((db.schema_version || 1) < 2) {
+    const migration = migrateAcademicDirectory(db.school_structure || []);
+    if (migration.changed) db.school_structure = migration.nodes;
+    db.schema_version = 2;
+    updated = true;
+  }
+
+  // Ensure all TEST_ACCOUNTS exist in db.users & db.usernames
   TEST_ACCOUNTS.forEach(acc => {
     const uid = `mock_uid_${acc.user}`;
     if (!db.users[uid]) {
@@ -241,82 +314,95 @@ const createReferenceSchoolStructure = (): SchoolNode[] => {
   const defaultSchool: SchoolNode = {
     id: 'school_rmc',
     name: 'Rizal Memorial Colleges',
-    type: 'school',
+    type: 'campus',
     logo_url: 'https://placehold.co/400x400/0E1B42/D4AF37?text=RMC',
+    metadata: { schemaVersion: 2, selectableForEvents: true },
     children: [
       {
         id: 'dept_jhs',
         name: 'Junior High School',
-        type: 'department',
+        type: 'education_unit',
+        metadata: { educationLevel: 'jhs', curriculumCode: 'matatag', schemaVersion: 2, selectableForEvents: true },
         children: [
-          { id: 'lvl_g7', name: 'Grade 7', type: 'level', children: [{ id: 'sec_narra', name: 'Narra', type: 'section' }] },
-          { id: 'lvl_g10', name: 'Grade 10', type: 'level', children: [{ id: 'sec_kamagong', name: 'Kamagong', type: 'section' }] }
+          { id: 'lvl_g7', name: 'Grade 7', type: 'grade_level', children: [{ id: 'sec_narra', name: 'Narra', type: 'section' }] },
+          { id: 'lvl_g8', name: 'Grade 8', type: 'grade_level', children: [] },
+          { id: 'lvl_g9', name: 'Grade 9', type: 'grade_level', children: [] },
+          { id: 'lvl_g10', name: 'Grade 10', type: 'grade_level', children: [{ id: 'sec_kamagong', name: 'Kamagong', type: 'section' }] }
         ]
       },
       {
-        id: 'dept_shs',
-        name: 'Senior High School',
-        type: 'department',
+        id: 'dept_strengthened_shs',
+        name: 'Strengthened Senior High School',
+        type: 'education_unit',
+        metadata: { educationLevel: 'shs', curriculumCode: 'strengthened_shs', schemaVersion: 2, selectableForEvents: true },
         children: [
-          { 
-            id: 'track_acad', 
-            name: 'Academic Track', 
-            type: 'track', 
+          {
+            id: 'track_strengthened_academic',
+            name: 'Academic',
+            type: 'track',
+            children: [
+              { id: 'lvl_strengthened_academic_g11', name: 'Grade 11', type: 'grade_level', children: [{ id: 'sec_pascal', name: 'Pascal', type: 'section' }] },
+              { id: 'lvl_strengthened_academic_g12', name: 'Grade 12', type: 'grade_level', children: [] },
+            ]
+          },
+          {
+            id: 'track_strengthened_techpro',
+            name: 'Technical Professional (TechPro)',
+            type: 'track',
+            children: [
+              { id: 'lvl_strengthened_techpro_g11', name: 'Grade 11', type: 'grade_level', children: [] },
+              { id: 'lvl_strengthened_techpro_g12', name: 'Grade 12', type: 'grade_level', children: [] },
+            ]
+          },
+        ]
+      },
+      {
+        id: 'dept_legacy_shs',
+        name: 'Legacy Senior High School',
+        type: 'education_unit',
+        metadata: { educationLevel: 'shs', curriculumCode: 'legacy_shs', schemaVersion: 2, selectableForEvents: true },
+        children: [
+          {
+            id: 'track_legacy_academic',
+            name: 'Academic',
+            type: 'track',
             children: [
               {
                 id: 'strand_stem',
                 name: 'STEM',
                 type: 'strand',
-                children: [
-                  { 
-                    id: 'lvl_shs_g12', 
-                    name: 'Grade 12', 
-                    type: 'level', 
-                    children: [
-                      { id: 'sec_newton', name: 'Newton', type: 'section' },
-                      { id: 'sec_einstein', name: 'Einstein', type: 'section' }
-                    ]
-                  },
-                  { 
-                    id: 'lvl_shs_g11', 
-                    name: 'Grade 11', 
-                    type: 'level', 
-                    children: [{ id: 'sec_pascal', name: 'Pascal', type: 'section' }]
-                  }
-                ]
+                children: [{ id: 'lvl_shs_g12', name: 'Grade 12', type: 'grade_level', children: [
+                  { id: 'sec_newton', name: 'Newton', type: 'section' },
+                  { id: 'sec_einstein', name: 'Einstein', type: 'section' },
+                ] }]
               },
-              {
-                id: 'strand_abm',
-                name: 'ABM',
-                type: 'strand',
-                children: [{ id: 'lvl_shs_g12_abm', name: 'Grade 12', type: 'level', children: [{ id: 'sec_luca', name: 'Luca Pacioli', type: 'section' }] }]
-              }
+              { id: 'strand_abm', name: 'ABM', type: 'strand', children: [{ id: 'lvl_shs_g12_abm', name: 'Grade 12', type: 'grade_level', children: [{ id: 'sec_luca', name: 'Luca Pacioli', type: 'section' }] }] },
             ]
-          }
+          },
+          { id: 'track_legacy_tvl', name: 'TVL', type: 'track', children: [] },
+          { id: 'track_legacy_arts', name: 'Arts and Design', type: 'track', children: [] },
+          { id: 'track_legacy_sports', name: 'Sports', type: 'track', children: [] },
         ]
       },
       {
-        id: 'dept_college_root',
-        name: 'College',
-        type: 'department',
-        children: [
-          {
-            id: 'col_cas',
-            name: 'College of Arts and Sciences',
-            type: 'track',
+        id: 'dept_higher_education',
+        name: 'Higher Education',
+        type: 'education_unit',
+        metadata: { educationLevel: 'higher_ed', schemaVersion: 2, selectableForEvents: true },
+        children: [{
+          id: 'col_cas',
+          name: 'College of Arts and Sciences',
+          type: 'college',
+          children: [{
+            id: 'prog_bscs',
+            name: 'BS Computer Science',
+            type: 'program',
             children: [
-              {
-                id: 'prog_bscs',
-                name: 'BS Computer Science',
-                type: 'strand',
-                children: [
-                  { id: 'sec_cs1a', name: 'CS-1A', type: 'section' },
-                  { id: 'sec_cs2a', name: 'CS-2A', type: 'section' }
-                ]
-              }
+              { id: 'lvl_bscs_1', name: '1st Year', type: 'year_level', children: [{ id: 'sec_cs1a', name: 'CS-1A', type: 'block' }] },
+              { id: 'lvl_bscs_2', name: '2nd Year', type: 'year_level', children: [{ id: 'sec_cs2a', name: 'CS-2A', type: 'block' }] },
             ]
-          }
-        ]
+          }]
+        }]
       }
     ]
   };
@@ -605,10 +691,22 @@ export const mockSeed = () => {
 };
 
 export const mockData = {
-  getEvents: () => Object.values(ensureMockReferenceData().events),
+  getEvents: () => {
+    const db = ensureMockReferenceData();
+    const now = Date.now();
+    let changed = false;
+    Object.values(db.events).forEach((event) => {
+      if (event.status === 'active' && event.endTime <= now) { event.status = 'done'; changed = true; }
+    });
+    if (changed) saveDB(db);
+    return Object.values(db.events);
+  },
   getApplications: () => Object.values(getDB().applications),
   getExcuseApplications: () => Object.values(getDB().excuse_applications || {}),
   getSchoolStructure: () => getDB().school_structure,
+  getAllAccountIdentities: () => getAccountProfiles(getDB()).map(({ email, username, student_id }) => ({
+    email, username, student_id,
+  })),
   getAllStudents: () => {
     const db = getDB();
     return Object.values(db.users)
@@ -619,10 +717,14 @@ export const mockData = {
         sanction_logs: db.sanction_logs[u.profile.uid] || []
       }));
   },
-  getStudentsBySection: (sectionName: string) => {
+  getStudentsBySection: (sectionName: string, terminalGroupId?: string) => {
     const db = getDB();
     return Object.values(db.users)
-      .filter(u => u.profile.school_data.section === sectionName)
+      .filter(({ profile }) => terminalGroupId
+        ? profile.school_data.academic_assignment?.terminalGroupId === terminalGroupId
+          || (!profile.school_data.academic_assignment && profile.school_data.section === sectionName)
+        : profile.school_data.section === sectionName)
+      .filter(({ profile }) => profile.role === 'student' || profile.role === 'mayor')
       .map(u => ({ ...u.profile, stats: u.stats }));
   },
   getUserProfile: (studentIdentifier: string) => {
@@ -643,27 +745,52 @@ export const mockData = {
       excuse_applications: Object.values(db.excuse_applications || {}).filter(a => a.student_uid === uid)
     };
   },
-  createUser: (profile: Omit<UserProfile, 'uid' | 'photo_url'>, password = 'password123') => {
+  createUser: (profile: NewUserProfile, password = 'password123') => {
     const db = getDB();
-    const uid = `u_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    db.usernames[profile.username.toLowerCase()] = profile.email.toLowerCase();
-    db.users[uid] = {
-      password,
-      profile: {
-        ...profile,
-        account_status: profile.account_status || 'active',
-        uid,
-        photo_url: `https://i.pravatar.cc/150?u=${uid}`,
-      } as UserProfile,
-      stats: {
-        attendance_rate: 100,
-        sanction_hours: 0,
-        events_attended: 0,
-        events_missed: 0
-      }
-    };
+    const normalized = normalizeNewUserProfile(profile);
+    assertNewUserProfile(db, normalized);
+    const uid = addUserToDB(db, normalized, password);
     saveDB(db);
     return uid;
+  },
+  createSectionMembers: (
+    members: Array<{ profile: NewUserProfile; makeMayor: boolean }>,
+    terminalGroupId: string,
+    sectionName: string,
+    password = 'password123',
+  ) => {
+    const db = getDB();
+    if (members.filter(({ makeMayor }) => makeMayor).length > 1) {
+      throw new Error('Only one mayor can be assigned to a section.');
+    }
+    const normalizedMembers = members.map(({ profile, makeMayor }) => ({
+      profile: normalizeNewUserProfile(profile), makeMayor,
+    }));
+    const validated: NewUserProfile[] = [];
+    normalizedMembers.forEach(({ profile }) => {
+      const assignment = profile.school_data.academic_assignment;
+      const belongsToSection = assignment
+        ? assignment.terminalGroupId === terminalGroupId
+        : profile.school_data.section === sectionName;
+      if (!belongsToSection) throw new Error('A member does not belong to the selected section.');
+      assertNewUserProfile(db, profile, validated);
+      validated.push(profile);
+    });
+
+    const created = normalizedMembers.map(({ profile }, index) => addUserToDB(db, profile, password, `${index}_`));
+    const mayorIndex = normalizedMembers.findIndex(({ makeMayor }) => makeMayor);
+    if (mayorIndex >= 0) {
+      const belongsToGroup = (profile: UserProfile) => profile.school_data.academic_assignment
+        ? profile.school_data.academic_assignment.terminalGroupId === terminalGroupId
+        : profile.school_data.section === sectionName;
+      Object.values(db.users).forEach(({ profile }) => {
+        if (belongsToGroup(profile) && profile.role === 'mayor') profile.role = 'student';
+      });
+      db.users[created[mayorIndex]].profile.role = 'mayor';
+    }
+    saveDB(db);
+    notifyAuthChange();
+    return created;
   },
   addSchoolNode: (parentId: string | null, node: SchoolNode) => {
     const db = getDB();
@@ -692,6 +819,25 @@ export const mockData = {
       saveDB(db);
       notifyAuthChange();
     }
+  },
+  assignSectionMayor: (uid: string, terminalGroupId: string, sectionName?: string) => {
+    const db = getDB();
+    const selected = db.users[uid]?.profile;
+    if (!selected) return false;
+    if (selected.role !== 'student' && selected.role !== 'mayor') return false;
+
+    const belongsToGroup = (profile: UserProfile) => profile.school_data.academic_assignment
+      ? profile.school_data.academic_assignment.terminalGroupId === terminalGroupId
+      : Boolean(sectionName && profile.school_data.section === sectionName);
+    if (!belongsToGroup(selected)) return false;
+
+    Object.values(db.users).forEach(({ profile }) => {
+      if (belongsToGroup(profile) && profile.role === 'mayor') profile.role = 'student';
+    });
+    selected.role = 'mayor';
+    saveDB(db);
+    notifyAuthChange();
+    return true;
   },
   updateContactDetails: (uid: string, changes: { phone?: string; guardianName?: string; guardianContact?: string }) => {
     const db = getDB();
@@ -818,6 +964,65 @@ export const mockData = {
     db.application_credentials![data.uid] = password;
     saveDB(db);
   },
+  replaceSchoolStructure: (nodes: SchoolNode[]) => {
+    const db = getDB();
+    db.school_structure = JSON.parse(JSON.stringify(nodes));
+    saveDB(db);
+  },
+  updateSchoolNode: (id: string, changes: Partial<Pick<SchoolNode, 'name' | 'type' | 'metadata'>>) => {
+    const db = getDB();
+    const update = (nodes: SchoolNode[]): boolean => {
+      for (const item of nodes) {
+        if (item.id === id) {
+          if (changes.name !== undefined) item.name = changes.name;
+          if (changes.type !== undefined) item.type = changes.type;
+          if (changes.metadata !== undefined) item.metadata = { ...(item.metadata || {}), ...changes.metadata };
+          return true;
+        }
+        if (update(item.children || [])) return true;
+      }
+      return false;
+    };
+    const changed = update(db.school_structure);
+    if (changed) saveDB(db);
+    return changed;
+  },
+  archiveSchoolNode: (id: string) => {
+    const db = getDB();
+    const archive = (nodes: SchoolNode[]): boolean => {
+      for (const item of nodes) {
+        if (item.id === id) {
+          item.metadata = { ...(item.metadata || {}), archived: true };
+          return true;
+        }
+        if (archive(item.children || [])) return true;
+      }
+      return false;
+    };
+    const changed = archive(db.school_structure);
+    if (changed) saveDB(db);
+    return changed;
+  },
+  deleteSchoolNode: (id: string) => {
+    const db = getDB();
+    const referencedByUser = Object.values(db.users).some(({ profile }) =>
+      profile.school_data.academic_assignment?.nodePathIds.includes(id),
+    );
+    const referencedByEvent = Object.values(db.events).some((event) => event.audienceTarget?.nodeId === id);
+    if (referencedByUser || referencedByEvent) return false;
+    const remove = (nodes: SchoolNode[]): boolean => {
+      const index = nodes.findIndex((item) => item.id === id);
+      if (index >= 0) {
+        if ((nodes[index].children || []).length > 0) return false;
+        nodes.splice(index, 1);
+        return true;
+      }
+      return nodes.some((item) => remove(item.children || []));
+    };
+    const changed = remove(db.school_structure);
+    if (changed) saveDB(db);
+    return changed;
+  },
   approveApplication: (id: string, role: any = 'student') => {
     const db = getDB();
     const app = db.applications[id];
@@ -839,6 +1044,28 @@ export const mockData = {
     db.events[id] = { ...ev, id } as AppEvent;
     saveDB(db);
   },
+  updateEvent: (id: string, changes: Partial<Omit<AppEvent, 'id'>>) => {
+    const db = getDB();
+    if (!db.events[id]) return false;
+    db.events[id] = { ...db.events[id], ...changes, id };
+    saveDB(db);
+    return true;
+  },
+  archiveEvent: (id: string) => {
+    const db = getDB();
+    if (!db.events[id]) return false;
+    db.events[id].status = 'done'; saveDB(db); return true;
+  },
+  cancelEvent: (id: string) => {
+    const db = getDB();
+    if (!db.events[id]) return false;
+    db.events[id].status = 'done'; db.events[id].cancellationStatus = 'cancelled'; saveDB(db); return true;
+  },
+  deleteEvent: (id: string) => {
+    const db = getDB();
+    if (!db.events[id]) return false;
+    delete db.events[id]; delete db.attendance_logs[id]; saveDB(db); return true;
+  },
   logAttendance: (eventId: string, studentUid: string, loggerUid: string, loggerName: string, recordTime?: number) => {
     const db = getDB();
     if (!db.attendance_logs[eventId]) db.attendance_logs[eventId] = {};
@@ -849,8 +1076,26 @@ export const mockData = {
     const event = db.events[eventId];
     const rawStartTime = event?.startTime;
     const parsedStartTime = typeof rawStartTime === 'number' ? rawStartTime : Date.parse(String(rawStartTime || ''));
-    const gracePeriodMs = 15 * 60 * 1000;
-    const status: 'present' | 'late' = Number.isFinite(parsedStartTime) && recordedAt > parsedStartTime + gracePeriodMs
+    const configuredWindows = event?.attendanceWindows || [];
+    const scanDate = new Date(recordedAt);
+    const scanMinutes = scanDate.getHours() * 60 + scanDate.getMinutes();
+    const parseMinutes = (value: string) => {
+      const [hours, minutes] = value.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+    const applicableWindow = [...configuredWindows]
+      .sort((left, right) => parseMinutes(left.timeIn) - parseMinutes(right.timeIn))
+      .filter((window) => parseMinutes(window.timeIn) <= scanMinutes)
+      .at(-1) || configuredWindows[0];
+    const configuredStart = applicableWindow ? new Date(recordedAt) : null;
+    if (configuredStart && applicableWindow) {
+      const [hours, minutes] = applicableWindow.timeIn.split(':').map(Number);
+      configuredStart.setHours(hours, minutes, 0, 0);
+    }
+    const lateThreshold = applicableWindow
+      ? configuredStart!.getTime() + applicableWindow.lateAfterMinutes * 60 * 1000
+      : parsedStartTime + 15 * 60 * 1000;
+    const status: 'present' | 'late' = Number.isFinite(lateThreshold) && recordedAt > lateThreshold
       ? 'late'
       : 'present';
     const record = {

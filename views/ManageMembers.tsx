@@ -5,61 +5,42 @@ import { mockData } from '../lib/mockBackend';
 import { SchoolNode, UserProfile } from '../types';
 import { 
   ChevronRight, Plus, Users, School, GraduationCap, 
-  BookOpen, Layers, UserPlus, Building2, Search
+  BookOpen, Layers, UserPlus, Building2, Crown, FileUp
 } from 'lucide-react';
 import CustomSelect from '../components/ui/CustomSelect';
+import SearchInput from '../components/ui/SearchInput';
 import Button from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
+import { getAllowedChildTypes, serializeAcademicAssignment } from '../lib/academicDirectory';
+import BulkMemberImportModal from '../components/members/BulkMemberImportModal';
+import { MemberCsvErrors, MemberCsvRow, validateMemberCsvRows } from '../lib/memberCsv';
 
 const deriveSchoolData = (path: SchoolNode[]): UserProfile['school_data'] => {
-  const school = path.find((node) => node.type === 'school');
-  const rootDepartment = path.find((node) => node.type === 'department');
-  const college = path.find((node) => node.type === 'college');
-  const track = path.find((node) => node.type === 'track');
-  const strand = path.find((node) => node.type === 'strand');
-  const program = path.find((node) => node.type === 'program');
-  const level = path.find((node) => node.type === 'level');
-  const section = [...path].reverse().find((node) => node.type === 'section');
-  const isCollege = path.some((node) => node.type === 'college' || (node.type !== 'school' && /\bcollege\b/i.test(node.name)));
-
-  if (isCollege) {
-    return {
-      type: 'College',
-      department: college?.name || track?.name || rootDepartment?.name,
-      ...((program?.name || strand?.name) ? { program: program?.name || strand?.name } : {}),
-      level: level?.name || '',
-      section: section?.name || '',
-      school_id: school?.id || 'school_rmc',
-    };
-  }
-
-  return {
-    type: 'High School',
-    department: rootDepartment?.name,
-    ...(track?.name ? { track: track.name } : {}),
-    ...(strand?.name ? { strand: strand.name } : {}),
-    level: level?.name || '',
-    section: section?.name || '',
-    school_id: school?.id || 'school_rmc',
-  };
+  const serialized = serializeAcademicAssignment(path);
+  return { ...serialized.schoolData, school_id: serialized.assignment.campusId || 'school_rmc', academic_assignment: serialized.assignment };
 };
 
 const ManageMembers: React.FC = () => {
-  const { isMock } = useAuth();
+  const { isMock, profile } = useAuth();
   const [structure, setStructure] = useState<SchoolNode[]>([]);
   const [currentPath, setCurrentPath] = useState<SchoolNode[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showMemberModal, setShowMemberModal] = useState(false);
+  const [showBulkMemberModal, setShowBulkMemberModal] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
   const [memberRole, setMemberRole] = useState<'all' | UserProfile['role']>('all');
+  const [, setRegistryRevision] = useState(0);
   
   // Create Modal State
   const [newItemName, setNewItemName] = useState('');
   const [newItemType, setNewItemType] = useState('');
   const [assignOfficer, setAssignOfficer] = useState(false);
   const [officerData, setOfficerData] = useState({ name: '', email: '', username: '' });
-  const [memberData, setMemberData] = useState({ name: '', email: '', username: '', studentId: '', role: 'student' as UserProfile['role'] });
+  const emptyMemberData = { name: '', email: '', username: '', studentId: '', role: 'student' as UserProfile['role'], phone: '', guardianName: '', guardianContact: '', guardianEmail: '' };
+  const [memberData, setMemberData] = useState(emptyMemberData);
+  const [memberErrors, setMemberErrors] = useState<MemberCsvErrors>({});
+  const [memberSubmitError, setMemberSubmitError] = useState('');
 
   useEffect(() => {
     if (isMock) {
@@ -85,6 +66,8 @@ const ManageMembers: React.FC = () => {
   };
 
   const getChildType = (parentType: string, parentName?: string): string => {
+    const semantic = getAllowedChildTypes({ type: parentType as SchoolNode['type'] });
+    if (semantic.length > 0) return semantic[0];
     switch (parentType) {
       case 'school': return 'department';
       case 'department': return 'college'; // Default fallback
@@ -161,17 +144,86 @@ const ManageMembers: React.FC = () => {
   };
 
   const handleCreateMember = () => {
-    if (!currentNode || !memberData.name || !memberData.email || !memberData.username || !memberData.studentId) return;
-    mockData.createUser({
-      name: memberData.name,
-      email: memberData.email,
-      username: memberData.username,
+    if (!currentNode) return;
+    const row: MemberCsvRow = {
+      name: memberData.name.trim(),
+      email: memberData.email.trim(),
+      username: memberData.username.trim(),
+      student_id: memberData.studentId.trim(),
       role: memberData.role,
-      student_id: memberData.studentId,
+      phone: memberData.phone.trim(),
+      guardian_name: memberData.guardianName.trim(),
+      guardian_contact: memberData.guardianContact.trim(),
+      guardian_email: memberData.guardianEmail.trim(),
+    };
+    const validation = validateMemberCsvRows([row], mockData.getAllAccountIdentities());
+    if (!validation.valid) {
+      setMemberErrors(validation.rows[0]?.errors || {});
+      return;
+    }
+    const profile = {
+      name: row.name,
+      email: row.email,
+      username: row.username,
+      role: 'student',
+      student_id: row.student_id,
+      ...(row.phone ? { phone: row.phone } : {}),
+      ...((row.guardian_name || row.guardian_contact || row.guardian_email) ? {
+        guardian: {
+          name: row.guardian_name,
+          contact: row.guardian_contact,
+          ...(row.guardian_email ? { email: row.guardian_email } : {}),
+        },
+      } : {}),
       school_data: deriveSchoolData(currentPath),
-    });
-    setMemberData({ name: '', email: '', username: '', studentId: '', role: 'student' });
+    } as const;
+    try {
+      mockData.createSectionMembers([{ profile, makeMayor: row.role === 'mayor' }], currentNode.id, currentNode.name);
+      closeMemberModal();
+      setRegistryRevision((revision) => revision + 1);
+    } catch (error) {
+      setMemberSubmitError(error instanceof Error ? error.message : 'The member could not be created.');
+    }
+  };
+
+  const closeMemberModal = () => {
+    setMemberData(emptyMemberData);
+    setMemberErrors({});
+    setMemberSubmitError('');
     setShowMemberModal(false);
+  };
+
+  const handleBulkCreateMembers = async (rows: MemberCsvRow[]) => {
+    if (!currentNode) return;
+    const members = rows.map((row) => ({
+      makeMayor: row.role === 'mayor',
+      profile: {
+        name: row.name,
+        email: row.email,
+        username: row.username,
+        role: 'student',
+        student_id: row.student_id,
+        ...(row.phone ? { phone: row.phone } : {}),
+        ...((row.guardian_name || row.guardian_contact || row.guardian_email) ? {
+          guardian: {
+            name: row.guardian_name,
+            contact: row.guardian_contact,
+            ...(row.guardian_email ? { email: row.guardian_email } : {}),
+          },
+        } : {}),
+        school_data: deriveSchoolData(currentPath),
+      } as const,
+    }));
+    mockData.createSectionMembers(members, currentNode.id, currentNode.name);
+    setShowBulkMemberModal(false);
+    setRegistryRevision((revision) => revision + 1);
+  };
+
+  const handleAssignMayor = (member: UserProfile) => {
+    if (!currentNode) return;
+    if (mockData.assignSectionMayor(member.uid, currentNode.id, currentNode.name)) {
+      setRegistryRevision((revision) => revision + 1);
+    }
   };
 
   const renderIcon = (type: string) => {
@@ -192,12 +244,13 @@ const ManageMembers: React.FC = () => {
   if (!currentNode) return <Page><p>Loading directory…</p></Page>;
 
   const childType = getChildType(currentNode.type, currentNode.name);
-  const isSection = currentNode.type === 'section';
+  const isSection = currentNode.type === 'section' || currentNode.type === 'block';
+  const canManageStructure = profile?.role === 'admin' || profile?.role === 'ossa';
 
   // Determine if we need to ask for specific types (e.g. Major vs Level)
   const needsTypeSelection = ['program', 'strand'].includes(currentNode.type);
   const sectionMembers = isSection
-    ? mockData.getStudentsBySection(currentNode.name) as Array<UserProfile & { stats?: { sanction_hours: number } }>
+    ? mockData.getStudentsBySection(currentNode.name, currentNode.id) as Array<UserProfile & { stats?: { sanction_hours: number } }>
     : [];
   const filteredMembers = sectionMembers.filter((member) => {
     const query = memberSearch.trim().toLowerCase();
@@ -212,7 +265,7 @@ const ManageMembers: React.FC = () => {
         eyebrow="Staff tools"
         title="Directory & Management"
         description="Manage school structure, member records, and attendance officers."
-        actions={!isSection ? (
+        actions={!isSection && canManageStructure ? (
           <Button
             onClick={() => {
               setNewItemType('');
@@ -254,21 +307,13 @@ const ManageMembers: React.FC = () => {
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{sectionMembers.length} members in this section</p>
               </div>
               <div className="grid w-full gap-3 sm:grid-cols-2 lg:flex lg:w-auto lg:flex-wrap">
-                <label className="relative block min-w-0 lg:w-64">
-                  <span className="sr-only">Search section members</span>
-                  <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input
-                    aria-label="Search section members"
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                    onChange={(event) => setMemberSearch(event.target.value)}
-                    placeholder="Search name, email, or ID"
-                    type="search"
-                    value={memberSearch}
-                  />
-                </label>
+                <SearchInput ariaLabel="Search section members" className="lg:w-64" onChange={setMemberSearch} placeholder="Search name, email, or ID" value={memberSearch} />
                 <CustomSelect ariaLabel="Filter members by role" className="min-w-0" combobox label="Role" onChange={(value) => setMemberRole(value as typeof memberRole)} options={[{ value: 'all', label: 'All roles' }, { value: 'student', label: 'Students' }, { value: 'mayor', label: 'Mayors' }]} value={memberRole} />
-                <Button aria-label="Add member" variant="gold" className="sm:col-span-2 lg:w-auto" onClick={() => setShowMemberModal(true)}>
-                <UserPlus size={16} /> Add
+                <Button aria-label="Bulk create members" variant="secondary" className="lg:w-auto" onClick={() => setShowBulkMemberModal(true)}>
+                  <FileUp size={16} /> Bulk create
+                </Button>
+                <Button aria-label="Add member" variant="gold" className="lg:w-auto" onClick={() => setShowMemberModal(true)}>
+                  <UserPlus size={16} /> Add member
                 </Button>
               </div>
             </div>
@@ -278,9 +323,9 @@ const ManageMembers: React.FC = () => {
             ) : (
               <>
                 <div className="hidden overflow-x-auto md:block">
-                  <table aria-label={`${currentNode.name} member registry`} className="w-full table-fixed text-left text-sm">
+                  <table aria-label={`${currentNode.name} member registry`} className="w-full text-left text-sm">
                     <thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-300">
-                      <tr><th className="w-1/4 p-3">Name</th><th className="w-1/4 p-3">Email</th><th className="w-1/4 p-3">Student ID</th><th className="w-1/4 p-3">Role</th></tr>
+                      <tr><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Student ID</th><th className="p-3">Role</th><th className="p-3 text-right">Mayor</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                       {filteredMembers.map((member) => (
@@ -289,6 +334,13 @@ const ManageMembers: React.FC = () => {
                           <td className="p-3 text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{member.email}</td>
                           <td className="p-3 font-mono text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{member.student_id}</td>
                           <td className="p-3 capitalize text-slate-600 dark:text-slate-300">{member.role}</td>
+                          <td className="p-3 text-right">
+                            {member.role === 'mayor' ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2.5 py-1 text-xs font-bold text-gold-800 dark:bg-gold-950/50 dark:text-gold-300"><Crown size={13} /> Current mayor</span>
+                            ) : (
+                              <Button aria-label={`Assign ${member.name} as mayor`} className="sm:w-auto" onClick={() => handleAssignMayor(member)} size="sm" variant="secondary">Assign mayor</Button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -303,6 +355,11 @@ const ManageMembers: React.FC = () => {
                         <div><dt className="font-semibold text-slate-500 dark:text-slate-400">Student ID</dt><dd className="mt-1 font-mono text-slate-700 [overflow-wrap:anywhere] dark:text-slate-200">{member.student_id}</dd></div>
                         <div><dt className="font-semibold text-slate-500 dark:text-slate-400">Role</dt><dd className="mt-1 capitalize text-slate-700 dark:text-slate-200">{member.role}</dd></div>
                       </dl>
+                      {member.role === 'mayor' ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2.5 py-1 text-xs font-bold text-gold-800 dark:bg-gold-950/50 dark:text-gold-300"><Crown size={13} /> Current mayor</span>
+                      ) : (
+                        <Button aria-label={`Assign ${member.name} as mayor`} onClick={() => handleAssignMayor(member)} size="sm" variant="secondary">Assign as mayor</Button>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -334,12 +391,14 @@ const ManageMembers: React.FC = () => {
             ) : (
               <div className="col-span-full text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
                 <p className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest">No {childType}s found</p>
-                <button 
-                  onClick={() => setShowCreateModal(true)}
-                  className="mt-4 text-brand-900 dark:text-gold-400 text-xs font-black uppercase tracking-widest hover:text-gold-600 dark:hover:text-gold-300"
-                >
-                  Create
-                </button>
+                {canManageStructure ? (
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="mt-4 text-brand-900 dark:text-gold-400 text-xs font-black uppercase tracking-widest hover:text-gold-600 dark:hover:text-gold-300"
+                  >
+                    Create
+                  </button>
+                ) : null}
               </div>
             )}
           </div>
@@ -489,14 +548,14 @@ const ManageMembers: React.FC = () => {
 
       <Modal
         open={showMemberModal}
-        onClose={() => setShowMemberModal(false)}
+        onClose={closeMemberModal}
         closeOnBackdrop={false}
         title={`Add member to ${currentNode.name}`}
         description="Create a member record and assign its initial directory role."
         size="md"
         footer={(
           <>
-            <Button variant="secondary" onClick={() => setShowMemberModal(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={closeMemberModal}>Cancel</Button>
             <Button
               aria-label="Create member"
               variant="gold"
@@ -520,16 +579,59 @@ const ManageMembers: React.FC = () => {
               <input
                 className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 id={id}
-                onChange={(event) => setMemberData({ ...memberData, [key]: event.target.value })}
+                aria-describedby={memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors] ? `${id}-error` : undefined}
+                aria-invalid={Boolean(memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors])}
+                onChange={(event) => {
+                  const errorKey = key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors;
+                  setMemberData({ ...memberData, [key]: event.target.value });
+                  setMemberErrors((current) => ({ ...current, [errorKey]: undefined }));
+                }}
                 required
                 type={type}
                 value={memberData[key as keyof typeof memberData]}
               />
+              {memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors] ? (
+                <span className="block text-xs text-red-600 dark:text-red-300" id={`${id}-error`}>
+                  {memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors]}
+                </span>
+              ) : null}
+            </label>
+          ))}
+          {[
+            ['member-phone', 'Phone (optional)', 'phone', 'tel'],
+            ['member-guardian-name', 'Guardian name (optional)', 'guardianName', 'text'],
+            ['member-guardian-contact', 'Guardian contact (optional)', 'guardianContact', 'tel'],
+            ['member-guardian-email', 'Guardian email (optional)', 'guardianEmail', 'email'],
+          ].map(([id, label, key, type]) => (
+            <label className="space-y-1.5" htmlFor={id} key={id}>
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+              <input
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                id={id}
+                aria-describedby={key === 'guardianEmail' && memberErrors.guardian_email ? `${id}-error` : undefined}
+                aria-invalid={key === 'guardianEmail' ? Boolean(memberErrors.guardian_email) : undefined}
+                onChange={(event) => {
+                  setMemberData({ ...memberData, [key]: event.target.value });
+                  if (key === 'guardianEmail') setMemberErrors((current) => ({ ...current, guardian_email: undefined }));
+                }}
+                type={type}
+                value={memberData[key as keyof typeof memberData]}
+              />
+              {key === 'guardianEmail' && memberErrors.guardian_email ? <span className="block text-xs text-red-600 dark:text-red-300" id={`${id}-error`}>{memberErrors.guardian_email}</span> : null}
             </label>
           ))}
           <CustomSelect className="sm:col-span-2" label="Initial role" onChange={(value) => setMemberData({ ...memberData, role: value as UserProfile['role'] })} options={[{ value: 'student', label: 'Student' }, { value: 'mayor', label: 'Mayor / attendance officer' }]} value={memberData.role} />
+          {memberSubmitError ? <p className="sm:col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200" role="alert">{memberSubmitError}</p> : null}
         </div>
       </Modal>
+
+      <BulkMemberImportModal
+        existingMembers={mockData.getAllAccountIdentities()}
+        onClose={() => setShowBulkMemberModal(false)}
+        onConfirm={handleBulkCreateMembers}
+        open={showBulkMemberModal}
+        sectionName={currentNode.name}
+      />
     </Page>
   );
 };

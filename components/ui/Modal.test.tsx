@@ -56,6 +56,24 @@ it('keeps keyboard focus inside the dialog', async () => {
   expect(outsideAction).not.toHaveFocus();
 });
 
+it('skips controls inside hidden content when wrapping focus backwards', async () => {
+  const user = userEvent.setup();
+
+  render(
+    <Modal open onClose={vi.fn()} title="Enrollment">
+      <button type="button">Continue to enrollment</button>
+      <div style={{ display: 'none' }}>
+        <button type="button">Hidden legacy action</button>
+      </div>
+    </Modal>,
+  );
+
+  const close = screen.getByRole('button', { name: 'Close dialog' });
+  expect(close).toHaveFocus();
+  await user.tab({ shift: true });
+  expect(screen.getByRole('button', { name: 'Continue to enrollment' })).toHaveFocus();
+});
+
 it('closes only the topmost modal when Escape is pressed', async () => {
   const user = userEvent.setup();
   const onOuterClose = vi.fn();

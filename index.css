@@ -256,6 +256,69 @@ a {
 }
 
 /* --- FORM CONTROLS & DROPDOWNS --- */
+.app-search-input {
+  width: 100%;
+  min-height: 2.75rem;
+  appearance: none;
+  border: 1px solid #E2E8F0;
+  border-radius: 0.75rem;
+  background: #F8FAFC;
+  padding: 0.625rem 2.75rem 0.625rem 2.5rem;
+  color: #002859;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  outline: none;
+  transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+}
+
+.app-search-input:hover,
+.app-search-input:focus {
+  border-color: #FFD700;
+  background: #FFFFFF;
+}
+
+.app-search-input:focus {
+  box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.1);
+}
+
+.app-search-input::placeholder {
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+.app-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.app-search-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dark .app-search-input {
+  border-color: #334155;
+  background: #1E293B;
+  color: #F8FAFC;
+}
+
+.dark .app-search-input:hover,
+.dark .app-search-input:focus {
+  background: #111827;
+}
+
+.app-field-label {
+  display: block;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+}
+
+.dark .app-field-label {
+  color: #CBD5E1;
+}
+
 .input-field {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -294,6 +357,15 @@ a {
 
 .dark .input-field::placeholder {
   color: #94A3B8;
+}
+
+.leaflet-container {
+  background: #E2E8F0;
+  font-family: 'Nunito', 'Outfit', system-ui, sans-serif;
+}
+
+.dark .leaflet-container {
+  background: #0F172A;
 }
 
 .dark .glass-card {

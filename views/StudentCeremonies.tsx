@@ -4,8 +4,9 @@ import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { Collapsible } from '../components/ui/Collapsible';
 import CustomSelect from '../components/ui/CustomSelect';
+import SearchInput from '../components/ui/SearchInput';
 import { 
-  Award, Search, Filter, MapPin, Clock,
+  Award, Filter, MapPin, Clock,
   FileUp, CheckCircle2, ArrowRight, Flag, Calendar, Send, Building2,
   ChevronDown, FileText
 } from 'lucide-react';
@@ -207,18 +208,7 @@ const StudentCeremonies: React.FC = () => {
 
       {/* SEARCH & FILTER */}
       <Surface aria-label="Ceremony filters" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <label className="sr-only" htmlFor="ceremony-search">Search ceremonies</label>
-            <input 
-              id="ceremony-search"
-              type="text" 
-              placeholder="Search ceremony..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-9 pr-3 py-1.5 shadow-xs"
-            />
-          </div>
+          <SearchInput ariaLabel="Search ceremonies" className="flex-1" onChange={setSearchTerm} placeholder="Search ceremony..." value={searchTerm} />
 
           <div className="flex min-w-0 items-center gap-1.5 sm:w-56">
             <Filter className="text-slate-400 shrink-0" size={14} />

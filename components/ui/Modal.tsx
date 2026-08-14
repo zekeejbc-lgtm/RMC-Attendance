@@ -38,6 +38,19 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
+function isVisibleFocusable(element: HTMLElement, dialog: HTMLElement) {
+  let current: HTMLElement | null = element;
+  while (current && current !== dialog.parentElement) {
+    const style = window.getComputedStyle(current);
+    if (current.hidden || current.hasAttribute('inert') || current.getAttribute('aria-hidden') === 'true' || style.display === 'none' || style.visibility === 'hidden') {
+      return false;
+    }
+    if (current === dialog) break;
+    current = current.parentElement;
+  }
+  return true;
+}
+
 const sizeClasses: Record<ModalSize, string> = {
   sm: 'max-w-md',
   md: 'max-w-lg',
@@ -129,7 +142,7 @@ export function Modal({
     if (!dialog) return;
 
     const focusableElements = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector))
-      .filter((element) => element.tabIndex >= 0 && !element.hasAttribute('inert'));
+      .filter((element) => element.tabIndex >= 0 && isVisibleFocusable(element, dialog));
     const firstElement = focusableElements[0];
     const lastElement = focusableElements.at(-1);
     if (!firstElement || !lastElement) return;

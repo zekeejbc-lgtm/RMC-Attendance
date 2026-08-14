@@ -14,6 +14,8 @@ import StudentRecords from './views/StudentRecords';
 import StudentProfile from './views/StudentProfile';
 import MayorScanner from './views/MayorScanner';
 import SSGPanel from './views/SSGPanel';
+import SSGEventCreation from './views/SSGEventCreation';
+import SSGCreateEvent from './views/SSGCreateEvent';
 import LandingPage from './views/LandingPage';
 
 import AttendanceDashboard from './views/AttendanceDashboard';
@@ -111,8 +113,25 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
-          <Route path="/admin/attendance" element={
+          <Route path="/ssg/events" element={
             <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
+              <SSGEventCreation />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/ssg/events/create" element={
+            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
+              <SSGCreateEvent />
+            </ProtectedRoute>
+          } />
+          <Route path="/ssg/events/:eventId/edit" element={
+            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
+              <SSGCreateEvent />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin/attendance" element={
+            <ProtectedRoute roles={['admin', 'ossa']}>
               <AttendanceDashboard />
             </ProtectedRoute>
           } />

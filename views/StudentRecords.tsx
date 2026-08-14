@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { 
-  FileText, Search, Filter, CheckCircle2, Clock, XCircle, FileSpreadsheet, 
+  FileText, Filter, CheckCircle2, Clock, XCircle, FileSpreadsheet,
   Download, ShieldAlert, Award, Calendar, AlertCircle, ArrowUpRight, Sparkles
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
 import CustomSelect from '../components/ui/CustomSelect';
+import SearchInput from '../components/ui/SearchInput';
 
 interface AttendanceRecord {
   id: string;
@@ -267,18 +268,7 @@ const StudentRecords: React.FC = () => {
 
       {/* SEARCH AND FILTERS */}
       <Surface className="flex flex-col items-stretch justify-between gap-3 p-4 md:flex-row md:items-center">
-        <div className="relative flex-1">
-          <label htmlFor="record-search" className="sr-only">Search attendance records</label>
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-          <input 
-            id="record-search"
-            type="search"
-            placeholder="Search event/ceremony title..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input-field py-2 pl-9 pr-3 text-base sm:text-sm"
-          />
-        </div>
+        <SearchInput ariaLabel="Search attendance records" className="flex-1" onChange={setSearchTerm} placeholder="Search event/ceremony title..." value={searchTerm} />
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <CustomSelect ariaLabel="Filter by category" combobox label="Category" onChange={(value) => setCategoryFilter(value as string)} options={[{ value: 'all', label: 'All Categories' }, { value: 'Event', label: 'Events Only' }, { value: 'Ceremony', label: 'Ceremonies Only' }]} value={categoryFilter} />

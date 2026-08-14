@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { mockData } from '../lib/mockBackend';
 import { Application, AppEvent, UserProfile, SchoolNode, UserStats } from '../types';
@@ -7,13 +7,18 @@ import Button from '../components/ui/Button';
 import CustomSelect from '../components/ui/CustomSelect';
 import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
+import { DirectoryNodeModal } from '../components/academic/DirectoryNodeModal';
+import { PresetPickerModal } from '../components/academic/PresetPickerModal';
+import { getAcademicNodeLabel } from '../lib/academicDirectory';
+import { createEventAudienceTarget } from '../lib/academicDirectory';
+import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { 
   Users, Check, X, Shield, Plus, UserCheck, Search, Filter,
   ChevronRight, School, BookOpen, Grid, List, ShieldAlert,
   Mail, Phone, User as UserIcon, Minus, ImageIcon, LayoutGrid,
   Upload, Trash2, Home, Clock, Lock, CalendarPlus, MapPin, Target,
   AlignLeft, Info, Users2, AlertTriangle, Compass, Crosshair, Map,
-  Globe, ChevronDown, FileText, Fingerprint, Trash, Building2, CalendarDays, Inbox
+  Globe, ChevronDown, FileText, Fingerprint, Trash, Building2, CalendarDays, Inbox, Pencil, Archive, WandSparkles
 } from 'lucide-react';
 
 const SSGPanel: React.FC = () => {
@@ -26,13 +31,15 @@ const SSGPanel: React.FC = () => {
   const [path, setPath] = useState<SchoolNode[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<(UserProfile & { stats: UserStats }) | null>(null);
 
-  const [showNodeModal, setShowNodeModal] = useState<{parent: string | null, type: string} | null>(null);
+  const [nodeEditor, setNodeEditor] = useState<{ parentId: string | null; node?: SchoolNode } | null>(null);
+  const [showPresetModal, setShowPresetModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
-  const [newNodeName, setNewNodeName] = useState('');
   const [pendingAdjustment, setPendingAdjustment] = useState<{ delta: number; action: string } | null>(null);
   
   // Specific Asset Input State
   const [assetInput, setAssetInput] = useState('');
+  const [audienceMode, setAudienceMode] = useState<'all' | 'directory_node' | 'specific'>('all');
+  const [eventAudiencePath, setEventAudiencePath] = useState<SchoolNode[]>([]);
 
   const [eventData, setEventData] = useState({
     title: '',
@@ -43,14 +50,6 @@ const SSGPanel: React.FC = () => {
     penaltyValue: 1,
     penaltyUnit: 'hours' as 'hours' | 'minutes',
     
-    // Threaded Targeting State
-    targetDepth: 'all' as AppEvent['participantsType'],
-    selectedCampus: '',
-    selectedDept: '',
-    selectedTrack: '',
-    selectedStrand: '',
-    selectedLevel: '',
-    selectedSection: '',
     specificPeople: [] as string[],
     
     lat: 7.0736,
@@ -106,39 +105,6 @@ const SSGPanel: React.FC = () => {
     return () => clearInterval(i);
   }, []);
 
-  // --- Threaded Targeting Helpers ---
-
-  const campusOptions = structure;
-  const deptOptions = useMemo(() => {
-    const campus = structure.find(s => s.id === eventData.selectedCampus);
-    return campus?.children?.filter(c => c.type === 'department') || [];
-  }, [structure, eventData.selectedCampus]);
-
-  const trackOptions = useMemo(() => {
-    const dept = deptOptions.find(d => d.id === eventData.selectedDept);
-    return dept?.children?.filter(c => c.type === 'track') || [];
-  }, [deptOptions, eventData.selectedDept]);
-
-  const strandOptions = useMemo(() => {
-    const track = trackOptions.find(t => t.id === eventData.selectedTrack);
-    return track?.children?.filter(c => c.type === 'strand') || [];
-  }, [trackOptions, eventData.selectedTrack]);
-
-  const levelOptions = useMemo(() => {
-    // Level can be child of Department or Strand depending on hierarchy
-    if (eventData.selectedStrand) {
-      const strand = strandOptions.find(s => s.id === eventData.selectedStrand);
-      return strand?.children?.filter(c => c.type === 'level') || [];
-    }
-    const dept = deptOptions.find(d => d.id === eventData.selectedDept);
-    return dept?.children?.filter(c => c.type === 'level') || [];
-  }, [strandOptions, deptOptions, eventData.selectedStrand, eventData.selectedDept]);
-
-  const sectionOptions = useMemo(() => {
-    const level = levelOptions.find(l => l.id === eventData.selectedLevel);
-    return level?.children?.filter(c => c.type === 'section') || [];
-  }, [levelOptions, eventData.selectedLevel]);
-
   const handleAddAsset = () => {
     if (assetInput.trim() && !eventData.specificPeople.includes(assetInput.trim())) {
       setEventData(prev => ({ ...prev, specificPeople: [...prev.specificPeople, assetInput.trim()] }));
@@ -161,13 +127,12 @@ const SSGPanel: React.FC = () => {
   };
 
   const handleCreateEvent = () => {
-    // Determine the actual final targeting label
-    let finalTargetValue = "All Students";
-    if (eventData.targetDepth === 'section') finalTargetValue = sectionOptions.find(s => s.id === eventData.selectedSection)?.name || "";
-    else if (eventData.targetDepth === 'level') finalTargetValue = levelOptions.find(s => s.id === eventData.selectedLevel)?.name || "";
-    else if (eventData.targetDepth === 'strand') finalTargetValue = strandOptions.find(s => s.id === eventData.selectedStrand)?.name || "";
-    else if (eventData.targetDepth === 'track') finalTargetValue = trackOptions.find(s => s.id === eventData.selectedTrack)?.name || "";
-    else if (eventData.targetDepth === 'department') finalTargetValue = deptOptions.find(s => s.id === eventData.selectedDept)?.name || "";
+    const directoryAudience = audienceMode === 'directory_node' ? createEventAudienceTarget(eventAudiencePath) : null;
+    const participantsType: AppEvent['participantsType'] = audienceMode === 'specific' ? 'specific' : directoryAudience?.participantsType || 'all';
+    const finalTargetValue = audienceMode === 'specific' ? 'Specific people' : directoryAudience?.targetValue || 'All Students';
+    const audienceTarget: AppEvent['audienceTarget'] = audienceMode === 'specific'
+      ? { mode: 'specific_people', specificUserIds: eventData.specificPeople }
+      : directoryAudience?.audienceTarget || { mode: 'all' };
 
     mockData.createEvent({
       title: eventData.title,
@@ -178,19 +143,21 @@ const SSGPanel: React.FC = () => {
       endTime: new Date(eventData.endTime).getTime(),
       penaltyValue: eventData.penaltyValue,
       penaltyUnit: eventData.penaltyUnit,
-      participantsType: eventData.targetDepth,
+      participantsType,
       targetValue: finalTargetValue,
+      audienceTarget,
       specificParticipants: eventData.specificPeople,
-      target: { all: eventData.targetDepth === 'all' },
+      target: { all: audienceMode === 'all' },
       location: { lat: eventData.lat, lng: eventData.lng, radius_meters: eventData.radius },
       timestamp: Date.now()
     } as any);
 
     setShowEventModal(false);
+    setAudienceMode('all');
+    setEventAudiencePath([]);
     setEventData({ 
       title: '', description: '', startTime: '', endTime: '', radius: 100, penaltyValue: 1, penaltyUnit: 'hours',
-      targetDepth: 'all', selectedCampus: '', selectedDept: '', selectedTrack: '', selectedStrand: '', 
-      selectedLevel: '', selectedSection: '', specificPeople: [], lat: 7.0736, lng: 125.6126, isLocating: false
+      specificPeople: [], lat: 7.0736, lng: 125.6126, isLocating: false
     });
     refresh();
   };
@@ -198,28 +165,40 @@ const SSGPanel: React.FC = () => {
   const navigateTo = (node: SchoolNode) => setPath([...path, node]);
   const goBackTo = (index: number) => setPath(index === -1 ? [] : path.slice(0, index + 1));
 
-  const handleCreateNode = () => {
-    if (!showNodeModal || !newNodeName) return;
-    let nextType: SchoolNode['type'] = 'department';
-    if (currentNode?.type === 'department') nextType = 'track';
-    else if (currentNode?.type === 'track') nextType = 'strand';
-    else if (currentNode?.type === 'strand') nextType = 'level';
-    else if (currentNode?.type === 'level') nextType = 'section';
-    mockData.addSchoolNode(showNodeModal.parent, { id: `node_${Date.now()}`, name: newNodeName, type: nextType, children: [] });
-    setShowNodeModal(null);
-    setNewNodeName('');
+  const handleSaveNode = (savedNode: SchoolNode) => {
+    if (!nodeEditor) return;
+    if (nodeEditor.node) mockData.updateSchoolNode(nodeEditor.node.id, savedNode);
+    else mockData.addSchoolNode(nodeEditor.parentId, savedNode);
+    setNodeEditor(null);
+    refresh();
+  };
+
+  const handleApplyPreset = (preset: SchoolNode) => {
+    const parentId = currentNode && ['campus', 'school'].includes(currentNode.type) ? currentNode.id : null;
+    mockData.addSchoolNode(parentId, preset);
+    setShowPresetModal(false);
+    refresh();
+  };
+
+  const handleArchiveNode = (node: SchoolNode) => {
+    mockData.archiveSchoolNode(node.id);
+    refresh();
+  };
+
+  const handleDeleteNode = (node: SchoolNode) => {
+    if (!window.confirm(`Delete ${node.name}? Units with children or active references cannot be deleted.`)) return;
+    if (!mockData.deleteSchoolNode(node.id)) window.alert('This unit has children or active references. Archive it instead.');
     refresh();
   };
 
   const currentNode = path.length > 0 ? path[path.length - 1] : null;
   const subUnits = currentNode ? (currentNode.children || []) : structure;
-  const isAtSection = currentNode?.type === 'section';
+  const isAtSection = currentNode?.type === 'section' || currentNode?.type === 'block';
   const students = isAtSection ? mockData.getStudentsBySection(currentNode.name) : [];
 
   const tabs = [
     { id: 'hub' as const, label: 'Directory', icon: Building2, count: structure.length },
     { id: 'applicants' as const, label: 'Applicants', icon: UserCheck, count: apps.length },
-    { id: 'events' as const, label: 'Events', icon: CalendarDays, count: events.length },
   ];
 
   const mapUrl = `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d15844.0!2d${eventData.lng}!3d${eventData.lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2sph!4v1620000000000!5m2!1sen!2sph&maptype=satellite`;
@@ -246,7 +225,7 @@ const SSGPanel: React.FC = () => {
               <p className="mt-0.5 text-xs font-semibold text-emerald-300">Administrative operations</p>
             </div>
           </div>
-          <div role="tablist" aria-label="SSG panel sections" className="grid w-full grid-cols-3 gap-1.5 rounded-xl border border-white/10 bg-brand-950/40 p-1.5 lg:w-auto">
+          <div role="tablist" aria-label="SSG panel sections" className="grid w-full grid-cols-2 gap-1.5 rounded-xl border border-white/10 bg-brand-950/40 p-1.5 lg:w-auto">
             {tabs.map(({ id, label, icon: Icon, count }) => (
               <button key={id} aria-label={label} aria-pressed={tab === id} onClick={() => setTab(id)} className={`flex min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2.5 text-xs font-bold transition-all sm:px-4 ${tab === id ? 'bg-gold-gradient text-brand-900 shadow-md' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
                 <Icon size={15} className="hidden sm:block" />
@@ -275,32 +254,27 @@ const SSGPanel: React.FC = () => {
       <div className="min-h-[60vh]">
         {tab === 'hub' && (
           <div className="space-y-4 animate-in fade-in">
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-x-auto no-scrollbar">
-              <button onClick={() => goBackTo(-1)} className={`flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${path.length === 0 ? 'text-brand-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-400'}`}>
-                <Home size={14} /> Campus
-              </button>
-              {path.map((node, i) => (
-                <React.Fragment key={node.id}>
-                  <ChevronRight size={12} className="text-slate-200 dark:text-slate-600" />
-                  <button onClick={() => goBackTo(i)} className={`whitespace-nowrap text-[9px] font-bold uppercase tracking-widest ${i === path.length - 1 ? 'text-brand-900 dark:text-slate-100 font-black' : 'text-slate-400 dark:text-slate-400'}`}>
-                    {node.name}
-                  </button>
-                </React.Fragment>
-              ))}
+            <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-2 overflow-x-auto no-scrollbar">
+                <button onClick={() => goBackTo(-1)} className={`flex items-center gap-1.5 whitespace-nowrap text-[9px] font-bold uppercase tracking-widest ${path.length === 0 ? 'text-brand-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-400'}`}><Home size={14} /> Campus</button>
+                {path.map((node, i) => <React.Fragment key={node.id}><ChevronRight size={12} className="shrink-0 text-slate-200 dark:text-slate-600" /><button onClick={() => goBackTo(i)} className={`whitespace-nowrap text-[9px] font-bold uppercase tracking-widest ${i === path.length - 1 ? 'text-brand-900 dark:text-slate-100 font-black' : 'text-slate-400 dark:text-slate-400'}`}>{node.name}</button></React.Fragment>)}
+              </div>
+              {currentNode && ['campus', 'school'].includes(currentNode.type) && <button onClick={() => setShowPresetModal(true)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-50 px-3 text-xs font-bold text-brand-900 hover:bg-gold-50 dark:bg-brand-900/40 dark:text-brand-200"><WandSparkles size={15} /> Add template</button>}
             </div>
 
             {!isAtSection ? (
               <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
-                {subUnits.map(node => (
-                  <button key={node.id} onClick={() => navigateTo(node)} className="group flex min-h-44 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-gold-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
-                    <div className="w-12 h-12 bg-brand-50 dark:bg-brand-900/40 rounded-xl flex items-center justify-center text-brand-900 dark:text-brand-300 border border-brand-100 dark:border-brand-800 group-hover:scale-110 transition-transform mb-3">
-                      {node.type === 'school' ? <School size={22} /> : node.type === 'section' ? <LayoutGrid size={22} /> : <BookOpen size={22} />}
-                    </div>
-                    <h4 className="text-[11px] font-bold text-brand-900 dark:text-slate-100 uppercase tracking-tight line-clamp-2 h-8 flex items-center">{node.name}</h4>
-                    <p className="text-[7px] font-black text-slate-300 dark:text-slate-400 uppercase tracking-widest mt-1">{node.type}</p>
-                  </button>
+                {subUnits.filter((node) => !node.metadata?.archived).map(node => (
+                  <article key={node.id} className="group relative flex min-h-44 flex-col rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-gold-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
+                    <div className="absolute right-2 top-2 flex gap-1 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-within:opacity-100"><button aria-label="Edit unit" title={`Edit ${node.name}`} onClick={() => setNodeEditor({ parentId: currentNode?.id || null, node })} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-brand-900 dark:bg-slate-700 dark:text-slate-300"><Pencil size={13} /></button><button aria-label="Archive unit" title={`Archive ${node.name}`} onClick={() => handleArchiveNode(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-amber-700 dark:bg-slate-700 dark:text-slate-300"><Archive size={13} /></button><button aria-label="Delete unit" title={`Delete ${node.name}`} onClick={() => handleDeleteNode(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-950/40"><Trash2 size={13} /></button></div>
+                    <button onClick={() => navigateTo(node)} className="flex flex-1 flex-col items-center justify-center px-3 pt-5">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-900 transition-transform group-hover:scale-105 dark:border-brand-800 dark:bg-brand-900/40 dark:text-brand-300">{['school', 'campus'].includes(node.type) ? <School size={22} /> : ['section', 'block'].includes(node.type) ? <LayoutGrid size={22} /> : <BookOpen size={22} />}</div>
+                      <h4 className="flex min-h-8 items-center text-[11px] font-bold uppercase tracking-tight text-brand-900 dark:text-slate-100">{node.name}</h4>
+                      <p className="mt-1 text-[8px] font-black uppercase tracking-widest text-slate-400">{getAcademicNodeLabel(node.type)}</p>
+                    </button>
+                  </article>
                 ))}
-                <button aria-label="Add unit" onClick={() => setShowNodeModal({ parent: currentNode?.id || null, type: 'unit' })} className="group flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-5 transition-all hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800">
+                <button aria-label="Add unit" onClick={() => setNodeEditor({ parentId: currentNode?.id || null })} className="group flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-5 transition-all hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800">
                    <Plus size={20} className="text-slate-300 dark:text-slate-500 mb-1" />
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Add</p>
                 </button>
@@ -413,7 +387,7 @@ const SSGPanel: React.FC = () => {
             variant="gold"
             className="sm:w-auto"
             onClick={handleCreateEvent}
-            disabled={!eventData.title || !eventData.startTime || !eventData.endTime || (eventData.targetDepth !== 'all' && eventData.targetDepth !== 'specific' && !eventData.selectedDept)}
+            disabled={!eventData.title || !eventData.startTime || !eventData.endTime || (audienceMode === 'directory_node' && eventAudiencePath.length === 0) || (audienceMode === 'specific' && eventData.specificPeople.length === 0)}
           >
             Deploy
           </Button>
@@ -493,102 +467,11 @@ const SSGPanel: React.FC = () => {
                        <Users2 size={16} className="text-gold-500" /> Target Population Thread
                     </h4>
                     <div className="space-y-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
-                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                             <CustomSelect 
-                               label="Precision Depth"
-                               options={[
-                                 { value: 'all', label: 'Global Institutional' },
-                                 { value: 'department', label: 'By Department' },
-                                 { value: 'track', label: 'By Academic Track' },
-                                 { value: 'strand', label: 'By Specialized Strand' },
-                                 { value: 'level', label: 'By Year Level' },
-                                 { value: 'section', label: 'By Specific Section' },
-                                 { value: 'specific', label: 'Manual Asset UIDs' }
-                               ]}
-                               value={eventData.targetDepth}
-                               onChange={val => setEventData({...eventData, targetDepth: val as any, selectedCampus: '', selectedDept: '', selectedTrack: '', selectedStrand: '', selectedLevel: '', selectedSection: ''})}
-                             />
-                          </div>
-
-                          {eventData.targetDepth !== 'all' && eventData.targetDepth !== 'specific' && (
-                             <div className="space-y-1.5 animate-in slide-in-from-top-2">
-                                <CustomSelect 
-                                  label="Target Campus"
-                                  options={campusOptions.map(c => ({ value: c.id, label: c.name }))}
-                                  value={eventData.selectedCampus}
-                                  onChange={val => setEventData({...eventData, selectedCampus: val as string})}
-                                  placeholder="Choose Campus..."
-                                />
-                             </div>
-                          )}
-                       </div>
-
-                       {/* CASCADING DROPDOWNS (THE THREAD) */}
-                       <div className="space-y-4 animate-in fade-in duration-500">
-                          {eventData.selectedCampus && (eventData.targetDepth !== 'all') && (
-                            <div className="space-y-1.5">
-                               <CustomSelect 
-                                 label="Target Department"
-                                 options={deptOptions.map(d => ({ value: d.id, label: d.name }))}
-                                 value={eventData.selectedDept}
-                                 onChange={val => setEventData({...eventData, selectedDept: val as string, selectedTrack: '', selectedStrand: '', selectedLevel: '', selectedSection: ''})}
-                                 placeholder="Choose Department..."
-                               />
-                            </div>
-                          )}
-
-                          {eventData.selectedDept && ['track', 'strand', 'level', 'section'].includes(eventData.targetDepth) && (
-                            <div className="space-y-1.5">
-                               <CustomSelect 
-                                 label="Target Track"
-                                 options={trackOptions.map(t => ({ value: t.id, label: t.name }))}
-                                 value={eventData.selectedTrack}
-                                 onChange={val => setEventData({...eventData, selectedTrack: val as string, selectedStrand: '', selectedLevel: '', selectedSection: ''})}
-                                 placeholder="Choose Track (Everyone in Dept if empty)..."
-                               />
-                            </div>
-                          )}
-
-                          {eventData.selectedTrack && ['strand', 'level', 'section'].includes(eventData.targetDepth) && (
-                            <div className="space-y-1.5">
-                               <CustomSelect 
-                                 label="Target Strand"
-                                 options={strandOptions.map(s => ({ value: s.id, label: s.name }))}
-                                 value={eventData.selectedStrand}
-                                 onChange={val => setEventData({...eventData, selectedStrand: val as string, selectedLevel: '', selectedSection: ''})}
-                                 placeholder="Choose Strand..."
-                               />
-                            </div>
-                          )}
-
-                          {((eventData.selectedDept && !trackOptions.length) || eventData.selectedStrand) && ['level', 'section'].includes(eventData.targetDepth) && (
-                            <div className="space-y-1.5">
-                               <CustomSelect 
-                                 label="Target Level"
-                                 options={levelOptions.map(l => ({ value: l.id, label: l.name }))}
-                                 value={eventData.selectedLevel}
-                                 onChange={val => setEventData({...eventData, selectedLevel: val as string, selectedSection: ''})}
-                                 placeholder="Choose Year Level..."
-                               />
-                            </div>
-                          )}
-
-                          {eventData.selectedLevel && eventData.targetDepth === 'section' && (
-                            <div className="space-y-1.5">
-                               <CustomSelect 
-                                 label="Target Section"
-                                 options={sectionOptions.map(s => ({ value: s.id, label: s.name }))}
-                                 value={eventData.selectedSection}
-                                 onChange={val => setEventData({...eventData, selectedSection: val as string})}
-                                 placeholder="Choose Section..."
-                               />
-                            </div>
-                          )}
-                       </div>
+                       <CustomSelect label="Audience type" options={[{ value: 'all', label: 'All institution members' }, { value: 'directory_node', label: 'Academic directory group' }, { value: 'specific', label: 'Specific people or IDs' }]} value={audienceMode} onChange={(value) => { setAudienceMode(value as typeof audienceMode); setEventAudiencePath([]); }} />
+                       {audienceMode === 'directory_node' && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50"><p className="mb-3 text-sm font-bold text-brand-900 dark:text-white">Choose any academic unit</p><AcademicPathPicker roots={structure} value={eventAudiencePath.map((node) => node.id)} onChange={setEventAudiencePath} purpose="events" /></div>}
 
                        {/* SPECIFIC ASSET UIDs (MANUAL) */}
-                       {eventData.targetDepth === 'specific' && (
+                       {audienceMode === 'specific' && (
                           <div className="space-y-4 animate-in slide-in-from-top-2">
                              <label htmlFor="asset-identifier" className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
                                <Fingerprint size={14} className="text-brand-900 dark:text-slate-100"/> Asset ID Registry
@@ -643,25 +526,8 @@ const SSGPanel: React.FC = () => {
               </div>
       </Modal>
 
-      {/* NODE ESTABLISHMENT MODAL */}
-      <Modal
-        open={Boolean(showNodeModal)}
-        onClose={() => setShowNodeModal(null)}
-        title="Establish unit"
-        description="Add the next organizational unit in the current directory path."
-        size="sm"
-        footer={(
-          <>
-            <Button variant="secondary" onClick={() => setShowNodeModal(null)}>Cancel</Button>
-            <Button aria-label="Establish unit" variant="gold" disabled={!newNodeName} onClick={handleCreateNode}>Create</Button>
-          </>
-        )}
-      >
-        <label className="space-y-1.5" htmlFor="unit-designation">
-          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Unit designation</span>
-          <input id="unit-designation" placeholder="e.g. STEM-12-Newton" className="w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-sm focus:border-gold-400 outline-none transition-all" value={newNodeName} onChange={e => setNewNodeName(e.target.value)} />
-        </label>
-      </Modal>
+      <DirectoryNodeModal open={Boolean(nodeEditor)} parent={currentNode} node={nodeEditor?.node} onClose={() => setNodeEditor(null)} onSave={handleSaveNode} />
+      <PresetPickerModal open={showPresetModal} campusName={currentNode?.name || 'Campus'} onClose={() => setShowPresetModal(false)} onApply={handleApplyPreset} />
 
       {/* REGAL USER DETAIL MODAL */}
       <Modal

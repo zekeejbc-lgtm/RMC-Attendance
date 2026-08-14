@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Award, BarChart3, Bell, Building2, Calendar, ChevronDown, ChevronRight, FileText,
+  Award, BarChart3, Bell, Building2, Calendar, CalendarPlus, ChevronDown, ChevronRight, FileText,
   LayoutDashboard, Menu, PanelLeftClose, QrCode,
   ScanLine, ShieldCheck, User, Users, X,
 } from 'lucide-react';
@@ -84,14 +84,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { label: 'Events', icon: Calendar, path: '/student/events', roles: ['student', 'mayor'] },
     { label: 'Ceremonies', icon: Award, path: '/student/ceremonies', roles: ['student', 'mayor'] },
     { label: 'Records', icon: FileText, path: '/student/records', roles: ['student', 'mayor'] },
-    { label: 'Mayor Hub', icon: ScanLine, path: '/mayor/scan', roles: ['mayor', 'ssg', 'admin', 'ossa'] },
+    { label: 'Mayor Hub', icon: ScanLine, path: '/mayor/scan', roles: ['mayor'] },
+    { label: 'Attendance Scanner', icon: ScanLine, path: '/mayor/scan', roles: ['ssg', 'admin', 'ossa'] },
     { label: 'SSG Panel', icon: ShieldCheck, path: '/ssg/panel', roles: ['ssg', 'admin', 'ossa'] },
+    { label: 'Event Management', icon: CalendarPlus, path: '/ssg/events', roles: ['ssg', 'admin', 'ossa'] },
   ];
   const role = profile?.role || '';
   const identityLabel = role === 'student' || role === 'mayor' ? 'Student ID' : 'Official ID';
   const allowedNavItems = navItems.filter((item) => item.roles.includes(role));
   const hasDirectory = ['ssg', 'admin', 'ossa'].includes(role);
   const canManageMembers = ['ssg', 'admin', 'ossa'].includes(role);
+  const canViewAttendance = ['admin', 'ossa'].includes(role);
 
   const navigateAndClose = (path: string) => {
     navigate(path);
@@ -123,19 +126,21 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           onClick={() => setIsDirectoryOpen((open) => !open)}
           className="w-full min-h-11 flex items-center justify-between px-3 py-3 text-gold-400/70 hover:text-gold-400 transition-colors uppercase text-[10px] font-black tracking-widest"
         >
-          <span>Admin</span>
+          <span>{role === 'ssg' ? 'Directory' : 'Admin'}</span>
           <ChevronDown size={14} className="app-disclosure-chevron" />
         </button>
         <Collapsible id={controlsId} open={isDirectoryOpen} innerClassName="space-y-1 pl-2">
-            <button
-              type="button"
-              aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined}
-              onClick={() => mobile ? navigateAndClose('/admin/attendance') : navigate('/admin/attendance')}
-              className={itemClass('/admin/attendance')}
-            >
-              <BarChart3 size={18} />
-              <span className="text-xs">Attendance</span>
-            </button>
+            {canViewAttendance && (
+              <button
+                type="button"
+                aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined}
+                onClick={() => mobile ? navigateAndClose('/admin/attendance') : navigate('/admin/attendance')}
+                className={itemClass('/admin/attendance')}
+              >
+                <BarChart3 size={18} />
+                <span className="text-xs">Attendance</span>
+              </button>
+            )}
             {canManageMembers && (
               <button
                 type="button"
@@ -144,7 +149,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 className={itemClass('/admin/members')}
               >
                 <Users size={18} />
-                <span className="text-xs">Members</span>
+                <span className="text-xs">Manage members</span>
               </button>
             )}
         </Collapsible>
@@ -245,7 +250,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             const isActive = location.pathname === item.path;
             return <button type="button" key={item.path} aria-label={isSidebarCollapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined} onClick={() => navigate(item.path)} className={navButtonClass(isActive, isSidebarCollapsed)}><Icon size={22} />{!isSidebarCollapsed && <span className="truncate font-medium text-sm">{item.label}</span>}</button>;
           })}
-          {isSidebarCollapsed && hasDirectory ? <div className="pt-4 mt-4 border-t border-brand-800/80 space-y-2"><button type="button" aria-label="Attendance dashboard" aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined} onClick={() => navigate('/admin/attendance')} className={navButtonClass(location.pathname === '/admin/attendance', true)}><BarChart3 size={22} /></button>{canManageMembers && <button type="button" aria-label="Manage members" aria-current={location.pathname === '/admin/members' ? 'page' : undefined} onClick={() => navigate('/admin/members')} className={navButtonClass(location.pathname === '/admin/members', true)}><Users size={22} /></button>}</div> : renderDirectory()}
+          {isSidebarCollapsed && hasDirectory ? <div className="pt-4 mt-4 border-t border-brand-800/80 space-y-2">{canViewAttendance && <button type="button" aria-label="Attendance dashboard" aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined} onClick={() => navigate('/admin/attendance')} className={navButtonClass(location.pathname === '/admin/attendance', true)}><BarChart3 size={22} /></button>}{canManageMembers && <button type="button" aria-label="Manage members" aria-current={location.pathname === '/admin/members' ? 'page' : undefined} onClick={() => navigate('/admin/members')} className={navButtonClass(location.pathname === '/admin/members', true)}><Users size={22} /></button>}</div> : renderDirectory()}
         </nav>
         <div className="shrink-0 p-3 border-t border-brand-800 space-y-2.5">
           {!isSidebarCollapsed ? <><div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-widest text-gold-400/80">Theme Mode</span><ThemeToggle size="sm" className="min-h-11 min-w-11" /></div><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="w-full min-h-14 group flex items-center gap-3 p-2.5 rounded-2xl bg-brand-950/80 hover:bg-brand-800/90 border border-gold-400/30 hover:border-gold-400/60 transition-all text-left"><img src={profile?.photo_url || 'https://i.pravatar.cc/150'} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/70" /><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-white truncate">{profile?.name || 'Account'}</span><span className="block text-[10px] font-mono font-bold text-gold-400/90 truncate">{identityLabel}: {profile?.student_id || 'Not assigned'}</span></span><User size={16} className="text-gold-400/80 shrink-0" /></button></> : <div className="flex flex-col items-center gap-2.5"><ThemeToggle size="sm" className="min-h-11 min-w-11" /><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="min-h-11 min-w-11 relative rounded-full ring-2 ring-gold-400/70"><img src={profile?.photo_url || 'https://i.pravatar.cc/150'} alt="" className="w-10 h-10 rounded-full object-cover" /></button></div>}

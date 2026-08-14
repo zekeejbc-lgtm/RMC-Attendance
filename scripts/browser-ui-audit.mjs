@@ -14,7 +14,6 @@ const routedViews = [
   { path: '/', role: null, ready: 'body' },
   { path: '/login', role: null, ready: '[role="dialog"]' },
   { path: '/register', role: null, ready: 'input' },
-  { path: '/register/status', role: 'student', ready: 'button' },
   { path: '/dashboard', role: 'student', ready: 'main' },
   { path: '/student/qr', role: 'student', ready: 'main' },
   { path: '/student/events', role: 'student', ready: 'main' },
@@ -23,8 +22,10 @@ const routedViews = [
   { path: '/student/profile', role: 'student', ready: 'main' },
   { path: '/mayor/scan', role: 'mayor', ready: 'main' },
   { path: '/ssg/panel', role: 'ssg', ready: 'main' },
-  { path: '/admin/attendance', role: 'ssg', ready: 'main' },
-  { path: '/admin/members', role: 'ssg', ready: 'main' },
+  { path: '/ssg/events', role: 'ssg', ready: 'main' },
+  { path: '/ssg/events/create', role: 'ssg', ready: 'main' },
+  { path: '/admin/attendance', role: 'admin', ready: 'main' },
+  { path: '/admin/members', role: 'admin', ready: 'main' },
   { path: '/ossa/dashboard', role: 'ossa', ready: 'main' },
 ];
 
@@ -35,24 +36,37 @@ function assert(condition, message) {
 }
 
 async function setRole(page, role) {
-  await page.evaluate((nextRole) => {
+  const script = await page.evaluateOnNewDocument((appOrigin, nextRole) => {
+    if (window.location.origin !== appOrigin) return;
     if (nextRole) localStorage.setItem('rmc_mock_session', `mock_uid_${nextRole}`);
     else localStorage.removeItem('rmc_mock_session');
     localStorage.setItem('iars-theme', 'light');
-  }, role);
+  }, new URL(baseUrl).origin, role);
+  return script.identifier;
 }
 
 async function gotoRoute(page, route, width) {
-  await setRole(page, route.role);
-  await page.goto('about:blank');
-  await page.goto(`${baseUrl}/#${route.path}`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
-  await page.waitForSelector(route.ready, { timeout: 10_000 });
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await page.goto('about:blank');
+      const roleScriptId = await setRole(page, route.role);
+      try {
+        await page.goto(`${baseUrl}/#${route.path}`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+        await page.waitForSelector(route.ready, { timeout: 10_000 });
+        const currentPath = await page.evaluate(() => window.location.hash.slice(1));
+        if (currentPath !== route.path) throw new Error(`redirected unexpectedly to ${currentPath}`);
+      } finally {
+        await page.removeScriptToEvaluateOnNewDocument(roleScriptId);
+      }
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw new Error(`${route.path} at ${width}px did not become ready: ${lastError.message}`);
   await delay(route.path.includes('attendance') || route.path.includes('ossa') ? 500 : 150);
-  const currentPath = await page.evaluate(() => window.location.hash.slice(1));
-  assert(
-    currentPath === route.path,
-    `${route.path} at ${width}px redirected unexpectedly to ${currentPath}`,
-  );
 }
 
 async function auditCurrentPage(page, route, width) {
@@ -280,7 +294,7 @@ async function setThemeThroughUi(page, theme) {
 }
 
 async function openEventDetails(page) {
-  await clickNamed(page, 'main button', 'View Details & Map');
+  await clickNamed(page, 'main button', 'General Assembly');
   await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="dialog"]'))
     .some((dialog) => (dialog.textContent || '').includes('Geofence Verification Zone')));
 }
@@ -305,7 +319,7 @@ async function verifyDrawerKeyboard(page) {
   await page.keyboard.down('Shift');
   await page.keyboard.press('Tab');
   await page.keyboard.up('Shift');
-  assert(await page.evaluate(() => (document.activeElement?.textContent || '').trim() === 'Sign Out'), 'Shift+Tab did not wrap to the drawer last control');
+  assert(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'View profile'), 'Shift+Tab did not wrap to the drawer last control');
   await page.keyboard.press('Tab');
   assert(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Close navigation'), 'Forward Tab did not wrap to the drawer first control');
   await page.keyboard.press('Escape');
@@ -316,11 +330,11 @@ async function verifyDrawerKeyboard(page) {
 async function verifyDialogKeyboard(page) {
   await page.setViewport({ width: 375, height: heights[375], deviceScaleFactor: 1 });
   await gotoRoute(page, routedViews[0], 375);
-  await clickNamed(page, 'button', 'Student Enrollment');
+  await clickNamed(page, 'button', 'Register');
   await page.waitForSelector('[role="dialog"]');
   assert(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Close dialog'), 'Dialog did not focus its close control');
   await page.keyboard.press('Tab');
-  assert(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Upload profile photo'), 'Forward Tab did not move to the dialog first body control');
+  assert(await page.evaluate(() => (document.activeElement?.textContent || '').includes('Continue to enrollment')), 'Forward Tab did not move to the dialog first body control');
   await page.keyboard.down('Shift');
   await page.keyboard.press('Tab');
   await page.keyboard.up('Shift');
@@ -328,7 +342,7 @@ async function verifyDialogKeyboard(page) {
   await page.keyboard.down('Shift');
   await page.keyboard.press('Tab');
   await page.keyboard.up('Shift');
-  assert(await page.evaluate(() => (document.activeElement?.textContent || '').includes('Next Phase')), 'Shift+Tab did not wrap to the dialog last control');
+  assert(await page.evaluate(() => (document.activeElement?.textContent || '').includes('Continue to enrollment')), 'Shift+Tab did not wrap to the dialog last control');
   await page.keyboard.press('Tab');
   assert(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Close dialog'), 'Forward Tab did not wrap to the dialog first control');
   await page.keyboard.press('Escape');
@@ -340,7 +354,7 @@ async function verifyDialogKeyboard(page) {
     visible: Boolean(dialog.getBoundingClientRect().width && dialog.getBoundingClientRect().height),
   })));
   assert(remainingDialogs.length === 0, `Escape did not close the dialog: ${JSON.stringify(remainingDialogs)}`);
-  assert(await page.evaluate(() => (document.activeElement?.textContent || '').includes('Student Enrollment')), 'Dialog did not return focus to its trigger');
+  assert(await page.evaluate(() => (document.activeElement?.textContent || '').includes('Register')), 'Dialog did not return focus to its trigger');
 }
 
 async function verifyProtectedConfirmation(page) {
@@ -348,8 +362,8 @@ async function verifyProtectedConfirmation(page) {
   const route = routedViews.find((candidate) => candidate.path === '/ssg/panel');
   await gotoRoute(page, route, 1024);
   await clickNamed(page, 'button', 'Rizal Memorial Colleges');
-  await clickNamed(page, 'button', 'Senior High School');
-  await clickNamed(page, 'button', 'Academic Track');
+  await clickNamed(page, 'button', 'Legacy Senior High School');
+  await clickNamed(page, 'button', 'Academic');
   await clickNamed(page, 'button', 'STEM');
   await clickNamed(page, 'button', 'Grade 12');
   await clickNamed(page, 'button', 'Newton');
@@ -414,7 +428,7 @@ async function captureThemeEvidence(page) {
     { path: '/login', role: null, width: 375, name: 'login-modal', modal: true },
     { path: '/student/records', role: 'student', width: 375, name: 'student-records-mobile' },
     { path: '/student/records', role: 'student', width: 1440, name: 'student-records-desktop' },
-    { path: '/admin/attendance', role: 'ssg', width: 1440, name: 'attendance-charts' },
+    { path: '/admin/attendance', role: 'admin', width: 1440, name: 'attendance-charts' },
     { path: '/ossa/dashboard', role: 'ossa', width: 375, name: 'ossa-mobile' },
     { path: '/student/events', role: 'student', width: 375, name: 'student-event-modal', modal: true, openEvent: true },
   ];

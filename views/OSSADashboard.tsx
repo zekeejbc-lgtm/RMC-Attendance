@@ -11,7 +11,6 @@ import {
   PlusCircle,
   RotateCcw,
   School,
-  Search,
   ShieldAlert,
   ShieldCheck,
   Users,
@@ -48,6 +47,7 @@ import Button from '../components/ui/Button';
 import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
 import { Modal } from '../components/ui/Modal';
 import CustomSelect from '../components/ui/CustomSelect';
+import SearchInput from '../components/ui/SearchInput';
 
 interface StudentWithStats extends UserProfile {
   stats: UserStats;
@@ -223,7 +223,7 @@ const OSSADashboard: React.FC = () => {
           <Surface aria-labelledby="ossa-filters-heading" className="p-4">
             <h2 className="sr-only" id="ossa-filters-heading">Student sanction filters</h2>
             <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[16rem] flex-1 space-y-1.5"><label className="text-xs font-bold text-slate-500 dark:text-slate-300" htmlFor="ossa-student-search">Search students</label><div className="relative"><Search aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input aria-label="Search student sanctions" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-10 text-sm font-semibold text-brand-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white" id="ossa-student-search" onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search student name, ID, section..." type="search" value={searchQuery} />{searchQuery ? <button aria-label="Clear student search" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" onClick={() => setSearchQuery('')} type="button"><X size={14} /></button> : null}</div></div>
+              <SearchInput ariaLabel="Search student sanctions" className="min-w-[16rem] flex-1" label="Search students" onChange={setSearchQuery} placeholder="Search student name, ID, section..." value={searchQuery} />
               <div className="min-w-[14rem] flex-1"><CustomSelect ariaLabel="Filter by department" combobox label="Department" onChange={(value) => setDeptFilter(value as string)} options={[{ value: 'all', label: 'All Departments' }, ...departments.map((department) => ({ value: department, label: department }))]} searchable value={deptFilter} /></div>
               <div aria-label="Filter by sanction status" className="flex max-w-full flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-900" role="group">
                 <button aria-pressed={sanctionFilter === 'all'} className={`rounded-lg px-3 py-2 text-xs font-black ${sanctionFilter === 'all' ? 'bg-brand-900 text-white dark:bg-gold-400 dark:text-slate-950' : 'text-slate-600 dark:text-slate-300'}`} onClick={() => setSanctionFilter('all')} type="button">All ({students.length})</button>

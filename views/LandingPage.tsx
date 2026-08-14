@@ -11,8 +11,9 @@ import { TEST_ACCOUNTS } from '../lib/seed';
 import { SchoolNode } from '../types';
 import Button from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import CustomSelect from '../components/ui/CustomSelect';
 import { Collapsible } from '../components/ui/Collapsible';
+import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
+import { serializeAcademicAssignment } from '../lib/academicDirectory';
 import { 
   ArrowRight, Shield, Target, Users, 
   MapPin, Mail, Phone, Facebook, Instagram,
@@ -53,12 +54,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   const [regStep, setRegStep] = useState(1);
   const [isRegistering, setIsRegistering] = useState(false);
   const [structure, setStructure] = useState<SchoolNode[]>([]);
-  const [selectedSchool, setSelectedSchool] = useState<SchoolNode | null>(null);
-  const [selectedDept, setSelectedDept] = useState<SchoolNode | null>(null);
-  const [selectedTrack, setSelectedTrack] = useState<SchoolNode | null>(null);
-  const [selectedStrand, setSelectedStrand] = useState<SchoolNode | null>(null);
-  const [selectedLvl, setSelectedLvl] = useState<SchoolNode | null>(null);
-  const [selectedSec, setSelectedSec] = useState<SchoolNode | null>(null);
+  const [academicPath, setAcademicPath] = useState<SchoolNode[]>([]);
   const [regData, setRegData] = useState({
     name: '', username: '', email: '', password: '', student_id: '',
     guardianName: '', guardianPhone: '', profilePic: '', idFront: '', idBack: ''
@@ -147,8 +143,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   };
 
   const handleRegisterSubmit = async () => {
+    const terminal = academicPath[academicPath.length - 1];
+    if (!terminal || !['section', 'block'].includes(terminal.type)) return;
     setIsRegistering(true);
     const uid = `user_${Date.now()}`;
+    const serialized = serializeAcademicAssignment(academicPath);
     const profile: any = {
       uid,
       name: regData.name,
@@ -157,15 +156,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
       student_id: regData.student_id,
       role: 'student',
       photo_url: regData.profilePic || `https://i.pravatar.cc/150?u=${uid}`,
-      school_data: {
-        type: selectedDept?.name.toLowerCase().includes('high') ? 'High School' : 'College',
-        department: selectedDept?.name,
-        track: selectedTrack?.name,
-        strand: selectedStrand?.name,
-        level: selectedLvl?.name,
-        section: selectedSec?.name,
-        school_id: selectedSchool?.id
-      }
+      school_data: { ...serialized.schoolData, school_id: serialized.assignment.campusId, academic_assignment: serialized.assignment }
     };
 
     mockData.submitApplication(profile);
@@ -508,17 +499,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                           <label htmlFor="landing-register-student-id" className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Official ID #</label>
                           <input id="landing-register-student-id" placeholder="2024-XXXXX" className="w-full min-w-0 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-base dark:text-white" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
                        </div>
-                       <div className="grid grid-cols-1 gap-2">
-                         <CustomSelect label="Campus Location" onChange={(value) => { const school = structure.find((item) => item.id === value); setSelectedSchool(school || null); setSelectedDept(null); }} options={structure.map((school) => ({ value: school.id, label: school.name }))} placeholder="Choose campus" value={selectedSchool?.id || ''} />
-                         {selectedSchool && (
-                           <CustomSelect label="Department" onChange={(value) => { const department = selectedSchool.children?.find((item) => item.id === value); setSelectedDept(department || null); }} options={selectedSchool.children?.map((department) => ({ value: department.id, label: department.name })) || []} placeholder="Choose department" value={selectedDept?.id || ''} />
-                         )}
-                         {selectedDept && (
-                           <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 text-center text-xs text-slate-400 font-medium">
-                             Additional academic details (Track/Strand/Level) will be verified by admin.
-                           </div>
-                         )}
-                       </div>
+                       <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
                        <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
                           <button aria-label="Capture student ID front" type="button" onClick={() => handleRegUpload('idFront')} className="p-3 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 aspect-video">
                              {regData.idFront ? <img src={regData.idFront} alt="Student ID front" className="w-full h-full object-cover rounded-lg" /> : <CreditCard size={24} />}

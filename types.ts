@@ -2,6 +2,28 @@
 export type UserRole = 'student' | 'mayor' | 'ssg' | 'admin' | 'ossa';
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'inactive' | 'graduated';
 
+export type AcademicNodeType =
+  | 'campus' | 'education_unit' | 'curriculum' | 'college' | 'department'
+  | 'track' | 'elective_cluster' | 'strand' | 'program' | 'major'
+  | 'grade_level' | 'year_level' | 'section' | 'block' | 'specialization' | 'custom'
+  // Legacy aliases retained while saved structures migrate.
+  | 'school' | 'sub_department' | 'level' | 'secondary' | 'elementary' | 'special';
+
+export type AcademicPresetId = 'jhs' | 'strengthened_shs' | 'legacy_shs' | 'higher_ed' | 'blank';
+
+export interface AcademicAssignment {
+  campusId: string;
+  nodePathIds: string[];
+  terminalGroupId: string;
+  curriculumCode?: string;
+  academicYear?: string;
+  affiliations?: Array<{
+    nodeId?: string;
+    type: 'tle_specialization' | 'academic_elective' | 'techpro_elective' | 'major' | 'other';
+    name: string;
+  }>;
+}
+
 export interface ExcuseApplication {
   id: string;
   student_uid: string;
@@ -51,6 +73,7 @@ export interface UserProfile {
     program?: string; 
     major?: string;
     school_id?: string;
+    academic_assignment?: AcademicAssignment;
   };
 }
 
@@ -61,12 +84,26 @@ export interface UserStats {
   events_missed: number;
 }
 
+export interface EventAttendanceWindow {
+  id: string;
+  label?: string;
+  timeIn: string;
+  timeOut: string;
+  lateAfterMinutes: number;
+}
+
+export interface EventSanctionRule {
+  value: number;
+  unit: 'hours' | 'minutes';
+}
+
 export interface AppEvent {
   id: string;
   title: string;
   description?: string;
   created_by: string;
   status: 'upcoming' | 'active' | 'done';
+  cancellationStatus?: 'cancelled' | 'dropped';
   startTime: number;
   endTime: number;
   penaltyValue: number;
@@ -86,15 +123,50 @@ export interface AppEvent {
     radius_meters: number;
   };
   timestamp: number;
+  startDate?: string;
+  endDate?: string;
+  attendanceWindows?: EventAttendanceWindow[];
+  sanctionRules?: {
+    late: EventSanctionRule;
+    absent: EventSanctionRule;
+  };
+  recipientGroups?: string[];
+  geofenceEnabled?: boolean;
+  audienceTarget?: {
+    mode: 'all' | 'directory_node' | 'specific_people' | 'group_list';
+    nodeId?: string;
+    includeDescendants?: boolean;
+    specificUserIds?: string[];
+    snapshotLabel?: string;
+    groups?: string[];
+  };
 }
 
 export interface SchoolNode {
   id: string;
   name: string;
-  type: 'school' | 'department' | 'sub_department' | 'track' | 'strand' | 'specialization' | 'level' | 'section' | 'college' | 'program' | 'major' | 'secondary' | 'elementary' | 'special';
+  type: AcademicNodeType;
   logo_url?: string;
   children?: SchoolNode[];
-  metadata?: any;
+  metadata?: {
+    schemaVersion?: number;
+    educationLevel?: 'elementary' | 'jhs' | 'shs' | 'higher_ed' | 'graduate' | 'other';
+    curriculumCode?: string;
+    academicYearStart?: number;
+    academicYearEnd?: number;
+    officialGrouping?: boolean;
+    selectableForRegistration?: boolean;
+    selectableForEvents?: boolean;
+    allowedChildTypes?: AcademicNodeType[];
+    shortCode?: string;
+    programLevel?: string;
+    durationYears?: number;
+    copcNumber?: string;
+    archived?: boolean;
+    legacyType?: string;
+    migrationStatus?: 'migrated' | 'needs_review';
+    customFields?: Record<string, string | number | boolean>;
+  };
 }
 
 export interface Application {

@@ -17,6 +17,8 @@ import StudentCeremonies from '../views/StudentCeremonies';
 import MayorScanner from '../views/MayorScanner';
 import ManageMembers from '../views/ManageMembers';
 import SSGPanel from '../views/SSGPanel';
+import SSGEventCreation from '../views/SSGEventCreation';
+import SSGCreateEvent from '../views/SSGCreateEvent';
 import AttendanceDashboard from '../views/AttendanceDashboard';
 import OSSADashboard from '../views/OSSADashboard';
 
@@ -70,7 +72,13 @@ const staffState = vi.hoisted(() => ({
   adjustSanctionHours: vi.fn(),
   approveApplication: vi.fn(),
   assignRole: vi.fn(),
+  assignSectionMayor: vi.fn(),
   createEvent: vi.fn(),
+  createSectionMembers: vi.fn(),
+  updateEvent: vi.fn(),
+  archiveEvent: vi.fn(),
+  cancelEvent: vi.fn(),
+  deleteEvent: vi.fn(),
   createUser: vi.fn(),
   logAttendance: vi.fn(),
   resolveStudentSanctions: vi.fn(),
@@ -110,10 +118,17 @@ vi.mock('../lib/mockBackend', () => ({
     adjustSanctionHours: staffState.adjustSanctionHours,
     approveApplication: staffState.approveApplication,
     assignRole: staffState.assignRole,
+    assignSectionMayor: staffState.assignSectionMayor,
     createEvent: staffState.createEvent,
+    createSectionMembers: staffState.createSectionMembers,
+    updateEvent: staffState.updateEvent,
+    archiveEvent: staffState.archiveEvent,
+    cancelEvent: staffState.cancelEvent,
+    deleteEvent: staffState.deleteEvent,
     createUser: staffState.createUser,
     getApplications: () => staffState.applications.length ? staffState.applications : routeState.applications,
     getAllStudents: () => staffState.students,
+    getAllAccountIdentities: () => staffState.students,
     getEvents: () => staffState.events,
     getExcuseApplications: () => staffState.excuses,
     getSchoolStructure: () => staffState.schoolStructure,
@@ -165,7 +180,13 @@ afterEach(() => {
   staffState.adjustSanctionHours.mockReset();
   staffState.approveApplication.mockReset();
   staffState.assignRole.mockReset();
+  staffState.assignSectionMayor.mockReset();
   staffState.createEvent.mockReset();
+  staffState.createSectionMembers.mockReset();
+  staffState.updateEvent.mockReset();
+  staffState.archiveEvent.mockReset();
+  staffState.cancelEvent.mockReset();
+  staffState.deleteEvent.mockReset();
   staffState.createUser.mockReset();
   staffState.logAttendance.mockReset();
   staffState.resolveStudentSanctions.mockReset();
@@ -585,6 +606,8 @@ describe('complete routed view render matrix', () => {
     { path: '/student/profile', file: 'views/StudentProfile.tsx', element: <StudentProfile />, setup: useStudentRoute, usesPage: true },
     { path: '/mayor/scan', file: 'views/MayorScanner.tsx', element: <MayorScanner />, setup: staffRoute, usesPage: true },
     { path: '/ssg/panel', file: 'views/SSGPanel.tsx', element: <SSGPanel />, setup: staffRoute, usesPage: true },
+    { path: '/ssg/events', file: 'views/SSGEventCreation.tsx', element: <SSGEventCreation />, setup: staffRoute, usesPage: true },
+    { path: '/ssg/events/create', file: 'views/SSGCreateEvent.tsx', element: <SSGCreateEvent />, setup: staffRoute, usesPage: true },
     { path: '/admin/attendance', file: 'views/AttendanceDashboard.tsx', element: <AttendanceDashboard />, setup: staffRoute, usesPage: true },
     { path: '/admin/members', file: 'views/ManageMembers.tsx', element: <ManageMembers />, setup: staffRoute, usesPage: true },
     { path: '/ossa/dashboard', file: 'views/OSSADashboard.tsx', element: <OSSADashboard />, setup: staffRoute, usesPage: true },
@@ -778,11 +801,13 @@ describe('staff route UI behavior', () => {
     renderRoute(<ManageMembers />);
 
     expect(await screen.findByRole('main')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^add$/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /senior high school/i }));
     await user.click(screen.getByRole('button', { name: /^newton/i }));
 
     expect(screen.getByRole('searchbox', { name: /search section members/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /filter members by role/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /bulk create members/i })).toBeInTheDocument();
     expect(screen.getByRole('table', { name: /newton member registry/i })).toBeInTheDocument();
     const memberCard = screen.getByRole('article', { name: /juan dela cruz/i });
     expect(memberCard).toHaveClass('mobile-data-card');
@@ -792,6 +817,8 @@ describe('staff route UI behavior', () => {
     expect(screen.getAllByText(studentProfile.student_id)).toHaveLength(2);
     expect(screen.getAllByText(/long-address/i)[0]).toHaveClass('[overflow-wrap:anywhere]');
     expect(screen.queryByText(/^active$/i)).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: /assign .* as mayor/i })[0]);
+    expect(staffState.assignSectionMayor).toHaveBeenCalledWith('student-1', 'section-newton', 'Newton');
 
     await user.type(screen.getByRole('searchbox', { name: /search section members/i }), 'missing member');
     expect(screen.queryByRole('article', { name: /juan dela cruz/i })).not.toBeInTheDocument();
@@ -803,6 +830,45 @@ describe('staff route UI behavior', () => {
     expect(within(memberForm).getByRole('textbox', { name: /email address/i })).toBeRequired();
     await user.click(screen.getByTestId('modal-backdrop'));
     expect(screen.getByRole('dialog', { name: /add member to newton/i })).toBeInTheDocument();
+  });
+
+  it('bulk creates reviewed members with the selected section assignment', async () => {
+    const user = userEvent.setup();
+    useStaff();
+    seedStaffDirectory();
+    renderRoute(<ManageMembers />);
+    await user.click(await screen.findByRole('button', { name: /senior high school/i }));
+    await user.click(screen.getByRole('button', { name: /^newton/i }));
+    await user.click(screen.getByRole('button', { name: /bulk create members/i }));
+
+    const csv = 'name,email,username,student_id,role,phone,guardian_name,guardian_contact,guardian_email\r\n'
+      + 'Ada Lovelace,ada@example.edu,ada,RMC-10,student,,,,\r\n'
+      + 'Grace Hopper,grace@example.edu,grace,RMC-11,mayor,09170000000,Parent Hopper,09171111111,parent@example.edu';
+    const file = new File([csv], 'newton.csv', { type: 'text/csv' });
+    Object.defineProperty(file, 'text', { value: async () => csv });
+    const dialog = screen.getByRole('dialog', { name: /bulk create members in newton/i });
+    await user.upload(within(dialog).getByLabelText(/upload completed csv/i), file);
+    await within(dialog).findByText(/2 people detected/i);
+    await user.click(within(dialog).getByRole('button', { name: /create 2 members/i }));
+
+    const schoolData = expect.objectContaining({
+      section: 'Newton',
+      academic_assignment: expect.objectContaining({ terminalGroupId: 'section-newton' }),
+    });
+    expect(staffState.createSectionMembers).toHaveBeenCalledWith([
+      expect.objectContaining({
+        makeMayor: false,
+        profile: expect.objectContaining({ name: 'Ada Lovelace', role: 'student', school_data: schoolData }),
+      }),
+      expect.objectContaining({
+        makeMayor: true,
+        profile: expect.objectContaining({
+          name: 'Grace Hopper', role: 'student', phone: '09170000000',
+          guardian: { name: 'Parent Hopper', contact: '09171111111', email: 'parent@example.edu' },
+          school_data: schoolData,
+        }),
+      }),
+    ], 'section-newton', 'Newton');
   });
 
   it('submits a college member with school data derived from the selected directory branch', async () => {
@@ -824,24 +890,52 @@ describe('staff route UI behavior', () => {
     await user.type(within(form).getByRole('textbox', { name: /student id/i }), 'RMC-COL-1001');
     await user.click(within(form).getByRole('button', { name: /create member/i }));
 
-    expect(staffState.createUser).toHaveBeenCalledWith({
-      name: 'Ada Lovelace',
-      email: 'ada@rmc.edu.ph',
-      username: 'ada.lovelace',
-      role: 'student',
-      student_id: 'RMC-COL-1001',
-      school_data: {
+    expect(staffState.createSectionMembers).toHaveBeenCalledWith([{
+      makeMayor: false,
+      profile: {
+        name: 'Ada Lovelace',
+        email: 'ada@rmc.edu.ph',
+        username: 'ada.lovelace',
+        role: 'student',
+        student_id: 'RMC-COL-1001',
+        school_data: {
         type: 'College',
         level: '',
         section: 'CS-1A',
         department: 'College of Arts and Sciences',
         program: 'BS Computer Science',
         school_id: 'school-rmc',
+        academic_assignment: {
+          campusId: 'school-rmc',
+          nodePathIds: ['school-rmc', 'department-college', 'college-cas', 'program-bscs', 'section-cs1a'],
+          terminalGroupId: 'section-cs1a',
+        },
+        },
       },
-    });
+    }], 'section-cs1a', 'CS-1A');
   });
 
-  it('keeps SSG unit and event creation in named, operable dialogs', async () => {
+  it('blocks invalid or whitespace-only single-member details', async () => {
+    const user = userEvent.setup();
+    useStaff();
+    seedStaffDirectory();
+    renderRoute(<ManageMembers />);
+    await user.click(await screen.findByRole('button', { name: /senior high school/i }));
+    await user.click(screen.getByRole('button', { name: /^newton/i }));
+    await user.click(screen.getByRole('button', { name: /add member/i }));
+    const form = screen.getByRole('dialog', { name: /add member to newton/i });
+    fireEvent.change(within(form).getByRole('textbox', { name: /legal full name/i }), { target: { value: '   ' } });
+    fireEvent.change(within(form).getByRole('textbox', { name: /email address/i }), { target: { value: 'invalid' } });
+    fireEvent.change(within(form).getByRole('textbox', { name: /username/i }), { target: { value: 'new.user' } });
+    fireEvent.change(within(form).getByRole('textbox', { name: /student id/i }), { target: { value: 'RMC-NEW' } });
+    await user.click(within(form).getByRole('button', { name: /create member/i }));
+
+    expect(within(form).getByText(/field is required/i)).toBeInTheDocument();
+    expect(within(form).getByText(/valid email/i)).toBeInTheDocument();
+    expect(staffState.createSectionMembers).not.toHaveBeenCalled();
+  });
+
+  it('keeps SSG unit creation in a named dialog', async () => {
     const user = userEvent.setup();
     useStaff();
     seedStaffDirectory();
@@ -851,43 +945,206 @@ describe('staff route UI behavior', () => {
     const unitDialog = screen.getByRole('dialog', { name: /establish unit/i });
     await user.type(within(unitDialog).getByRole('textbox', { name: /unit designation/i }), 'New College Division');
     await user.click(within(unitDialog).getByRole('button', { name: /establish unit/i }));
-    expect(staffState.addSchoolNode).toHaveBeenCalledWith(null, {
-      id: expect.stringMatching(/^node_/),
+    expect(staffState.addSchoolNode).toHaveBeenCalledWith(null, expect.objectContaining({
+      id: expect.stringMatching(/^education_unit_/),
       name: 'New College Division',
-      type: 'department',
+      type: 'education_unit',
       children: [],
-    });
+    }));
 
-    await user.click(screen.getByRole('button', { name: /^events$/i }));
+  });
+
+  it('shows, searches, and filters the SSG event registry before opening event creation', async () => {
+    const user = userEvent.setup();
+    useStaff();
+    const baseEvent = {
+      description: 'Event details', created_by: 'SSG President', startTime: Date.now(), endTime: Date.now() + 3600000,
+      penaltyValue: 1, penaltyUnit: 'hours', participantsType: 'all', target: { all: true },
+      location: { lat: 7.0736, lng: 125.6126, radius_meters: 100 }, timestamp: Date.now(),
+    };
+    staffState.events = [
+      { ...baseEvent, id: 'ongoing-1', title: 'Live Assembly', status: 'active', recipientGroups: ['All Students'], geofenceEnabled: true },
+      { ...baseEvent, id: 'scheduled-1', title: 'Future College Fair', status: 'upcoming', recipientGroups: ['College'], geofenceEnabled: false },
+      { ...baseEvent, id: 'archived-1', title: 'Past JHS Program', status: 'done', recipientGroups: ['JHS'], geofenceEnabled: true },
+    ];
+
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/ssg/events']}>
+          <Routes>
+            <Route path="/ssg/events" element={<SSGEventCreation />} />
+            <Route path="/ssg/events/create" element={<p>Create event destination</p>} />
+          </Routes>
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByRole('heading', { name: /^institutional events$/i })).toBeInTheDocument();
+    expect(screen.getByText(/campus calendar/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /active.*ongoing.*1/i })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: /live assembly/i })).toHaveClass('bg-brand-950', 'text-white');
+    expect(screen.getByRole('button', { name: /scheduled upcoming events.*1/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: /archived events.*1/i })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('heading', { name: /archived events.*1/i })).toBeInTheDocument();
+    await user.type(screen.getByRole('searchbox', { name: /search events/i }), 'Future College');
+    expect(screen.getByText('Future College Fair')).toBeInTheDocument();
+    expect(screen.queryByText('Live Assembly')).not.toBeInTheDocument();
+    await user.clear(screen.getByRole('searchbox', { name: /search events/i }));
+    await user.click(screen.getByRole('button', { name: /event status/i }));
+    await user.click(screen.getByRole('option', { name: /archived/i }));
+    expect(screen.getByRole('button', { name: /event recipients/i })).toHaveTextContent(/all recipients/i);
+    expect(screen.getByRole('button', { name: /geofence status/i })).toHaveTextContent(/all events/i);
+    expect(screen.getByText('Past JHS Program')).toBeInTheDocument();
+    expect(screen.queryByText('Future College Fair')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /create event/i }));
-    const eventDialog = screen.getByRole('dialog', { name: /strategic deployment/i });
-    await user.type(within(eventDialog).getByRole('textbox', { name: /deployment title/i }), 'College General Assembly');
-    await user.type(within(eventDialog).getByRole('textbox', { name: /administrative description/i }), 'Required institutional assembly.');
-    fireEvent.change(within(eventDialog).getByLabelText(/window open/i), { target: { value: '2026-08-10T08:00' } });
-    fireEvent.change(within(eventDialog).getByLabelText(/window close/i), { target: { value: '2026-08-10T10:00' } });
-    await user.click(within(eventDialog).getByText(/^global institutional$/i));
-    await user.click(within(eventDialog).getByRole('option', { name: /manual asset uids/i }));
-    await user.type(within(eventDialog).getByRole('textbox', { name: /asset id registry/i }), 'RMC-COL-1001');
-    await user.click(within(eventDialog).getByRole('button', { name: /add id/i }));
-    expect(within(eventDialog).getByRole('button', { name: /remove asset rmc-col-1001/i })).toBeInTheDocument();
-    await user.click(within(eventDialog).getByRole('button', { name: /authorize deployment protocol/i }));
+    expect(screen.getByText(/create event destination/i)).toBeInTheDocument();
+  });
 
-    expect(staffState.createEvent).toHaveBeenCalledWith({
+  it('shows one Edit action and opens the prefilled create-style event editor', async () => {
+    const user = userEvent.setup();
+    useStaff();
+    const now = Date.now();
+    const baseEvent = {
+      description: 'Complete event details', created_by: 'SSG President', startTime: now, endTime: now + 3600000,
+      penaltyValue: 2, penaltyUnit: 'hours', participantsType: 'all', target: { all: true },
+      recipientGroups: ['All Students'], geofenceEnabled: true,
+      location: { lat: 7.0736, lng: 125.6126, radius_meters: 100 }, timestamp: now,
+      attendanceWindows: [{ id: 'window-1', label: 'Main', timeIn: '08:00', timeOut: '10:00', lateAfterMinutes: 15 }],
+      sanctionRules: { late: { value: 30, unit: 'minutes' }, absent: { value: 2, unit: 'hours' } },
+    };
+    staffState.events = [
+      { ...baseEvent, id: 'active-1', title: 'Live Assembly', status: 'active' },
+      { ...baseEvent, id: 'scheduled-1', title: 'Future Fair', status: 'upcoming', startTime: now + 86400000, endTime: now + 90000000 },
+      { ...baseEvent, id: 'archived-1', title: 'Past Program', status: 'done' },
+    ];
+    render(
+      <ThemeProvider><MemoryRouter initialEntries={['/ssg/events']}><Routes>
+        <Route path="/ssg/events" element={<SSGEventCreation />} />
+        <Route path="/ssg/events/:eventId/edit" element={<SSGCreateEvent />} />
+      </Routes></MemoryRouter></ThemeProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /open live assembly details/i }));
+    let dialog = screen.getByRole('dialog', { name: /live assembly/i });
+    expect(within(dialog).getByText('Complete event details')).toBeInTheDocument();
+    const activeEdit = within(dialog).getByRole('button', { name: /^edit$/i });
+    expect(within(dialog).getAllByRole('button')).toHaveLength(2);
+    await user.click(activeEdit);
+    expect(screen.getByRole('heading', { name: /edit event/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /event title/i })).toHaveValue('Live Assembly');
+    expect(screen.getByRole('button', { name: /extend by 1 hour/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /finish and archive/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /delete event/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /back to events/i }));
+
+    await user.click(screen.getByRole('button', { name: /scheduled upcoming events/i }));
+    await user.click(screen.getByRole('button', { name: /open future fair details/i }));
+    dialog = screen.getByRole('dialog', { name: /future fair/i });
+    expect(within(dialog).getAllByRole('button')).toHaveLength(2);
+    await user.click(within(dialog).getByRole('button', { name: /^edit$/i }));
+    expect(screen.getByRole('textbox', { name: /event title/i })).toHaveValue('Future Fair');
+    expect(screen.getByRole('button', { name: /reschedule/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /drop/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /archive/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
+    const editActions = screen.getByRole('group', { name: /event form actions/i });
+    expect(editActions).toHaveClass('grid-cols-2', 'sm:flex');
+    expect(within(editActions).getByRole('button', { name: /reschedule/i })).toHaveClass('sm:w-auto');
+    expect(within(editActions).getByRole('button', { name: /delete/i })).toHaveClass('text-red-700');
+    expect(within(editActions).getByRole('button', { name: /^save$/i })).toHaveClass('sm:min-w-32');
+    await user.click(screen.getByRole('button', { name: /back to events/i }));
+
+    await user.click(screen.getByRole('button', { name: /archived events/i }));
+    await user.click(screen.getByRole('button', { name: /open past program details/i }));
+    dialog = screen.getByRole('dialog', { name: /past program/i });
+    expect(within(dialog).getByText(/read-only archived record/i)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /edit/i })).not.toBeInTheDocument();
+  });
+
+  it('schedules an event with combined recipients, geofencing, multiple windows, and sanction rules', async () => {
+    const user = userEvent.setup();
+    useStaff();
+    seedCollegeDirectory();
+    renderRoute(<SSGCreateEvent />);
+
+    const form = screen.getByRole('form', { name: /schedule attendance event/i });
+    await user.type(within(form).getByRole('textbox', { name: /event title/i }), 'College General Assembly');
+    const details = within(form).getByRole('textbox', { name: /event details/i });
+    expect(details).toHaveClass('input-field');
+    await user.type(details, 'Required institutional assembly.');
+    fireEvent.change(within(form).getByLabelText(/^start date$/i), { target: { value: '2026-08-10' } });
+    fireEvent.change(within(form).getByLabelText(/^end date$/i), { target: { value: '2026-08-11' } });
+    const recipientSearch = within(form).getByRole('combobox', { name: /search and add event recipients/i });
+    await user.type(recipientSearch, 'JHS, College,');
+    await user.type(recipientSearch, 'BS Comp');
+    await user.click(within(form).getByRole('option', { name: /^bs computer science$/i }));
+    await user.type(recipientSearch, 'Nursing,');
+    const addedRecipients = within(form).getByRole('status', { name: /added event recipients/i });
+    expect(addedRecipients).toHaveTextContent('JHS, College, BS Computer Science, Nursing');
+    expect(addedRecipients).toHaveTextContent('4 recipients added');
+    await user.click(within(form).getByRole('switch', { name: /enable geofencing/i }));
+    expect(within(form).getByRole('region', { name: /event geofence map/i })).toBeInTheDocument();
+    const radius = within(form).getByRole('spinbutton', { name: /geofence radius/i });
+    await user.clear(radius);
+    await user.type(radius, '275');
+    fireEvent.change(within(form).getByLabelText(/time in 1/i), { target: { value: '08:00' } });
+    fireEvent.change(within(form).getByLabelText(/time out 1/i), { target: { value: '10:00' } });
+    const firstLateThreshold = within(form).getByLabelText(/late after minutes 1/i);
+    await user.clear(firstLateThreshold);
+    await user.type(firstLateThreshold, '30');
+    await user.click(within(form).getByRole('button', { name: /add attendance window/i }));
+    fireEvent.change(within(form).getByLabelText(/time in 2/i), { target: { value: '13:00' } });
+    fireEvent.change(within(form).getByLabelText(/time out 2/i), { target: { value: '16:00' } });
+    const lateSanction = within(form).getByRole('spinbutton', { name: /late sanction value/i });
+    await user.clear(lateSanction);
+    await user.type(lateSanction, '30');
+    const scheduleButton = within(form).getByRole('button', { name: /schedule event/i });
+    expect(scheduleButton).toBeEnabled();
+    await user.click(scheduleButton);
+
+    expect(staffState.createEvent).toHaveBeenCalledWith(expect.objectContaining({
       title: 'College General Assembly',
       description: 'Required institutional assembly.',
-      status: 'active',
+      status: 'upcoming',
       created_by: 'SSG President',
+      startDate: '2026-08-10',
+      endDate: '2026-08-11',
       startTime: new Date('2026-08-10T08:00').getTime(),
-      endTime: new Date('2026-08-10T10:00').getTime(),
+      endTime: new Date('2026-08-11T16:00').getTime(),
       penaltyValue: 1,
       penaltyUnit: 'hours',
       participantsType: 'specific',
-      targetValue: 'All Students',
-      specificParticipants: ['RMC-COL-1001'],
+      targetValue: 'JHS, College, BS Computer Science, Nursing',
+      recipientGroups: ['JHS', 'College', 'BS Computer Science', 'Nursing'],
+      audienceTarget: { mode: 'group_list', groups: ['JHS', 'College', 'BS Computer Science', 'Nursing'], snapshotLabel: 'JHS, College, BS Computer Science, Nursing' },
       target: { all: false },
-      location: { lat: 7.0736, lng: 125.6126, radius_meters: 100 },
-      timestamp: expect.any(Number),
-    });
+      geofenceEnabled: true,
+      location: { lat: 7.0736, lng: 125.6126, radius_meters: 275 },
+      attendanceWindows: [
+        { id: expect.any(String), label: 'Window 1', timeIn: '08:00', timeOut: '10:00', lateAfterMinutes: 30 },
+        { id: expect.any(String), label: 'Window 2', timeIn: '13:00', timeOut: '16:00', lateAfterMinutes: 15 },
+      ],
+      sanctionRules: { late: { value: 30, unit: 'minutes' }, absent: { value: 1, unit: 'hours' } },
+    }));
+  });
+
+  it('keeps schedule actions compact and lets the user cancel event creation', async () => {
+    const user = userEvent.setup();
+    useStaff();
+    render(
+      <ThemeProvider><MemoryRouter initialEntries={['/ssg/events/create']}><Routes>
+        <Route path="/ssg/events/create" element={<SSGCreateEvent />} />
+        <Route path="/ssg/events" element={<p>Events registry destination</p>} />
+      </Routes></MemoryRouter></ThemeProvider>,
+    );
+
+    const actions = screen.getByRole('group', { name: /event form actions/i });
+    expect(within(actions).getByRole('button', { name: /schedule event/i })).toHaveClass('sm:w-auto');
+    await user.click(within(actions).getByRole('button', { name: /^cancel$/i }));
+
+    expect(screen.getByText('Events registry destination')).toBeInTheDocument();
+    expect(staffState.createEvent).not.toHaveBeenCalled();
   });
 
   it('executes the preserved applicant approval action from the rendered SSG panel', async () => {
@@ -906,6 +1163,15 @@ describe('staff route UI behavior', () => {
     await user.click(screen.getByRole('button', { name: /^applicants$/i }));
     await user.click(screen.getByRole('button', { name: /^verify$/i }));
     expect(staffState.approveApplication).toHaveBeenCalledWith('application-1', 'student');
+  });
+
+  it('does not duplicate event navigation in the SSG control hub', () => {
+    useStaff();
+    seedStaffDirectory();
+    renderRoute(<SSGPanel />);
+
+    expect(screen.queryByRole('button', { name: /^events$/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Attendance events')).toBeInTheDocument();
   });
 
   it('renders equivalent attendance records and operable report and date-range dialogs', async () => {

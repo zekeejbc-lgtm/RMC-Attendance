@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 
 interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'type'> {
   children?: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'gold';
+  variant?: 'primary' | 'secondary' | 'gold' | 'danger' | 'warning';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   iconOnly?: boolean;
@@ -34,6 +34,8 @@ export default function Button({
     primary: 'bg-brand-900 text-white shadow-sm hover:bg-brand-800',
     secondary: 'border border-brand-900/70 bg-white text-brand-900 hover:bg-brand-50',
     gold: 'bg-gold-gradient text-brand-900 shadow-sm hover:brightness-105',
+    danger: 'border border-red-300 bg-white text-red-700 shadow-sm hover:border-red-400 hover:bg-red-50 dark:border-red-800 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950/40',
+    warning: 'border border-amber-300 bg-amber-50 text-amber-800 shadow-sm hover:border-amber-400 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50',
   };
   const sizes = {
     sm: 'h-8 px-3 text-xs',
