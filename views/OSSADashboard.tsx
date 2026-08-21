@@ -48,6 +48,7 @@ import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
 import { Modal } from '../components/ui/Modal';
 import CustomSelect from '../components/ui/CustomSelect';
 import SearchInput from '../components/ui/SearchInput';
+import { useAuth } from '../components/AuthContext';
 
 interface StudentWithStats extends UserProfile {
   stats: UserStats;
@@ -55,6 +56,7 @@ interface StudentWithStats extends UserProfile {
 }
 
 const OSSADashboard: React.FC = () => {
+  const { profile } = useAuth();
   const [students, setStudents] = useState<StudentWithStats[]>([]);
   const [excuseApps, setExcuseApps] = useState<ExcuseApplication[]>([]);
   const [activeTab, setActiveTab] = useState<'roster' | 'excuses'>('roster');
@@ -73,8 +75,8 @@ const OSSADashboard: React.FC = () => {
   const [excuseActionSuccess, setExcuseActionSuccess] = useState<string | null>(null);
 
   const loadData = () => {
-    setStudents(mockData.getAllStudents() as StudentWithStats[]);
-    setExcuseApps(mockData.getExcuseApplications());
+    setStudents((profile && typeof mockData.getVisibleStudents === 'function' ? mockData.getVisibleStudents(profile.uid) : mockData.getAllStudents()) as StudentWithStats[]);
+    setExcuseApps(profile && typeof mockData.getVisibleExcuseApplications === 'function' ? mockData.getVisibleExcuseApplications(profile.uid) : mockData.getExcuseApplications());
 
     if (selectedStudent) {
       const updatedDetail = mockData.getUserDetail(selectedStudent.uid);

@@ -78,7 +78,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   useEffect(() => {
     if (user) {
-      if (profile?.role === 'ossa') {
+      if (profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
         navigate('/ossa/dashboard');
       } else {
         navigate('/dashboard');

@@ -19,10 +19,10 @@ import SSGCreateEvent from './views/SSGCreateEvent';
 import LandingPage from './views/LandingPage';
 
 import AttendanceDashboard from './views/AttendanceDashboard';
-import ManageMembers from './views/ManageMembers';
 import OSSADashboard from './views/OSSADashboard';
+import { UserRole } from './types';
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: string[] }> = ({ children, roles }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: UserRole[] }> = ({ children, roles }) => {
   const { user, loading, profile } = useAuth();
 
   if (loading) return (
@@ -38,16 +38,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: string[] }> 
     return <Navigate to="/register/status" replace />;
   }
 
-  // Administrators have the highest access level. Student-only navigation is
-  // hidden from their sidebar, but direct access remains available for support.
-  if (profile.role === 'admin') return <Layout>{children}</Layout>;
-
-  // Handle OSSA role routing
-  if (profile.role === 'ossa') {
-    if (!roles || !roles.includes('ossa')) {
-      return <Navigate to="/ossa/dashboard" replace />;
-    }
-  } else if (roles && !roles.includes(profile.role)) {
+  if (roles && !roles.includes(profile.role)) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -66,7 +57,7 @@ const App: React.FC = () => {
           <Route path="/register/status" element={<RegisterStatus />} />
           
           <Route path="/dashboard" element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'ossa', 'ossa_staff', 'admin']}>
               <Dashboard />
             </ProtectedRoute>
           } />
@@ -96,19 +87,19 @@ const App: React.FC = () => {
           } />
 
           <Route path="/student/profile" element={
-            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa']}>
+            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
               <StudentProfile />
             </ProtectedRoute>
           } />
 
           <Route path="/mayor/scan" element={
-            <ProtectedRoute roles={['mayor', 'ssg', 'admin', 'ossa']}>
+            <ProtectedRoute roles={['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
               <MayorScanner />
             </ProtectedRoute>
           } />
 
           <Route path="/ssg/panel" element={
-            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
+            <ProtectedRoute roles={['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
               <SSGPanel />
             </ProtectedRoute>
           } />
@@ -131,21 +122,22 @@ const App: React.FC = () => {
           } />
 
           <Route path="/admin/attendance" element={
-            <ProtectedRoute roles={['admin', 'ossa']}>
+            <ProtectedRoute roles={['admin', 'ossa', 'ossa_staff']}>
               <AttendanceDashboard />
             </ProtectedRoute>
           } />
 
           <Route path="/admin/members" element={
-            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
-              <ManageMembers />
-            </ProtectedRoute>
+            <Navigate to="/ssg/panel" replace />
           } />
 
           <Route path="/ossa/dashboard" element={
-            <ProtectedRoute roles={['ossa', 'admin']}>
+            <ProtectedRoute roles={['ossa', 'ossa_staff', 'admin']}>
               <OSSADashboard />
             </ProtectedRoute>
+          } />
+          <Route path="/admin/accounts" element={
+            <Navigate to="/ssg/panel" replace />
           } />
         </Routes>
       </HashRouter>

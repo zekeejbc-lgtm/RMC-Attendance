@@ -214,6 +214,15 @@ const useStaff = () => {
   };
 };
 
+const useOSSA = () => {
+  routeState.auth = {
+    isMock: true,
+    profile: { ...studentProfile, uid: 'ossa-1', name: 'Dr. Evelyn Santos', role: 'ossa' } as typeof studentProfile,
+    stats: null,
+    user: { uid: 'ossa-1' },
+  };
+};
+
 const seedStaffDirectory = () => {
   const section = { id: 'section-newton', name: 'Newton', type: 'section', children: [] };
   const department = { id: 'department-shs', name: 'Senior High School', type: 'department', children: [section] };
@@ -1174,6 +1183,21 @@ describe('staff route UI behavior', () => {
     expect(screen.getByText('Attendance events')).toBeInTheDocument();
   });
 
+  it('renders an OSSA-specific home and control panel', () => {
+    useOSSA();
+    renderRoute(<Dashboard />);
+
+    expect(screen.getByText(/ossa workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /open ossa control panel/i })).toBeInTheDocument();
+
+    cleanup();
+    renderRoute(<SSGPanel />);
+
+    expect(screen.getByRole('heading', { name: /ossa control panel/i })).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: /ossa panel sections/i })).toBeInTheDocument();
+    expect(screen.queryByText(/ssg administration/i)).not.toBeInTheDocument();
+  });
+
   it('renders equivalent attendance records and operable report and date-range dialogs', async () => {
     const user = userEvent.setup();
     useStaff();
@@ -1389,6 +1413,6 @@ describe('staff route UI behavior', () => {
       'Administrative Adjustment: SSG President',
     );
     await user.click(within(memberDialog).getByRole('button', { name: /^mayor$/i }));
-    expect(staffState.assignRole).toHaveBeenCalledWith('student-1', 'mayor');
+    expect(staffState.assignSectionMayor).toHaveBeenCalledWith('student-1', 'section-newton', 'Newton');
   });
 });

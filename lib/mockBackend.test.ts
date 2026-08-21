@@ -315,3 +315,74 @@ it('creates a reviewed section batch atomically and assigns its requested mayor'
   expect(getDB().users[ids[0]].profile.role).toBe('student');
   expect(getDB().users[ids[1]].profile.role).toBe('mayor');
 });
+
+it('allows only the System Owner to create and delete school-official accounts', () => {
+  ensureMockReferenceData();
+  const official = {
+    name: 'New OSSA Staff',
+    username: 'new.ossa.staff',
+    email: 'new.ossa.staff@example.edu',
+    role: 'ossa_staff' as const,
+    student_id: 'OSSA-STAFF-02',
+    official_data: { body: 'OSSA' as const, position: 'Staff', scope: 'Institution', assignment_node_id: 'school_rmc' },
+    school_data: { type: 'College' as const, level: 'Administration', section: 'OSSA Main' },
+  };
+
+  expect(() => mockData.createSchoolOfficial('mock_uid_ossa', official, 'temporary123'))
+    .toThrow(/only the System Owner/i);
+
+  const uid = mockData.createSchoolOfficial('mock_uid_admin', official, 'temporary123');
+  expect(getDB().users[uid].profile.role).toBe('ossa_staff');
+  expect(mockData.getAccountAuditLogs()[0]).toEqual(expect.objectContaining({
+    action: 'account.created', actor_uid: 'mock_uid_admin', target_uid: uid,
+  }));
+
+  expect(() => mockData.deleteSchoolOfficial('mock_uid_ossa', uid)).toThrow(/only the System Owner/i);
+  expect(mockData.deleteSchoolOfficial('mock_uid_admin', uid)).toBe(true);
+  expect(getDB().users[uid]).toBeUndefined();
+  expect(mockData.getAccountAuditLogs()[0]).toEqual(expect.objectContaining({
+    action: 'account.deleted', actor_uid: 'mock_uid_admin', target_uid: uid,
+  }));
+});
+
+it('limits officers to their assigned node and descendants without exposing ancestors or siblings', () => {
+  ensureMockReferenceData();
+  const officer = {
+    name: 'Junior High Officer', username: 'jhs.officer', email: 'jhs.officer@example.edu',
+    role: 'ssg' as const, student_id: 'SSG-JHS-01',
+    official_data: { body: 'SSG' as const, position: 'Officer', scope: 'Junior High School', assignment_node_id: 'dept_jhs' },
+    school_data: { type: 'High School' as const, level: 'Administration', section: 'Junior High School' },
+  };
+  const uid = mockData.createSchoolOfficial('mock_uid_admin', officer, 'temporary123');
+  const visible = mockData.getVisibleSchoolStructure(uid);
+
+  expect(visible.map((node) => node.id)).toEqual(['dept_jhs']);
+  expect(mockData.isNodeVisibleTo(uid, 'sec_kamagong')).toBe(true);
+  expect(mockData.isNodeVisibleTo(uid, 'school_rmc')).toBe(false);
+  expect(mockData.isNodeVisibleTo(uid, 'dept_strengthened_shs')).toBe(false);
+  expect(mockData.getVisibleStudents(uid).map((student) => student.student_id)).toContain('2024-00105');
+  expect(mockData.getVisibleStudents(uid).map((student) => student.student_id)).not.toContain('2024-00102');
+});
+
+it('rejects officer roles assigned at the wrong hierarchy level', () => {
+  ensureMockReferenceData();
+  const invalid = {
+    name: 'Misassigned OSSA', username: 'wrong.scope', email: 'wrong.scope@example.edu',
+    role: 'ossa' as const, student_id: 'OSSA-WRONG',
+    official_data: { body: 'OSSA' as const, position: 'Director', scope: 'Junior High School', assignment_node_id: 'dept_jhs' },
+    school_data: { type: 'High School' as const, level: 'Administration', section: 'Junior High School' },
+  };
+
+  expect(() => mockData.createSchoolOfficial('mock_uid_admin', invalid, 'temporary123'))
+    .toThrow(/cannot be assigned/i);
+});
+
+it('protects the System Owner account and keeps deleted seeded officials deleted', async () => {
+  ensureMockReferenceData();
+
+  expect(() => mockData.deleteSchoolOfficial('mock_uid_admin', 'mock_uid_admin'))
+    .toThrow(/cannot be deleted/i);
+  expect(mockData.deleteSchoolOfficial('mock_uid_admin', 'mock_uid_ssg')).toBe(true);
+  expect(getDB().users.mock_uid_ssg).toBeUndefined();
+  await expect(mockAuth.signIn('ssg', 'password123')).rejects.toThrow(/not found/i);
+});

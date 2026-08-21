@@ -94,6 +94,16 @@ export const findNodePath = (nodes: SchoolNode[], id: string): SchoolNode[] | un
   return undefined;
 };
 
+export const getDirectorySubtree = (nodes: SchoolNode[], rootId: string): SchoolNode[] => {
+  const root = findNodeById(nodes, rootId);
+  return root ? [root] : [];
+};
+
+export const isNodeInSubtree = (nodes: SchoolNode[], rootId: string, candidateId: string): boolean => {
+  const root = findNodeById(nodes, rootId);
+  return Boolean(root && findNodeById([root], candidateId));
+};
+
 const semanticType = (type: AcademicNodeType): AcademicNodeType => {
   if (type === 'school') return 'campus';
   if (type === 'level') return 'grade_level';

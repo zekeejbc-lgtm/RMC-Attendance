@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { mockData } from '../lib/mockBackend';
 import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
+import { hasPermission } from '../lib/accessControl';
 
 const Dashboard: React.FC = () => {
   const { profile, stats, isMock } = useAuth();
@@ -27,9 +28,10 @@ const Dashboard: React.FC = () => {
     }
   }, [isMock]);
 
-  if (profile?.role === 'admin') return <Navigate to="/admin/attendance" replace />;
-  if (profile?.role === 'ssg') return <SSGHome name={profile.name} navigate={navigate} />;
-  if (profile?.role === 'ossa') return <Navigate to="/ossa/dashboard" replace />;
+  if (profile?.role === 'admin') return <Navigate to="/ssg/panel" replace />;
+  if (profile?.role === 'ssg' || profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
+    return <StaffHome name={profile.name} role={profile.role} navigate={navigate} />;
+  }
 
   return (
     <Page className="max-w-6xl animate-in fade-in duration-200">
@@ -294,25 +296,28 @@ const Dashboard: React.FC = () => {
   );
 };
 
-const SSGHome = ({ name, navigate }: { name: string; navigate: ReturnType<typeof useNavigate> }) => {
+const StaffHome = ({ name, role, navigate }: { name: string; role: 'ssg' | 'ossa' | 'ossa_staff'; navigate: ReturnType<typeof useNavigate> }) => {
   const applications = mockData.getApplications();
   const events = mockData.getEvents();
   const campuses = mockData.getSchoolStructure();
   const activeEvents = events.filter((event) => event.status === 'active');
+  const isOSSA = role === 'ossa' || role === 'ossa_staff';
+  const workspaceName = isOSSA ? 'OSSA' : 'SSG';
 
   const actions = [
-    { label: 'SSG Control Panel', description: 'Manage the institution directory and applications.', path: '/ssg/panel', icon: ShieldCheck, tone: 'bg-brand-50 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200' },
-    { label: 'Attendance', description: 'Review attendance trends and institutional records.', path: '/admin/attendance', icon: BarChart3, tone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
-    { label: 'Members', description: 'Search member profiles and manage student records.', path: '/admin/members', icon: Users2, tone: 'bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300' },
-    { label: 'Mayor Scanner', description: 'Open attendance scanning and verification tools.', path: '/mayor/scan', icon: ScanLine, tone: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
+    ...(role !== 'ossa_staff' ? [{ label: `${workspaceName} Control Panel`, description: 'Manage the institution directory and applications.', path: '/ssg/panel', icon: ShieldCheck, tone: 'bg-brand-50 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200' }] : []),
+    ...(hasPermission(role, 'attendance.manage') ? [{ label: 'Attendance', description: 'Review attendance trends and institutional records.', path: '/admin/attendance', icon: BarChart3, tone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' }] : []),
+    { label: 'Attendance Scanner', description: 'Open attendance scanning and verification tools.', path: '/mayor/scan', icon: ScanLine, tone: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
   ];
 
   return (
     <Page className="max-w-6xl animate-in fade-in duration-200">
       <PageHeader
-        eyebrow={<span className="inline-flex items-center gap-1.5"><ShieldCheck size={14} /> SSG workspace</span>}
-        title={`Welcome, ${name || 'SSG Officer'}`}
-        description="Monitor institution activity and open your most-used administration tools."
+        eyebrow={<span className="inline-flex items-center gap-1.5"><ShieldCheck size={14} /> {workspaceName} workspace</span>}
+        title={`Welcome, ${name || (isOSSA ? 'OSSA Officer' : 'SSG Officer')}`}
+        description={isOSSA
+          ? 'Oversee student services, institutional activity, and your most-used administration tools.'
+          : 'Monitor institution activity and open your most-used administration tools.'}
       />
 
       <section className="relative overflow-hidden rounded-2xl border border-brand-800 bg-brand-900 p-5 text-white shadow-lg sm:p-7">
@@ -324,21 +329,21 @@ const SSGHome = ({ name, navigate }: { name: string; navigate: ReturnType<typeof
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Review pending work, oversee active attendance events, and manage the school community from one place.</p>
           </div>
           <button onClick={() => navigate('/ssg/panel')} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gold-gradient px-5 py-3 text-sm font-bold text-brand-900 shadow-md transition hover:brightness-105">
-            Open SSG Panel <ArrowRight size={16} />
+            Open {workspaceName} Control Panel <ArrowRight size={16} />
           </button>
         </div>
       </section>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="SSG overview metrics">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={`${workspaceName} overview metrics`}>
         <MetricCard icon={<Building2 size={20} />} label="Campuses" value={campuses.length} detail="Directory roots" />
         <MetricCard icon={<Users2 size={20} />} label="Applications" value={applications.length} detail="Pending review" />
         <MetricCard icon={<CalendarDays size={20} />} label="Active Events" value={activeEvents.length} detail={`${events.length} total records`} />
         <MetricCard icon={<Activity size={20} />} label="Operations" value={actions.length} detail="Available workspaces" />
       </div>
 
-      <section aria-labelledby="ssg-quick-actions-title">
+      <section aria-labelledby="staff-quick-actions-title">
         <div className="mb-3 flex items-center justify-between">
-          <div><h2 id="ssg-quick-actions-title" className="text-lg font-bold text-brand-900 dark:text-white">Quick actions</h2><p className="text-sm text-slate-500 dark:text-slate-400">Jump directly to an administrative workspace.</p></div>
+          <div><h2 id="staff-quick-actions-title" className="text-lg font-bold text-brand-900 dark:text-white">Quick actions</h2><p className="text-sm text-slate-500 dark:text-slate-400">Jump directly to an administrative workspace.</p></div>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {actions.map(({ label, description, path, icon: Icon, tone }) => (

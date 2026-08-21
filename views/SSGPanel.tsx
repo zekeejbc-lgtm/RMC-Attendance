@@ -10,8 +10,10 @@ import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { DirectoryNodeModal } from '../components/academic/DirectoryNodeModal';
 import { PresetPickerModal } from '../components/academic/PresetPickerModal';
 import { getAcademicNodeLabel } from '../lib/academicDirectory';
-import { createEventAudienceTarget } from '../lib/academicDirectory';
+import { createEventAudienceTarget, serializeAcademicAssignment } from '../lib/academicDirectory';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
+import { NodeOfficerManager, NodeOfficerSummary } from '../components/academic/NodeOfficerManager';
+import { hasPermission, roleLabels } from '../lib/accessControl';
 import { 
   Users, Check, X, Shield, Plus, UserCheck, Search, Filter,
   ChevronRight, School, BookOpen, Grid, List, ShieldAlert,
@@ -20,6 +22,8 @@ import {
   AlignLeft, Info, Users2, AlertTriangle, Compass, Crosshair, Map,
   Globe, ChevronDown, FileText, Fingerprint, Trash, Building2, CalendarDays, Inbox, Pencil, Archive, WandSparkles
 } from 'lucide-react';
+
+const memberFieldClass = 'mt-1.5 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
 
 const SSGPanel: React.FC = () => {
   const { profile, isMock } = useAuth();
@@ -35,6 +39,9 @@ const SSGPanel: React.FC = () => {
   const [showPresetModal, setShowPresetModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [pendingAdjustment, setPendingAdjustment] = useState<{ delta: number; action: string } | null>(null);
+  const [showMemberModal, setShowMemberModal] = useState(false);
+  const [memberError, setMemberError] = useState('');
+  const [memberData, setMemberData] = useState({ name: '', email: '', username: '', studentId: '', password: 'password123' });
   
   // Specific Asset Input State
   const [assetInput, setAssetInput] = useState('');
@@ -57,13 +64,19 @@ const SSGPanel: React.FC = () => {
     isLocating: false
   });
 
-  const isPresident = profile?.role === 'ssg' || profile?.role === 'admin';
+  const isPresident = profile?.role === 'ssg' || profile?.role === 'admin' || profile?.role === 'ossa';
+  const canManageStructure = hasPermission(profile?.role, 'directory.manage_structure');
+  const canManageMembers = hasPermission(profile?.role, 'directory.manage_members');
+  const canManageOfficers = profile?.role === 'admin';
+  const canReviewApplicants = profile?.role === 'admin' || profile?.role === 'ossa' || profile?.role === 'ssg';
 
   // Fix: Enhanced refresh to update selected student details if a modal is active
   const refresh = () => {
-    setApps(mockData.getApplications());
-    setStructure(mockData.getSchoolStructure());
-    setEvents(mockData.getEvents());
+    setApps(profile && typeof mockData.getVisibleApplications === 'function' ? mockData.getVisibleApplications(profile.uid) : mockData.getApplications());
+    setStructure(profile && typeof mockData.getVisibleSchoolStructure === 'function'
+      ? mockData.getVisibleSchoolStructure(profile.uid)
+      : mockData.getSchoolStructure());
+    setEvents(profile && typeof mockData.getVisibleEvents === 'function' ? mockData.getVisibleEvents(profile.uid) : mockData.getEvents());
     
     // Check if the current user has selected student open to refresh their data
     if (selectedStudent) {
@@ -87,7 +100,8 @@ const SSGPanel: React.FC = () => {
   };
 
   const handleAssignRole = (uid: string, role: 'student' | 'mayor') => {
-    mockData.assignRole(uid, role);
+    if (role === 'mayor' && currentNode) mockData.assignSectionMayor(uid, currentNode.id, currentNode.name);
+    else mockData.assignRole(uid, role);
     const freshUser = mockData.getUserDetail(uid);
     if (freshUser) setSelectedStudent({ ...freshUser.profile, stats: freshUser.stats });
     refresh();
@@ -194,21 +208,52 @@ const SSGPanel: React.FC = () => {
   const currentNode = path.length > 0 ? path[path.length - 1] : null;
   const subUnits = currentNode ? (currentNode.children || []) : structure;
   const isAtSection = currentNode?.type === 'section' || currentNode?.type === 'block';
-  const students = isAtSection ? mockData.getStudentsBySection(currentNode.name) : [];
+  const students = isAtSection ? mockData.getStudentsBySection(currentNode.name, currentNode.id) : [];
+
+  const createMember = () => {
+    if (!currentNode) return;
+    setMemberError('');
+    try {
+      if (memberData.password.length < 8) throw new Error('Temporary password must contain at least 8 characters.');
+      const fullPath = mockData.getSchoolNodePath(currentNode.id);
+      const serialized = serializeAcademicAssignment(fullPath);
+      mockData.createSectionMembers([{
+        makeMayor: false,
+        profile: {
+          name: memberData.name, email: memberData.email, username: memberData.username,
+          student_id: memberData.studentId, role: 'student',
+          school_data: { ...serialized.schoolData, school_id: serialized.assignment.campusId || 'school_rmc', academic_assignment: serialized.assignment },
+        },
+      }], currentNode.id, currentNode.name, memberData.password);
+      setMemberData({ name: '', email: '', username: '', studentId: '', password: 'password123' });
+      setShowMemberModal(false);
+      refresh();
+    } catch (caught) {
+      setMemberError(caught instanceof Error ? caught.message : 'The member could not be created.');
+    }
+  };
 
   const tabs = [
     { id: 'hub' as const, label: 'Directory', icon: Building2, count: structure.length },
-    { id: 'applicants' as const, label: 'Applicants', icon: UserCheck, count: apps.length },
+    ...(canReviewApplicants ? [{ id: 'applicants' as const, label: 'Applicants', icon: UserCheck, count: apps.length }] : []),
   ];
 
   const mapUrl = `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d15844.0!2d${eventData.lng}!3d${eventData.lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2sph!4v1620000000000!5m2!1sen!2sph&maptype=satellite`;
+  const isOSSA = profile?.role === 'ossa' || profile?.role === 'ossa_staff';
+  const workspaceName = profile?.role === 'admin' ? 'System Owner' : isOSSA ? 'OSSA' : profile?.role === 'mayor' ? 'Classroom' : 'SSG';
 
   return (
     <Page>
       <PageHeader
-        eyebrow="SSG administration"
-        title="Institution Control Hub"
-        description="Manage the school directory, applications, member records, and attendance events."
+        eyebrow={`${workspaceName} administration`}
+        title={profile?.role === 'admin' ? 'School Hierarchy & Accounts' : isOSSA ? 'OSSA Control Panel' : profile?.role === 'mayor' ? 'My Classroom' : 'Institution Control Hub'}
+        description={isOSSA
+          ? 'Manage student services and everything inside your assigned school scope.'
+          : profile?.role === 'admin'
+            ? 'Manage campuses, departments, classrooms, members, and officer accounts from one hierarchy.'
+            : profile?.role === 'mayor'
+              ? 'View only your assigned classroom and its member registry.'
+              : 'Manage only the departments, classrooms, members, and events inside your assigned scope.'}
       />
       <Surface className="relative overflow-hidden !border-brand-800 !bg-brand-900 p-5 text-white shadow-xl sm:p-6">
         <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-gold-400/15 blur-3xl" />
@@ -221,11 +266,11 @@ const SSGPanel: React.FC = () => {
               className="w-9 h-9 rounded-full object-cover ring-2 ring-gold-400/50 shadow-md shrink-0" 
             />
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl">IARS Control Hub</h2>
-              <p className="mt-0.5 text-xs font-semibold text-emerald-300">Administrative operations</p>
+              <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl">{workspaceName} Control Hub</h2>
+              <p className="mt-0.5 text-xs font-semibold text-emerald-300">{isOSSA ? 'Student services operations' : 'Administrative operations'}</p>
             </div>
           </div>
-          <div role="tablist" aria-label="SSG panel sections" className="grid w-full grid-cols-2 gap-1.5 rounded-xl border border-white/10 bg-brand-950/40 p-1.5 lg:w-auto">
+          <div role="tablist" aria-label={`${workspaceName} panel sections`} className={`grid w-full ${tabs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5 rounded-xl border border-white/10 bg-brand-950/40 p-1.5 lg:w-auto`}>
             {tabs.map(({ id, label, icon: Icon, count }) => (
               <button key={id} aria-label={label} aria-pressed={tab === id} onClick={() => setTab(id)} className={`flex min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2.5 text-xs font-bold transition-all sm:px-4 ${tab === id ? 'bg-gold-gradient text-brand-900 shadow-md' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
                 <Icon size={15} className="hidden sm:block" />
@@ -239,7 +284,7 @@ const SSGPanel: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
-          { label: 'Campuses', value: structure.length, detail: 'Directory roots', icon: Building2, tone: 'text-brand-700 bg-brand-50 dark:bg-brand-900/40 dark:text-brand-200' },
+          { label: profile?.role === 'admin' ? 'Campuses' : 'Visible roots', value: structure.length, detail: profile?.role === 'admin' ? 'Directory roots' : 'Assigned scope only', icon: Building2, tone: 'text-brand-700 bg-brand-50 dark:bg-brand-900/40 dark:text-brand-200' },
           { label: 'Pending review', value: apps.length, detail: apps.length === 1 ? 'Application waiting' : 'Applications waiting', icon: UserCheck, tone: 'text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-200' },
           { label: 'Attendance events', value: events.length, detail: 'Institution records', icon: CalendarDays, tone: 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-200' },
         ].map(({ label, value, detail, icon: Icon, tone }) => (
@@ -256,35 +301,39 @@ const SSGPanel: React.FC = () => {
           <div className="space-y-4 animate-in fade-in">
             <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-2 overflow-x-auto no-scrollbar">
-                <button onClick={() => goBackTo(-1)} className={`flex items-center gap-1.5 whitespace-nowrap text-[9px] font-bold uppercase tracking-widest ${path.length === 0 ? 'text-brand-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-400'}`}><Home size={14} /> Campus</button>
+                <button onClick={() => goBackTo(-1)} className={`flex items-center gap-1.5 whitespace-nowrap text-[9px] font-bold uppercase tracking-widest ${path.length === 0 ? 'text-brand-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-400'}`}><Home size={14} /> {profile?.role === 'admin' ? 'Campus' : 'My scope'}</button>
                 {path.map((node, i) => <React.Fragment key={node.id}><ChevronRight size={12} className="shrink-0 text-slate-200 dark:text-slate-600" /><button onClick={() => goBackTo(i)} className={`whitespace-nowrap text-[9px] font-bold uppercase tracking-widest ${i === path.length - 1 ? 'text-brand-900 dark:text-slate-100 font-black' : 'text-slate-400 dark:text-slate-400'}`}>{node.name}</button></React.Fragment>)}
               </div>
-              {currentNode && ['campus', 'school'].includes(currentNode.type) && <button onClick={() => setShowPresetModal(true)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-50 px-3 text-xs font-bold text-brand-900 hover:bg-gold-50 dark:bg-brand-900/40 dark:text-brand-200"><WandSparkles size={15} /> Add template</button>}
+              {canManageStructure && currentNode && ['campus', 'school'].includes(currentNode.type) && <button onClick={() => setShowPresetModal(true)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-50 px-3 text-xs font-bold text-brand-900 hover:bg-gold-50 dark:bg-brand-900/40 dark:text-brand-200"><WandSparkles size={15} /> Add template</button>}
             </div>
+
+            {currentNode && <NodeOfficerManager actor={profile!} canManage={canManageOfficers} node={currentNode} onChanged={refresh} />}
 
             {!isAtSection ? (
               <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
                 {subUnits.filter((node) => !node.metadata?.archived).map(node => (
                   <article key={node.id} className="group relative flex min-h-44 flex-col rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-gold-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
-                    <div className="absolute right-2 top-2 flex gap-1 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-within:opacity-100"><button aria-label="Edit unit" title={`Edit ${node.name}`} onClick={() => setNodeEditor({ parentId: currentNode?.id || null, node })} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-brand-900 dark:bg-slate-700 dark:text-slate-300"><Pencil size={13} /></button><button aria-label="Archive unit" title={`Archive ${node.name}`} onClick={() => handleArchiveNode(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-amber-700 dark:bg-slate-700 dark:text-slate-300"><Archive size={13} /></button><button aria-label="Delete unit" title={`Delete ${node.name}`} onClick={() => handleDeleteNode(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-950/40"><Trash2 size={13} /></button></div>
+                    {canManageStructure && <div className="absolute right-2 top-2 flex gap-1 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-within:opacity-100"><button aria-label="Edit unit" title={`Edit ${node.name}`} onClick={() => setNodeEditor({ parentId: currentNode?.id || null, node })} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-brand-900 dark:bg-slate-700 dark:text-slate-300"><Pencil size={13} /></button><button aria-label="Archive unit" title={`Archive ${node.name}`} onClick={() => handleArchiveNode(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-amber-700 dark:bg-slate-700 dark:text-slate-300"><Archive size={13} /></button><button aria-label="Delete unit" title={`Delete ${node.name}`} onClick={() => handleDeleteNode(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-950/40"><Trash2 size={13} /></button></div>}
                     <button onClick={() => navigateTo(node)} className="flex flex-1 flex-col items-center justify-center px-3 pt-5">
                       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-900 transition-transform group-hover:scale-105 dark:border-brand-800 dark:bg-brand-900/40 dark:text-brand-300">{['school', 'campus'].includes(node.type) ? <School size={22} /> : ['section', 'block'].includes(node.type) ? <LayoutGrid size={22} /> : <BookOpen size={22} />}</div>
                       <h4 className="flex min-h-8 items-center text-[11px] font-bold uppercase tracking-tight text-brand-900 dark:text-slate-100">{node.name}</h4>
                       <p className="mt-1 text-[8px] font-black uppercase tracking-widest text-slate-400">{getAcademicNodeLabel(node.type)}</p>
+                      <NodeOfficerSummary node={node} />
                     </button>
                   </article>
                 ))}
-                <button aria-label="Add unit" onClick={() => setNodeEditor({ parentId: currentNode?.id || null })} className="group flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-5 transition-all hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800">
+                {canManageStructure && <button aria-label="Add unit" onClick={() => setNodeEditor({ parentId: currentNode?.id || null })} className="group flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-5 transition-all hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800">
                    <Plus size={20} className="text-slate-300 dark:text-slate-500 mb-1" />
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Add</p>
-                </button>
+                </button>}
               </div>
             ) : (
               <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-lg overflow-hidden">
                  <div className="p-5 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-700">
                     <h3 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest">{currentNode.name} Registry</h3>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                        <span className="bg-white dark:bg-slate-800 px-3 py-1 rounded-lg text-[8px] font-bold text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{students.length} Personnel</span>
+                       {canManageMembers && <Button className="w-auto" onClick={() => { setMemberError(''); setShowMemberModal(true); }} size="sm"><Plus size={14} /> Add member</Button>}
                     </div>
                  </div>
                  <div className="hidden overflow-x-auto p-4 md:block">
@@ -298,7 +347,7 @@ const SSGPanel: React.FC = () => {
                            <td className="p-3 font-semibold text-brand-900 [overflow-wrap:anywhere] dark:text-white">{student.name}</td>
                            <td className="p-3 text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{student.email}</td>
                            <td className="p-3 font-mono text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{student.student_id}</td>
-                           <td className="p-3 capitalize text-slate-600 dark:text-slate-300">{student.role}</td>
+                           <td className="p-3 text-slate-600 dark:text-slate-300">{roleLabels[student.role]}</td>
                            <td className="p-3"><button aria-label={`Manage ${student.name}`} className="font-semibold text-brand-900 underline-offset-4 hover:underline dark:text-gold-300" onClick={() => setSelectedStudent(student)}>Manage</button></td>
                          </tr>
                        ))}
@@ -312,7 +361,7 @@ const SSGPanel: React.FC = () => {
                          <img alt="" src={student.photo_url || undefined} className="h-12 w-12 shrink-0 rounded-xl object-cover" />
                          <div className="min-w-0"><h4 className="font-bold text-brand-900 [overflow-wrap:anywhere] dark:text-white">{student.name}</h4><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-300">{student.student_id}</p><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-300">{student.email}</p></div>
                        </div>
-                       <dl className="grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500 dark:text-slate-400">Role</dt><dd className="capitalize text-slate-700 dark:text-slate-200">{student.role}</dd></div><div><dt className="font-semibold text-slate-500 dark:text-slate-400">Sanctions</dt><dd className="text-red-600 dark:text-red-300">{student.stats.sanction_hours}h</dd></div></dl>
+                       <dl className="grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500 dark:text-slate-400">Role</dt><dd className="text-slate-700 dark:text-slate-200">{roleLabels[student.role]}</dd></div><div><dt className="font-semibold text-slate-500 dark:text-slate-400">Sanctions</dt><dd className="text-red-600 dark:text-red-300">{student.stats.sanction_hours}h</dd></div></dl>
                        <Button aria-label={`Manage ${student.name}`} variant="secondary" onClick={() => setSelectedStudent(student)}>Manage</Button>
                      </article>
                    ))}
@@ -526,6 +575,23 @@ const SSGPanel: React.FC = () => {
               </div>
       </Modal>
 
+      <Modal
+        open={showMemberModal}
+        onClose={() => setShowMemberModal(false)}
+        title={`Add member to ${currentNode?.name || 'classroom'}`}
+        description="Create the student inside this classroom. You can designate the classroom mayor from the member details afterward."
+        footer={<><Button onClick={() => setShowMemberModal(false)} variant="secondary">Cancel</Button><Button onClick={createMember}><Plus size={16} /> Create member</Button></>}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-semibold">Full name<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, name: event.target.value })} required value={memberData.name} /></label>
+          <label className="text-sm font-semibold">Student ID<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, studentId: event.target.value })} required value={memberData.studentId} /></label>
+          <label className="text-sm font-semibold">Email<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, email: event.target.value })} required type="email" value={memberData.email} /></label>
+          <label className="text-sm font-semibold">Username<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, username: event.target.value })} required value={memberData.username} /></label>
+          <label className="text-sm font-semibold sm:col-span-2">Temporary password<input className={memberFieldClass} minLength={8} onChange={(event) => setMemberData({ ...memberData, password: event.target.value })} required type="password" value={memberData.password} /></label>
+          {memberError ? <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 sm:col-span-2 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200" role="alert">{memberError}</p> : null}
+        </div>
+      </Modal>
+
       <DirectoryNodeModal open={Boolean(nodeEditor)} parent={currentNode} node={nodeEditor?.node} onClose={() => setNodeEditor(null)} onSave={handleSaveNode} />
       <PresetPickerModal open={showPresetModal} campusName={currentNode?.name || 'Campus'} onClose={() => setShowPresetModal(false)} onApply={handleApplyPreset} />
 
@@ -568,7 +634,7 @@ const SSGPanel: React.FC = () => {
                      <p className="text-3xl font-black text-red-600 dark:text-red-400">{selectedStudent.stats.sanction_hours}</p>
                   </div>
                </div>
-               <div className="space-y-4">
+               {canManageMembers && <div className="space-y-4">
                   <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
                     <ShieldAlert size={12} /> Hour Modification
                   </h4>
@@ -580,8 +646,8 @@ const SSGPanel: React.FC = () => {
                         {isPresident ? <Minus size={16} /> : <Lock size={12} />} Clear
                      </button>
                   </div>
-               </div>
-               <div className="space-y-4">
+               </div>}
+               {canManageMembers && <div className="space-y-4">
                   <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
                     <UserIcon size={12} /> Designation Control
                   </h4>
@@ -589,7 +655,7 @@ const SSGPanel: React.FC = () => {
                      <button onClick={() => handleAssignRole(selectedStudent.uid, 'student')} className={`flex-1 py-3 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${selectedStudent.role === 'student' ? 'bg-brand-900 text-white shadow-md' : 'text-slate-400'}`}>Regular</button>
                      <button onClick={() => handleAssignRole(selectedStudent.uid, 'mayor')} className={`flex-1 py-3 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${selectedStudent.role === 'mayor' ? 'bg-gold-gradient text-brand-900 shadow-md' : 'text-slate-400'}`}>Mayor</button>
                   </div>
-               </div>
+               </div>}
             </div>
           </div>
         ) : null}

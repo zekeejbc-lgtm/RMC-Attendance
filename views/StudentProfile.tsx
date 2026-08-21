@@ -168,6 +168,8 @@ const StudentProfile: React.FC = () => {
       ? 'SSG Official'
       : profile.role === 'ossa'
         ? 'OSSA Official'
+        : profile.role === 'ossa_staff'
+          ? 'OSSA Staff'
         : profile.role === 'admin'
           ? 'System Administrator'
           : 'Student';

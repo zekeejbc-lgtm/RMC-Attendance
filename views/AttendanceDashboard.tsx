@@ -88,7 +88,7 @@ const generateMockAttendance = (events: AppEvent[], filter: FilterState): Attend
 };
 
 const AttendanceDashboard: React.FC = () => {
-  const { isMock } = useAuth();
+  const { isMock, profile } = useAuth();
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
@@ -118,9 +118,9 @@ const AttendanceDashboard: React.FC = () => {
   // Load initial data
   useEffect(() => {
     if (isMock) {
-      setEvents(mockData.getEvents());
+      setEvents(profile && typeof mockData.getVisibleEvents === 'function' ? mockData.getVisibleEvents(profile.uid) : mockData.getEvents());
     }
-  }, [isMock]);
+  }, [isMock, profile]);
 
   // Derived Data
   const attendanceData = useMemo(() => generateMockAttendance(events, filters), [events, filters, selectedEvents]);

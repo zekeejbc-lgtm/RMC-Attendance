@@ -1,5 +1,5 @@
 
-export type UserRole = 'student' | 'mayor' | 'ssg' | 'admin' | 'ossa';
+export type UserRole = 'student' | 'mayor' | 'ssg' | 'admin' | 'ossa' | 'ossa_staff';
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'inactive' | 'graduated';
 
 export type AcademicNodeType =
@@ -62,6 +62,8 @@ export interface UserProfile {
     body: 'SSG' | 'OSSA' | 'Administration';
     position?: string;
     scope?: string;
+    assignment_node_id?: string;
+    assignment_node_path_ids?: string[];
   };
   school_data: {
     type: 'High School' | 'College';

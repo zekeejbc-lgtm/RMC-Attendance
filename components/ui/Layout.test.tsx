@@ -195,7 +195,7 @@ it('closes the drawer when its backdrop is clicked', async () => {
   expect(screen.queryByRole('dialog', { name: /main navigation/i })).not.toBeInTheDocument();
 });
 
-it('shows SSG member tools without the mayor label or attendance administration', async () => {
+it('shows the merged SSG hierarchy without duplicate member or attendance administration links', async () => {
   const user = userEvent.setup();
   layoutAuth.role = 'ssg';
 
@@ -213,11 +213,27 @@ it('shows SSG member tools without the mayor label or attendance administration'
   expect(within(navigation).queryByRole('button', { name: /mayor hub/i })).not.toBeInTheDocument();
   expect(within(navigation).queryByText(/^admin$/i)).not.toBeInTheDocument();
   expect(within(navigation).queryByRole('button', { name: /attendance dashboard/i })).not.toBeInTheDocument();
-  expect(within(navigation).getByRole('button', { name: /manage members/i })).toBeInTheDocument();
+  expect(within(navigation).queryByRole('button', { name: /manage members/i })).not.toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: /collapse sidebar/i }));
   expect(within(navigation).queryByRole('button', { name: /attendance dashboard/i })).not.toBeInTheDocument();
-  expect(within(navigation).getByRole('button', { name: /manage members/i })).toBeInTheDocument();
+  expect(within(navigation).queryByRole('button', { name: /manage members/i })).not.toBeInTheDocument();
+});
+
+it('uses OSSA-specific naming for the shared control panel', () => {
+  layoutAuth.role = 'ossa';
+
+  render(
+    <ThemeProvider>
+      <MemoryRouter initialEntries={['/ssg/panel']}>
+        <Layout><p>OSSA content</p></Layout>
+      </MemoryRouter>
+    </ThemeProvider>,
+  );
+
+  const navigation = screen.getByRole('navigation', { name: /desktop navigation/i });
+  expect(within(navigation).getByRole('button', { name: /ossa hierarchy/i })).toBeInTheDocument();
+  expect(within(navigation).queryByRole('button', { name: /ssg panel/i })).not.toBeInTheDocument();
 });
 
 it('moves logout to the profile page and expands from the arrow beside the logo', async () => {

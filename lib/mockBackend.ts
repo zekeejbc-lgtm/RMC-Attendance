@@ -1,7 +1,8 @@
 
 import { TEST_ACCOUNTS } from './seed';
-import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication } from '../types';
-import { migrateAcademicDirectory } from './academicDirectory';
+import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, UserRole } from '../types';
+import { schoolOfficialRoles } from './accessControl';
+import { findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNodeInSubtree, migrateAcademicDirectory } from './academicDirectory';
 
 const STORAGE_KEY = 'rmc_regalia_db';
 
@@ -16,6 +17,17 @@ interface MockDB {
   school_structure: SchoolNode[];
   schema_version?: number;
   application_credentials?: Record<string, string>;
+  deleted_seed_accounts?: string[];
+  audit_logs?: Array<{
+    id: string;
+    action: 'account.created' | 'account.deleted';
+    actor_uid: string;
+    actor_name: string;
+    target_uid: string;
+    target_name: string;
+    target_role: UserRole;
+    timestamp: number;
+  }>;
 }
 
 type NewUserProfile = Omit<UserProfile, 'uid' | 'photo_url'>;
@@ -78,6 +90,60 @@ const addUserToDB = (db: MockDB, profile: NewUserProfile, password: string, suff
   return uid;
 };
 
+const getAssignmentNodeId = (profile: UserProfile) =>
+  profile.official_data?.assignment_node_id
+  || (profile.role === 'mayor' ? profile.school_data.academic_assignment?.terminalGroupId : undefined);
+
+const canRoleBeAssignedToNode = (role: UserRole, node: SchoolNode) => {
+  if (role === 'ossa' || role === 'ossa_staff') return ['campus', 'school'].includes(node.type);
+  if (role === 'ssg') return ['education_unit', 'department', 'college'].includes(node.type);
+  if (role === 'mayor') return ['section', 'block'].includes(node.type);
+  return false;
+};
+
+const applyAssignment = (profile: UserProfile | NewUserProfile, path: SchoolNode[]) => {
+  const node = path.at(-1);
+  if (!node) throw new Error('Select a valid directory unit.');
+  if (!canRoleBeAssignedToNode(profile.role, node)) throw new Error(`${profile.role} cannot be assigned to this type of directory unit.`);
+  profile.official_data = {
+    ...(profile.official_data || { body: profile.role === 'ssg' || profile.role === 'mayor' ? 'SSG' : 'OSSA' }),
+    scope: node.name,
+    assignment_node_id: node.id,
+    assignment_node_path_ids: path.map((item) => item.id),
+  };
+};
+
+const migrateOfficerAssignments = (db: MockDB) => {
+  if (!db.school_structure.length) return false;
+  const flattened = flattenDirectory(db.school_structure);
+  let changed = false;
+  Object.values(db.users).forEach(({ profile }) => {
+    if (profile.role === 'admin' || profile.role === 'student' || getAssignmentNodeId(profile)) return;
+    const node = profile.role === 'ossa' || profile.role === 'ossa_staff'
+      ? flattened.find((item) => ['campus', 'school'].includes(item.type))
+      : profile.role === 'ssg'
+        ? flattened.find((item) => ['education_unit', 'department', 'college'].includes(item.type))
+        : flattened.find((item) => ['section', 'block'].includes(item.type) && item.name === profile.school_data.section)
+          || flattened.find((item) => ['section', 'block'].includes(item.type));
+    const path = node ? findNodePath(db.school_structure, node.id) : undefined;
+    if (path) {
+      applyAssignment(profile, path);
+      changed = true;
+    }
+  });
+  return changed;
+};
+
+const profileBelongsToScope = (db: MockDB, profile: UserProfile, scopeNodeId: string) => {
+  const assignment = profile.school_data.academic_assignment;
+  if (assignment?.nodePathIds.includes(scopeNodeId)) return true;
+  if (assignment?.terminalGroupId && isNodeInSubtree(db.school_structure, scopeNodeId, assignment.terminalGroupId)) return true;
+  const scopedNodes = flattenDirectory(getDirectorySubtree(db.school_structure, scopeNodeId));
+  return scopedNodes.some((node) =>
+    ['section', 'block'].includes(node.type) && node.name === profile.school_data.section,
+  );
+};
+
 export const getDB = (): MockDB => {
   let db: MockDB;
   try {
@@ -97,6 +163,8 @@ export const getDB = (): MockDB => {
   }
 
   if (!db.application_credentials) db.application_credentials = {};
+  if (!db.deleted_seed_accounts) db.deleted_seed_accounts = [];
+  if (!db.audit_logs) db.audit_logs = [];
 
   let updated = false;
   if ('directory_backups' in db) {
@@ -113,6 +181,7 @@ export const getDB = (): MockDB => {
   // Ensure all TEST_ACCOUNTS exist in db.users & db.usernames
   TEST_ACCOUNTS.forEach(acc => {
     const uid = `mock_uid_${acc.user}`;
+    if (db.deleted_seed_accounts?.includes(uid)) return;
     if (!db.users[uid]) {
       updated = true;
       db.usernames[acc.user.toLowerCase()] = acc.email.toLowerCase();
@@ -198,6 +267,8 @@ export const getDB = (): MockDB => {
     }
   });
 
+  if (migrateOfficerAssignments(db)) updated = true;
+
   if (!db.sanction_logs['mock_uid_student'] || db.sanction_logs['mock_uid_student'].length === 0) {
     updated = true;
     db.sanction_logs['mock_uid_student'] = [
@@ -275,7 +346,7 @@ export const mockAuth = {
         a.user.toLowerCase() === cleanId || 
         a.email.toLowerCase() === cleanId
       );
-      if (testAcc) {
+      if (testAcc && !db.deleted_seed_accounts?.includes(`mock_uid_${testAcc.user}`)) {
         mockSeed();
         const refreshedDb = getDB();
         userEntry = Object.values(refreshedDb.users).find(u => 
@@ -289,7 +360,7 @@ export const mockAuth = {
       if ((userEntry.profile.account_status || 'active') !== 'active') {
         throw new Error('This account is not active. Contact an authorized school official.');
       }
-      if (userEntry.password === pass || pass === 'password123') {
+      if (userEntry.password === pass) {
         localStorage.setItem('rmc_mock_session', userEntry.profile.uid);
         notifyAuthChange();
         return userEntry;
@@ -514,6 +585,8 @@ export const ensureMockReferenceData = () => {
     }
   });
 
+  if (migrateOfficerAssignments(db)) updated = true;
+
   if (updated) saveDB(db);
   return db;
 };
@@ -704,9 +777,101 @@ export const mockData = {
   getApplications: () => Object.values(getDB().applications),
   getExcuseApplications: () => Object.values(getDB().excuse_applications || {}),
   getSchoolStructure: () => getDB().school_structure,
+  getSchoolNodePath: (nodeId: string) => findNodePath(getDB().school_structure, nodeId) || [],
+  getVisibleSchoolStructure: (actorUid: string) => {
+    const db = getDB();
+    const actor = db.users[actorUid]?.profile;
+    if (!actor) return [];
+    if (actor.role === 'admin') return db.school_structure;
+    const scopeNodeId = getAssignmentNodeId(actor);
+    return scopeNodeId ? getDirectorySubtree(db.school_structure, scopeNodeId) : [];
+  },
+  getOfficialsForNode: (nodeId: string) => Object.values(getDB().users)
+    .map(({ profile }) => profile)
+    .filter((profile) => profile.role !== 'student' && profile.role !== 'admin' && getAssignmentNodeId(profile) === nodeId)
+    .sort((first, second) => first.name.localeCompare(second.name)),
   getAllAccountIdentities: () => getAccountProfiles(getDB()).map(({ email, username, student_id }) => ({
     email, username, student_id,
   })),
+  getOfficialAccounts: () => Object.values(getDB().users)
+    .map(({ profile }) => profile)
+    .filter(({ role }) => role !== 'student')
+    .sort((first, second) => first.name.localeCompare(second.name)),
+  getAccountAuditLogs: () => [...(getDB().audit_logs || [])]
+    .sort((first, second) => second.timestamp - first.timestamp),
+  createSchoolOfficial: (
+    actorUid: string,
+    profile: NewUserProfile,
+    password: string,
+  ) => {
+    const db = getDB();
+    const actor = db.users[actorUid]?.profile;
+    if (actor?.role !== 'admin') throw new Error('Only the System Owner can create school-official accounts.');
+    if (!schoolOfficialRoles.includes(profile.role)) throw new Error('That role cannot be created from School Accounts.');
+    if (password.length < 8) throw new Error('Temporary password must contain at least 8 characters.');
+
+    const normalized = normalizeNewUserProfile(profile);
+    const assignmentNodeId = normalized.official_data?.assignment_node_id;
+    const assignmentPath = assignmentNodeId ? findNodePath(db.school_structure, assignmentNodeId) : undefined;
+    if (!assignmentPath) throw new Error('Assign the account to a valid school unit.');
+    applyAssignment(normalized, assignmentPath);
+    assertNewUserProfile(db, normalized);
+    const uid = addUserToDB(db, normalized, password);
+    db.audit_logs?.push({
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      action: 'account.created', actor_uid: actor.uid, actor_name: actor.name,
+      target_uid: uid, target_name: normalized.name, target_role: normalized.role,
+      timestamp: Date.now(),
+    });
+    saveDB(db);
+    notifyAuthChange();
+    return uid;
+  },
+  deleteSchoolOfficial: (actorUid: string, targetUid: string) => {
+    const db = getDB();
+    const actor = db.users[actorUid]?.profile;
+    const target = db.users[targetUid]?.profile;
+    if (actor?.role !== 'admin') throw new Error('Only the System Owner can delete school-official accounts.');
+    if (!target) throw new Error('Account not found.');
+    if (actorUid === targetUid || target.role === 'admin') throw new Error('System Owner accounts cannot be deleted here.');
+    if (target.role === 'student') throw new Error('Student accounts must be managed from the school directory.');
+
+    delete db.usernames[target.username.toLowerCase()];
+    delete db.users[targetUid];
+    if (targetUid.startsWith('mock_uid_') && !db.deleted_seed_accounts?.includes(targetUid)) {
+      db.deleted_seed_accounts?.push(targetUid);
+    }
+    db.audit_logs?.push({
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      action: 'account.deleted', actor_uid: actor.uid, actor_name: actor.name,
+      target_uid: targetUid, target_name: target.name, target_role: target.role,
+      timestamp: Date.now(),
+    });
+    saveDB(db);
+    notifyAuthChange();
+    return true;
+  },
+  assignOfficialToNode: (actorUid: string, targetUid: string, nodeId: string) => {
+    const db = getDB();
+    const actor = db.users[actorUid]?.profile;
+    const target = db.users[targetUid]?.profile;
+    const path = findNodePath(db.school_structure, nodeId);
+    if (actor?.role !== 'admin') throw new Error('Only the System Owner can assign officer scopes.');
+    if (!target || target.role === 'admin' || target.role === 'student') throw new Error('Select a school-official account.');
+    if (!path) throw new Error('Directory unit not found.');
+    applyAssignment(target, path);
+    saveDB(db);
+    notifyAuthChange();
+    return true;
+  },
+  isNodeVisibleTo: (actorUid: string, nodeId: string) => {
+    const db = getDB();
+    const actor = db.users[actorUid]?.profile;
+    if (!actor) return false;
+    if (actor.role === 'admin') return Boolean(findNodeById(db.school_structure, nodeId));
+    const scopeNodeId = getAssignmentNodeId(actor);
+    return Boolean(scopeNodeId && isNodeInSubtree(db.school_structure, scopeNodeId, nodeId));
+  },
   getAllStudents: () => {
     const db = getDB();
     return Object.values(db.users)
@@ -716,6 +881,42 @@ export const mockData = {
         stats: u.stats,
         sanction_logs: db.sanction_logs[u.profile.uid] || []
       }));
+  },
+  getVisibleStudents: (actorUid: string) => {
+    const db = getDB();
+    const actor = db.users[actorUid]?.profile;
+    const scopeNodeId = actor ? getAssignmentNodeId(actor) : undefined;
+    return Object.values(db.users)
+      .filter(({ profile }) => profile.role === 'student' || profile.role === 'mayor')
+      .filter(({ profile }) => actor?.role === 'admin' || Boolean(scopeNodeId && profileBelongsToScope(db, profile, scopeNodeId)))
+      .map(({ profile, stats }) => ({ ...profile, stats, sanction_logs: db.sanction_logs[profile.uid] || [] }));
+  },
+  getVisibleApplications: (actorUid: string) => {
+    const db = getDB();
+    const actor = db.users[actorUid]?.profile;
+    const scopeNodeId = actor ? getAssignmentNodeId(actor) : undefined;
+    return Object.values(db.applications)
+      .filter((application) => actor?.role === 'admin' || Boolean(scopeNodeId && profileBelongsToScope(db, application.form_data, scopeNodeId)));
+  },
+  getVisibleExcuseApplications: (actorUid: string) => {
+    const visibleIds = new Set(mockData.getVisibleStudents(actorUid).map((student) => student.uid));
+    return Object.values(getDB().excuse_applications || {}).filter((application) => visibleIds.has(application.student_uid));
+  },
+  getVisibleEvents: (actorUid: string) => {
+    const db = getDB();
+    const actor = db.users[actorUid]?.profile;
+    if (actor?.role === 'admin') return Object.values(db.events);
+    const scopeNodeId = actor ? getAssignmentNodeId(actor) : undefined;
+    if (!scopeNodeId) return [];
+    return Object.values(db.events).filter((event) => {
+      if (!event.audienceTarget || event.audienceTarget.mode === 'all') return true;
+      if (event.audienceTarget.mode === 'specific_people') return event.audienceTarget.specificUserIds?.includes(actorUid);
+      const eventNodeId = event.audienceTarget.nodeId;
+      return Boolean(eventNodeId && (
+        isNodeInSubtree(db.school_structure, scopeNodeId, eventNodeId)
+        || isNodeInSubtree(db.school_structure, eventNodeId, scopeNodeId)
+      ));
+    });
   },
   getStudentsBySection: (sectionName: string, terminalGroupId?: string) => {
     const db = getDB();
@@ -1006,7 +1207,8 @@ export const mockData = {
   deleteSchoolNode: (id: string) => {
     const db = getDB();
     const referencedByUser = Object.values(db.users).some(({ profile }) =>
-      profile.school_data.academic_assignment?.nodePathIds.includes(id),
+      profile.school_data.academic_assignment?.nodePathIds.includes(id)
+      || profile.official_data?.assignment_node_path_ids?.includes(id),
     );
     const referencedByEvent = Object.values(db.events).some((event) => event.audienceTarget?.nodeId === id);
     if (referencedByUser || referencedByEvent) return false;

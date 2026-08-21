@@ -65,14 +65,15 @@ const MayorScanner: React.FC = () => {
   useEffect(() => {
     if (isMock) {
       const now = Date.now();
-      setEvents(mockData.getEvents().map((event) => ({
+      const visibleEvents = profile && typeof mockData.getVisibleEvents === 'function' ? mockData.getVisibleEvents(profile.uid) : mockData.getEvents();
+      setEvents(visibleEvents.map((event) => ({
         ...event,
         startTime: eventTime(event.startTime, now - 60000),
         endTime: eventTime(event.endTime, now + 3600000),
         location: event.location || { lat: 7.0736, lng: 125.6126, radius_meters: 150 },
       })).sort((a, b) => a.startTime - b.startTime));
     }
-  }, [isMock]);
+  }, [isMock, profile]);
 
   useEffect(() => () => {
     const scanner = scannerRef.current;
@@ -152,7 +153,11 @@ const MayorScanner: React.FC = () => {
 
   const handleDecoded = (decodedText: string) => {
     if (handlingScan.current) return;
-    const student = isMock ? mockData.getUserProfile(decodedText) : null;
+    const student = isMock
+      ? (profile && typeof mockData.getVisibleStudents === 'function'
+        ? mockData.getVisibleStudents(profile.uid).find((candidate) => candidate.uid === decodedText || candidate.student_id === decodedText)
+        : mockData.getUserProfile(decodedText))
+      : null;
     if (student && selectedEvent && profile) {
       identifyStudent(student);
     } else {
@@ -169,7 +174,7 @@ const MayorScanner: React.FC = () => {
       return;
     }
     const student = isMock
-      ? mockData.getAllStudents().find((candidate) => candidate.student_id.trim().toLowerCase() === normalizedId)
+      ? (profile && typeof mockData.getVisibleStudents === 'function' ? mockData.getVisibleStudents(profile.uid) : mockData.getAllStudents()).find((candidate) => candidate.student_id.trim().toLowerCase() === normalizedId)
       : null;
     if (!student) {
       setManualError('No active student was found with that exact student ID.');
