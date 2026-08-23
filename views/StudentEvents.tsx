@@ -34,14 +34,14 @@ const MOCK_EVENTS: AppEvent[] = [
     id: 'e_sched_1',
     title: 'RMC Campus Sports & Cultural Festival 2026',
     description: 'Annual inter-departmental athletic games and cultural competitions. All students are required to log attendance during opening and closing ceremonies.',
-    status: 'scheduled',
+    status: 'upcoming',
     created_by: 'Sports Development Committee',
     startTime: Date.now() + 86400000 * 2, // 2 days later
     endTime: Date.now() + 86400000 * 2 + 14400000,
     penaltyValue: 12,
     penaltyUnit: 'hours',
     participantsType: 'department',
-    target: { department: 'Senior High School' },
+    target: { all: false, department: ['Senior High School'] },
     location: { lat: 7.0740, lng: 125.6130, radius_meters: 500 },
     timestamp: Date.now()
   },
@@ -49,14 +49,14 @@ const MOCK_EVENTS: AppEvent[] = [
     id: 'e_sched_2',
     title: 'Career & College Program Orientation',
     description: 'Orientation session for Grade 12 Senior High School students regarding tertiary education offerings and scholarship tracks.',
-    status: 'scheduled',
+    status: 'upcoming',
     created_by: 'Guidance Office',
     startTime: Date.now() + 86400000 * 5, // 5 days later
     endTime: Date.now() + 86400000 * 5 + 7200000,
     penaltyValue: 5,
     penaltyUnit: 'hours',
     participantsType: 'department',
-    target: { department: 'Senior High School' },
+    target: { all: false, department: ['Senior High School'] },
     location: { lat: 7.0725, lng: 125.6120, radius_meters: 250 },
     timestamp: Date.now()
   },
@@ -64,7 +64,7 @@ const MOCK_EVENTS: AppEvent[] = [
     id: 'e_archived_1',
     title: 'First Semester General Assembly 2025',
     description: 'Institutional opening assembly for all enrolled students at Rizal Memorial Colleges.',
-    status: 'ended',
+    status: 'done',
     created_by: 'SSG Executive Board',
     startTime: Date.now() - 86400000 * 30,
     endTime: Date.now() - 86400000 * 30 + 10800000,
@@ -79,7 +79,7 @@ const MOCK_EVENTS: AppEvent[] = [
     id: 'e_archived_2',
     title: 'Disaster Risk & Safety Drill',
     description: 'Campus-wide emergency evacuation drill supervised by the Safety and Logistics Unit.',
-    status: 'cancelled',
+    status: 'done',
     created_by: 'Campus Safety Office',
     startTime: Date.now() - 86400000 * 14,
     endTime: Date.now() - 86400000 * 14 + 3600000,
@@ -97,7 +97,7 @@ const StudentEvents: React.FC = () => {
   
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'scheduled' | 'ended' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'upcoming' | 'done'>('all');
   
   // Section Collapsible Toggles (Default: Scheduled & Archived Collapsed)
   const [isScheduledOpen, setIsScheduledOpen] = useState(false);
@@ -128,7 +128,7 @@ const StudentEvents: React.FC = () => {
   const filteredEvents = useMemo(() => {
     return allEvents.filter(event => {
       const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            event.description.toLowerCase().includes(searchTerm.toLowerCase());
+                            (event.description || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' ? true : event.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -136,12 +136,12 @@ const StudentEvents: React.FC = () => {
 
   // Group events into categories
   const activeEvents = useMemo(() => filteredEvents.filter(e => e.status === 'active'), [filteredEvents]);
-  const scheduledEvents = useMemo(() => filteredEvents.filter(e => e.status === 'scheduled'), [filteredEvents]);
-  const archivedEvents = useMemo(() => filteredEvents.filter(e => e.status === 'ended' || e.status === 'cancelled'), [filteredEvents]);
+  const scheduledEvents = useMemo(() => filteredEvents.filter(e => e.status === 'upcoming'), [filteredEvents]);
+  const archivedEvents = useMemo(() => filteredEvents.filter(e => e.status === 'done'), [filteredEvents]);
 
   const canFileExcuse = (event: AppEvent) => (
     event.endTime > Date.now()
-    && !['done', 'ended', 'cancelled'].includes(event.status)
+    && event.status !== 'done'
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -181,7 +181,7 @@ const StudentEvents: React.FC = () => {
 
           <div className="flex min-w-0 items-center gap-1.5 sm:w-56">
             <Filter className="text-slate-400 shrink-0" size={14} />
-            <CustomSelect className="min-w-0 flex-1" label="Status" onChange={(value) => setStatusFilter(value as typeof statusFilter)} options={[{ value: 'all', label: 'All Statuses' }, { value: 'active', label: 'Active Only' }, { value: 'scheduled', label: 'Scheduled Only' }, { value: 'ended', label: 'Ended Only' }, { value: 'cancelled', label: 'Cancelled Only' }]} value={statusFilter} />
+            <CustomSelect className="min-w-0 flex-1" label="Status" onChange={(value) => setStatusFilter(value as typeof statusFilter)} options={[{ value: 'all', label: 'All Statuses' }, { value: 'active', label: 'Active Only' }, { value: 'upcoming', label: 'Upcoming Only' }, { value: 'done', label: 'Done Only' }]} value={statusFilter} />
           </div>
       </Surface>
 
@@ -343,11 +343,7 @@ const StudentEvents: React.FC = () => {
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left opacity-80 transition-all hover:border-slate-300 hover:opacity-100 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:border-slate-600 sm:p-5"
                   >
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-md ${
-                        event.status === 'ended'
-                          ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
-                          : 'bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300'
-                      }`}>
+                      <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                         {event.status}
                       </span>
                       <span className="text-[10px] font-bold text-slate-400">

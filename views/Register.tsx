@@ -8,10 +8,11 @@ import { SchoolNode } from '../types';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { serializeAcademicAssignment } from '../lib/academicDirectory';
+import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 import { 
   User, School, Shield, ChevronRight, ChevronLeft, 
   Camera, CheckCircle2, AlertCircle, ImageIcon, Upload, CreditCard,
-  UserCircle
+  UserCircle, Eye, EyeOff
 } from 'lucide-react';
 
 const Register: React.FC = () => {
@@ -28,6 +29,7 @@ const Register: React.FC = () => {
     username: '',
     email: '',
     password: '',
+    confirmPassword: '',
     student_id: '',
     guardianName: '',
     guardianPhone: '',
@@ -35,6 +37,9 @@ const Register: React.FC = () => {
     idFront: '',
     idBack: ''
   });
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     setStructure(mockData.getSchoolStructure());
@@ -47,12 +52,16 @@ const Register: React.FC = () => {
 
   const handleSubmit = async () => {
     const terminal = academicPath[academicPath.length - 1];
-    if (!formData.name.trim() || !formData.email.trim() || !formData.password || !formData.student_id.trim() || !terminal || !['section', 'block'].includes(terminal.type)) {
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password || !formData.confirmPassword || !formData.student_id.trim() || !terminal || !['section', 'block'].includes(terminal.type)) {
       setError('Complete all required identity and academic fields.');
       return;
     }
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
     setLoading(true);
@@ -147,7 +156,31 @@ const Register: React.FC = () => {
 
               <div className="space-y-1">
                 <label htmlFor="register-password" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Security Key</label>
-                <input id="register-password" placeholder="••••••••" type="password" className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                <div className="relative">
+                  <input id="register-password" aria-label="Security Key" placeholder="••••••••" type={showPassword ? 'text' : 'password'} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 pr-12 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                  <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-900 dark:hover:text-gold-400 transition-colors p-1">
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <PasswordStrengthMeter password={formData.password} />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="register-confirm-password" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Confirm Password</label>
+                <div className="relative">
+                  <input id="register-confirm-password" placeholder="••••••••" type={showConfirmPassword ? 'text' : 'password'} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 pr-12 text-base font-bold text-brand-900 outline-none placeholder:text-slate-400 focus:border-gold-400 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
+                  <button type="button" aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'} onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-900 dark:hover:text-gold-400 transition-colors p-1">
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                  <p className="mt-1 text-[10px] font-bold text-red-500">Passwords do not match.</p>
+                )}
+                {formData.confirmPassword && formData.password === formData.confirmPassword && (
+                  <p className="mt-1 text-[10px] font-bold text-emerald-500 flex items-center gap-1">
+                    <CheckCircle2 size={12} /> Passwords match.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -196,7 +229,14 @@ const Register: React.FC = () => {
               </Button>
             )}
             {step < 3 ? (
-              <Button className="!rounded-xl text-[10px] uppercase font-black tracking-widest" onClick={() => { setError(''); setStep(step + 1); }} disabled={(step === 1 && (!formData.name.trim() || !formData.email.trim() || formData.password.length < 6)) || (step === 2 && (!formData.student_id.trim() || (!isCollege && !selectedLvl) || !selectedSec))}>
+              <Button className="!rounded-xl text-[10px] uppercase font-black tracking-widest" onClick={() => { 
+                if (step === 1 && formData.confirmPassword && formData.password !== formData.confirmPassword) {
+                  setError('Passwords do not match.');
+                  return;
+                }
+                setError(''); 
+                setStep(step + 1); 
+              }} disabled={step === 1 && (!formData.name.trim() || !formData.email.trim() || formData.password.length < 6 || (Boolean(formData.confirmPassword) && formData.password !== formData.confirmPassword))}>
                 Next
               </Button>
             ) : (

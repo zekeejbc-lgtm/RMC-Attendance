@@ -14,6 +14,7 @@ import { Modal } from '../components/ui/Modal';
 import { Collapsible } from '../components/ui/Collapsible';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { serializeAcademicAssignment } from '../lib/academicDirectory';
+import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 import { 
   ArrowRight, Shield, Target, Users, 
   MapPin, Mail, Phone, Facebook, Instagram,
@@ -25,9 +26,10 @@ import {
 
 interface LandingPageProps {
   defaultOpenLogin?: boolean;
+  defaultOpenRegister?: boolean;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, defaultOpenRegister = false }) => {
   const navigate = useNavigate();
   const { isMock, user, profile } = useAuth();
   
@@ -38,7 +40,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   
   // Modals
   const [showLoginModal, setShowLoginModal] = useState(defaultOpenLogin);
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(defaultOpenRegister);
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
 
   // Login Logic State
@@ -52,18 +54,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   // Register Logic State
   const [regStep, setRegStep] = useState(1);
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [regError, setRegError] = useState('');
   const [structure, setStructure] = useState<SchoolNode[]>([]);
   const [academicPath, setAcademicPath] = useState<SchoolNode[]>([]);
   const [regData, setRegData] = useState({
-    name: '', username: '', email: '', password: '', student_id: '',
+    name: '', username: '', email: '', password: '', confirmPassword: '', student_id: '',
     guardianName: '', guardianPhone: '', profilePic: '', idFront: '', idBack: ''
   });
 
   // --- EFFECTS ---
   useEffect(() => {
     if (defaultOpenLogin) setShowLoginModal(true);
-  }, [defaultOpenLogin]);
+    if (defaultOpenRegister) setShowRegisterModal(true);
+  }, [defaultOpenLogin, defaultOpenRegister]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -139,12 +145,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   // Register Handlers
   const handleRegUpload = (field: string) => {
-    setRegData(prev => ({ ...prev, [field]: `https://picsum.photos/400/400?sig=${field}_${Math.random()}` }));
+    setRegData((prev: any) => ({ ...prev, [field]: `https://picsum.photos/400/400?sig=${field}_${Math.random()}` }));
   };
 
   const handleRegisterSubmit = async () => {
     const terminal = academicPath[academicPath.length - 1];
     if (!terminal || !['section', 'block'].includes(terminal.type)) return;
+    if (regData.password !== regData.confirmPassword) {
+      setRegError('Passwords do not match.');
+      return;
+    }
     setIsRegistering(true);
     const uid = `user_${Date.now()}`;
     const serialized = serializeAcademicAssignment(academicPath);
@@ -335,13 +345,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                    )}
 
                    <form onSubmit={handleLogin} className="space-y-4">
-                     <div className="space-y-1.5">
-                       <label htmlFor="landing-login-identifier" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Asset Identifier</label>
-                       <div className="relative">
-                         <UserCircle size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-                         <input
-                           id="landing-login-identifier"
-                           type="text"
+                      <div className="space-y-1.5">
+                        <label htmlFor="landing-login-identifier" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Asset Identifier / Email</label>
+                        <div className="relative">
+                          <UserCircle size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+                          <input
+                            id="landing-login-identifier"
+                            aria-label="Asset Identifier"
+                            type="text"
                            required
                            value={identifier}
                            onChange={(e) => setIdentifier(e.target.value)}
@@ -357,6 +368,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                          <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                          <input
                            id="landing-login-password"
+                           aria-label="Security Key"
                            type={showPassword ? "text" : "password"}
                            required
                            value={password}
@@ -435,108 +447,164 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
       {/* REGISTRATION MODAL */}
       <Modal
         open={showRegisterModal}
-        onClose={() => setShowRegisterModal(false)}
+        onClose={() => { setShowRegisterModal(false); if (defaultOpenRegister) navigate('/'); }}
         size="md"
         title="System Enrollment"
         description={`Stage ${regStep} of 3 • Protocol`}
       >
-           <>
-             <div className="space-y-5">
-               <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 dark:border-blue-900 dark:bg-blue-950/40">
-                 <h3 className="font-black text-brand-900 dark:text-white">Only essential information is required</h3>
-                 <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Prepare your legal name, school email, official student ID, password, and current academic assignment. A profile photo and emergency contact are optional; ID document images are not collected.</p>
-               </div>
-               <Button variant="gold" onClick={() => { setShowRegisterModal(false); navigate('/register'); }}>Continue to enrollment</Button>
-             </div>
-             <div className="hidden min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
+           <div className="space-y-5">
+              {regStep === 1 && (
+                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                    <div className="flex flex-col items-center mb-4">
+                       <button aria-label="Upload profile photo" type="button" onClick={() => handleRegUpload('profilePic')} className="w-20 h-20 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 hover:bg-gold-50/10 transition-all overflow-hidden relative group">
+                          {regData.profilePic ? <img src={regData.profilePic} alt="Uploaded profile" className="w-full h-full object-cover" /> : <><UserCircle size={28} /><span className="text-[8px] font-black uppercase mt-1">Photo</span></>}
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={18} className="text-white" /></div>
+                       </button>
+                       <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">Digital Identity Picture (Optional)</p>
+                    </div>
 
-              <div className="bg-brand-gradient p-6 flex justify-between items-center border-b-2 border-emerald-500 shrink-0">
-                 <div className="flex items-center gap-3">
-                    <img 
-                      src="https://i.imgur.com/K3T5yIT.jpeg" 
-                      alt="IARS Academic Seal" 
-                      className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/50 shadow-md" 
-                    />
-                    <div>
-                       <h2 className="text-lg font-black text-white uppercase tracking-tight leading-none">System Enrollment</h2>
-                       <p className="text-emerald-300 text-[10px] font-bold tracking-widest uppercase mt-1">Stage {regStep} of 3 • Protocol</p>
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Legal Full Name</label>
+                       <input id="landing-register-name" placeholder="Ex. Juan Dela Cruz" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                       <div className="space-y-1">
+                          <label htmlFor="landing-register-username" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Username <span className="normal-case text-slate-400">(optional)</span></label>
+                          <input id="landing-register-username" placeholder="Defaults to email" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.username} onChange={e => setRegData({...regData, username: e.target.value})} />
+                       </div>
+                       <div className="space-y-1">
+                          <label htmlFor="landing-register-email" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Email Address</label>
+                          <input id="landing-register-email" placeholder="name@email.com" type="email" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} />
+                       </div>
+                    </div>
+
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-password" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Password</label>
+                       <div className="relative">
+                         <input
+                           id="landing-register-password"
+                           placeholder="••••••••"
+                           type={showRegPassword ? "text" : "password"}
+                           className="w-full p-3.5 pr-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none"
+                           value={regData.password}
+                           onChange={e => setRegData({...regData, password: e.target.value})}
+                         />
+                         <button 
+                           aria-label={showRegPassword ? 'Hide password' : 'Show password'}
+                           type="button" 
+                           onClick={() => setShowRegPassword(!showRegPassword)} 
+                           className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-900 dark:hover:text-gold-400 transition-colors p-1"
+                         >
+                           {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                         </button>
+                       </div>
+                       <PasswordStrengthMeter password={regData.password} />
+                    </div>
+
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-confirm-password" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Confirm Password</label>
+                       <div className="relative">
+                         <input
+                           id="landing-register-confirm-password"
+                           placeholder="••••••••"
+                           type={showRegConfirmPassword ? "text" : "password"}
+                           className="w-full p-3.5 pr-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none"
+                           value={regData.confirmPassword}
+                           onChange={e => setRegData({...regData, confirmPassword: e.target.value})}
+                         />
+                         <button 
+                           aria-label={showRegConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                           type="button" 
+                           onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)} 
+                           className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-900 dark:hover:text-gold-400 transition-colors p-1"
+                         >
+                           {showRegConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                         </button>
+                       </div>
+                       {regData.confirmPassword && regData.password !== regData.confirmPassword && (
+                         <p className="mt-1 text-[10px] font-bold text-red-500">Passwords do not match.</p>
+                       )}
+                       {regData.confirmPassword && regData.password === regData.confirmPassword && (
+                         <p className="mt-1 text-[10px] font-bold text-emerald-500 flex items-center gap-1">
+                           <CheckCircle2 size={12} /> Passwords match.
+                         </p>
+                       )}
                     </div>
                  </div>
+              )}
+
+              {regStep === 2 && (
+                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-student-id" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Official Student ID #</label>
+                       <input id="landing-register-student-id" placeholder="2024-XXXXX" className="w-full min-w-0 p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
+                    </div>
+
+                    <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
+
+                    <p className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+                      Your ID number and academic assignment will be verified against school records. ID image uploads are not needed.
+                    </p>
+                 </div>
+              )}
+
+              {regStep === 3 && (
+                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800">
+                       <Shield size={28} className="text-brand-900 dark:text-gold-400 shrink-0" />
+                       <div>
+                          <h4 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase">Optional Emergency Contact</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Not required for attendance enrollment</p>
+                       </div>
+                    </div>
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-guardian-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Guardian Name</label>
+                       <input id="landing-register-guardian-name" placeholder="Legal Full Name" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianName} onChange={e => setRegData({...regData, guardianName: e.target.value})} />
+                    </div>
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-guardian-phone" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Emergency Contact #</label>
+                       <input id="landing-register-guardian-phone" placeholder="+63 9XX XXX XXXX" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianPhone} onChange={e => setRegData({...regData, guardianPhone: e.target.value})} />
+                    </div>
+                 </div>
+              )}
+
+              {regError && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-800 text-xs font-semibold">
+                  {regError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:gap-4">
+                 {regStep > 1 && (
+                   <Button variant="secondary" aria-label="Previous registration phase" className="!w-full !rounded-xl sm:!w-16 sm:!p-0" onClick={() => setRegStep(regStep - 1)}>
+                     <ChevronLeft size={20} />
+                   </Button>
+                 )}
+                 {regStep < 3 ? (
+                   <Button className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { 
+                     if (regStep === 1 && regData.password !== regData.confirmPassword) {
+                       setRegError('Passwords do not match.');
+                       return;
+                     }
+                     setRegError(''); 
+                     setRegStep(regStep + 1); 
+                   }} disabled={regStep === 1 && (!regData.name.trim() || !regData.email.trim() || regData.password.length < 6 || !regData.confirmPassword || regData.password !== regData.confirmPassword)}>
+                     Next
+                   </Button>
+                 ) : (
+                   <Button variant="gold" className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={handleRegisterSubmit} disabled={isRegistering}>
+                     {isRegistering ? 'Submitting...' : 'Register'}
+                   </Button>
+                 )}
               </div>
 
-              <div className="flex-1 p-4 sm:p-8">
-                 {regStep === 1 && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                       <div className="flex flex-col items-center mb-4">
-                          <button aria-label="Upload profile photo" type="button" onClick={() => handleRegUpload('profilePic')} className="w-24 h-24 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 hover:bg-gold-50/10 transition-all overflow-hidden relative group">
-                             {regData.profilePic ? <img src={regData.profilePic} alt="Uploaded profile" className="w-full h-full object-cover" /> : <><UserCircle size={32} /><span className="text-[9px] font-black uppercase mt-1">Photo</span></>}
-                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={20} className="text-white" /></div>
-                          </button>
-                       </div>
-                       <div className="space-y-1">
-                          <label htmlFor="landing-register-name" className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Legal Full Name</label>
-                          <input id="landing-register-name" placeholder="Ex. Juan Dela Cruz" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-base dark:text-white" value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} />
-                       </div>
-                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <div className="space-y-1">
-                             <label htmlFor="landing-register-username" className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Username</label>
-                             <input id="landing-register-username" placeholder="Choose alias" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-base dark:text-white" value={regData.username} onChange={e => setRegData({...regData, username: e.target.value})} />
-                          </div>
-                          <div className="space-y-1">
-                             <label htmlFor="landing-register-email" className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Email</label>
-                             <input id="landing-register-email" placeholder="name@email.com" type="email" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-base dark:text-white" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} />
-                          </div>
-                       </div>
-                       <div className="space-y-1">
-                          <label htmlFor="landing-register-password" className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Password</label>
-                          <input id="landing-register-password" placeholder="••••••••" type="password" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-base dark:text-white" value={regData.password} onChange={e => setRegData({...regData, password: e.target.value})} />
-                       </div>
-                    </div>
-                 )}
-                 {regStep === 2 && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                       <div className="space-y-1">
-                          <label htmlFor="landing-register-student-id" className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Official ID #</label>
-                          <input id="landing-register-student-id" placeholder="2024-XXXXX" className="w-full min-w-0 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-base dark:text-white" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
-                       </div>
-                       <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
-                       <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
-                          <button aria-label="Capture student ID front" type="button" onClick={() => handleRegUpload('idFront')} className="p-3 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 aspect-video">
-                             {regData.idFront ? <img src={regData.idFront} alt="Student ID front" className="w-full h-full object-cover rounded-lg" /> : <CreditCard size={24} />}
-                          </button>
-                          <button aria-label="Capture student ID back" type="button" onClick={() => handleRegUpload('idBack')} className="p-3 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 aspect-video">
-                             {regData.idBack ? <img src={regData.idBack} alt="Student ID back" className="w-full h-full object-cover rounded-lg" /> : <CreditCard size={24} />}
-                          </button>
-                       </div>
-                    </div>
-                 )}
-                 {regStep === 3 && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                       <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center gap-3">
-                          <Shield size={28} className="text-brand-900 dark:text-white" />
-                          <div><h4 className="text-xs font-black text-brand-900 dark:text-white uppercase">Guardian Protocol</h4></div>
-                       </div>
-                       <div className="space-y-1">
-                          <label htmlFor="landing-register-guardian-name" className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Guardian Name</label>
-                          <input id="landing-register-guardian-name" placeholder="Legal Full Name" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-base dark:text-white" value={regData.guardianName} onChange={e => setRegData({...regData, guardianName: e.target.value})} />
-                       </div>
-                       <div className="space-y-1">
-                          <label htmlFor="landing-register-guardian-phone" className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Emergency Contact #</label>
-                          <input id="landing-register-guardian-phone" placeholder="+63 9XX XXX XXXX" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-base dark:text-white" value={regData.guardianPhone} onChange={e => setRegData({...regData, guardianPhone: e.target.value})} />
-                       </div>
-                    </div>
-                 )}
+              <div className="text-center pt-1 border-t border-slate-100 dark:border-slate-800">
+                <button onClick={() => { setShowRegisterModal(false); setShowLoginModal(true); }} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-brand-900 dark:hover:text-gold-400 transition-colors">
+                  Already have an account? <span className="text-gold-500 underline">Log In</span>
+                </button>
               </div>
-
-              <div className="flex shrink-0 flex-col gap-3 border-t border-slate-100 p-4 dark:border-slate-800 sm:flex-row sm:p-6">
-                  {regStep > 1 && <Button variant="secondary" aria-label="Previous registration phase" className="!w-full sm:!w-14" onClick={() => setRegStep(regStep-1)}>←</Button>}
-                  {regStep < 3 ? 
-                    <Button onClick={() => setRegStep(regStep+1)} className="!text-xs font-black uppercase">Next</Button> :
-                    <Button variant="gold" onClick={handleRegisterSubmit} disabled={isRegistering} className="!text-xs font-black uppercase">{isRegistering ? 'Submitting...' : 'Submit'}</Button>
-                  }
-              </div>
-             </div>
-           </>
+           </div>
       </Modal>
 
       {/* HERO SECTION */}
@@ -735,7 +803,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                     </div>
                     <div className="min-w-0">
                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{link.label}</p>
-                       <p className="break-words text-xs font-bold text-brand-900 [overflow-wrap:anywhere] dark:text-white">{link.value}</p>
+                       <p className="break-words text-xs font-bold text-brand-900 dark:text-white">{link.value}</p>
                     </div>
                     <button aria-label={`Open ${link.label}`} className="ml-auto shrink-0 p-2 text-slate-300 hover:text-brand-900 dark:hover:text-white transition-colors">
                        <ExternalLink size={16} />

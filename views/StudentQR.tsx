@@ -13,6 +13,9 @@ const StudentQR: React.FC = () => {
 
   if (!profile) return null;
 
+  // Generate unique token identifier for QR security payload
+  const qrToken = `RMC_SECURE_PASSPORT:${profile.uid}:${btoa(profile.uid + '_sec_' + profile.student_id)}`;
+
   const handleDownloadPNG = () => {
     setDownloading(true);
     setDownloadSuccess(false);
@@ -22,103 +25,239 @@ const StudentQR: React.FC = () => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      canvas.width = 600;
-      canvas.height = 900;
+      // Canvas dimensions for crisp high resolution export
+      canvas.width = 700;
+      canvas.height = 1050;
 
-      // Background
-      ctx.fillStyle = '#0E1B42'; // brand-900
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      // 1. Outer Background (White background)
+      ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Card Inner Box
-      ctx.fillStyle = '#FFFFFF';
-      ctx.roundRect(30, 30, 540, 840, 32);
-      ctx.fill();
+      // 2. Lifted Card Container with Shadow
+      const cardX = 40;
+      const cardY = 40;
+      const cardW = 620;
+      const cardH = 970;
 
-      // Top Banner
-      ctx.fillStyle = '#0E1B42';
+      ctx.save();
+      ctx.shadowColor = 'rgba(15, 23, 42, 0.22)';
+      ctx.shadowBlur = 32;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 16;
+      ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.roundRect(30, 30, 540, 160, [32, 32, 0, 0]);
+      ctx.roundRect(cardX, cardY, cardW, cardH, 28);
       ctx.fill();
+      ctx.restore();
 
-      // Gold accent line
-      ctx.fillStyle = '#D4AF37';
-      ctx.fillRect(30, 185, 540, 5);
+      // Card outline border for clean definition on white canvas
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(cardX, cardY, cardW, cardH, 28);
+      ctx.stroke();
 
-      // Header Text
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = '900 20px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('INSTITUTION ATTENDANCE & RECORDS', 300, 85);
+      // Determine Role Details & Colors
+      // Color scheme requirements:
+      // student (or mayor): Blue (#2563EB / #1D4ED8)
+      // SSG officer (ssg): Green (#16A34A / #15803D)
+      // OSAS officer/staff (ossa / ossa_staff): Orange (#EA580C / #C2410C)
+      // default / admin: Gold/Slate (#0E1B42 / #D4AF37)
+      let roleLabel = 'STUDENT';
+      let roleBgColor = '#2563EB'; // Blue
+      let roleTextColor = '#FFFFFF';
 
-      ctx.fillStyle = '#D4AF37';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText('OFFICIAL DIGITAL STUDENT PASSPORT', 300, 115);
+      const userRole = profile.role;
+      if (userRole === 'ssg') {
+        roleLabel = 'SSG OFFICER';
+        roleBgColor = '#16A34A'; // Green
+      } else if (userRole === 'ossa' || userRole === 'ossa_staff') {
+        roleLabel = 'OSAS OFFICER';
+        roleBgColor = '#EA580C'; // Orange
+      } else if (userRole === 'mayor') {
+        roleLabel = 'STUDENT (SECTION MAYOR)';
+        roleBgColor = '#2563EB'; // Blue
+      } else if (userRole === 'admin') {
+        roleLabel = 'SYSTEM ADMINISTRATOR';
+        roleBgColor = '#475569'; // Slate/Gray
+      } else {
+        roleLabel = 'STUDENT';
+        roleBgColor = '#2563EB'; // Blue
+      }
 
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.font = '10px sans-serif';
-      ctx.fillText('IARS • VERIFIED IDENTITY', 300, 140);
-
-      // Student Details
+      // Top Header Banner
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(cardX, cardY, cardW, 165, [28, 28, 0, 0]);
+      ctx.clip();
       ctx.fillStyle = '#0E1B42';
-      ctx.font = '900 22px sans-serif';
-      ctx.fillText(profile.name.toUpperCase(), 300, 240);
+      ctx.fillRect(cardX, cardY, cardW, 165);
+      ctx.restore();
 
-      ctx.fillStyle = '#64748B';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.fillText(`ID: ${profile.student_id}`, 300, 270);
+      // Gold accent line below header
+      ctx.fillStyle = '#D4AF37';
+      ctx.fillRect(cardX, cardY + 165, cardW, 5);
 
-      // Department Pill
-      ctx.fillStyle = '#F1F5F9';
-      ctx.roundRect(80, 290, 440, 36, 18);
-      ctx.fill();
+      // App Logo Image loading
+      const logoImg = new Image();
+      logoImg.crossOrigin = 'anonymous';
+      logoImg.src = 'https://i.imgur.com/K3T5yIT.jpeg';
 
-      ctx.fillStyle = '#0E1B42';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText(`${profile.school_data.department || 'GENERAL'} • ${profile.school_data.section || 'N/A'}`, 300, 313);
+      const finishExport = () => {
+        // Draw Logo cleanly on Header
+        if (logoImg.complete && logoImg.naturalWidth > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(100, 122, 36, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(logoImg, 64, 86, 72, 72);
+          ctx.restore();
 
-      // Draw SVG QR Code to Canvas
-      const svgElement = qrWrapperRef.current?.querySelector('svg');
-      if (svgElement) {
-        const svgData = new XMLSerializer().serializeToString(svgElement);
-        const img = new Image();
-        img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
-
-        img.onload = () => {
-          // White QR Box
-          ctx.fillStyle = '#FAFAFA';
-          ctx.strokeStyle = '#E2E8F0';
-          ctx.lineWidth = 2;
-          ctx.roundRect(160, 360, 280, 280, 24);
-          ctx.fill();
+          // High definition logo gold ring border
+          ctx.strokeStyle = '#D4AF37';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(100, 122, 36, 0, Math.PI * 2);
           ctx.stroke();
 
-          ctx.drawImage(img, 180, 380, 240, 240);
+          // Header Text (with logo aligned on left)
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '900 18px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('INSTITUTION ATTENDANCE & RECORDS', 152, 112);
 
-          // Footer info
-          ctx.fillStyle = '#0E1B42';
-          ctx.font = 'bold 12px sans-serif';
-          ctx.fillText('SCAN FOR EVENT & CEREMONY CHECK-IN', 300, 680);
+          ctx.fillStyle = '#D4AF37';
+          ctx.font = 'bold 13px sans-serif';
+          ctx.fillText('OFFICIAL DIGITAL PASSPORT', 152, 135);
 
-          ctx.fillStyle = '#10B981';
-          ctx.font = 'bold 11px sans-serif';
-          ctx.fillText('✓ SYSTEM VERIFIED & SECURITY STAMPED', 300, 710);
-
-          ctx.fillStyle = '#94A3B8';
+          ctx.fillStyle = 'rgba(255,255,255,0.75)';
           ctx.font = '10px sans-serif';
-          ctx.fillText(`Generated on ${new Date().toLocaleDateString('en-US', { dateStyle: 'medium' })}`, 300, 830);
+          ctx.fillText('IARS • VERIFIED SECURE IDENTITY', 152, 153);
+        } else {
+          // Centered Header Text fallback
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '900 19px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('INSTITUTION ATTENDANCE & RECORDS', 350, 105);
 
-          // Trigger download
-          const link = document.createElement('a');
-          link.download = `RMC_Student_QR_${profile.student_id}.png`;
-          link.href = canvas.toDataURL('image/png');
-          link.click();
+          ctx.fillStyle = '#D4AF37';
+          ctx.font = 'bold 13px sans-serif';
+          ctx.fillText('OFFICIAL DIGITAL PASSPORT', 350, 132);
 
+          ctx.fillStyle = 'rgba(255,255,255,0.75)';
+          ctx.font = '10px sans-serif';
+          ctx.fillText('IARS • VERIFIED SECURE IDENTITY', 350, 153);
+        }
+
+        // Student Details
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#0E1B42';
+        ctx.font = '900 24px sans-serif';
+        ctx.fillText(profile.name.toUpperCase(), 350, 245);
+
+        ctx.fillStyle = '#64748B';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`ID: ${profile.student_id}`, 350, 270);
+
+        // Role Badge Pill (Student = Blue, SSG = Green, OSAS = Orange)
+        ctx.font = 'bold 12px sans-serif';
+        const roleWidth = Math.max(140, ctx.measureText(roleLabel).width + 36);
+        ctx.fillStyle = roleBgColor;
+        ctx.beginPath();
+        ctx.roundRect(350 - roleWidth / 2, 285, roleWidth, 28, 14);
+        ctx.fill();
+
+        ctx.fillStyle = roleTextColor;
+        ctx.fillText(roleLabel, 350, 303);
+
+        // Department & Section Pill
+        ctx.fillStyle = '#F1F5F9';
+        ctx.beginPath();
+        ctx.roundRect(80, 325, 540, 34, 17);
+        ctx.fill();
+
+        ctx.fillStyle = '#0E1B42';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`${profile.school_data.department || 'GENERAL'} • ${profile.school_data.level || ''} ${profile.school_data.section || 'N/A'}`.trim(), 350, 346);
+
+        // Draw SVG QR Code to Canvas
+        const svgElement = qrWrapperRef.current?.querySelector('svg');
+        if (svgElement) {
+          const svgData = new XMLSerializer().serializeToString(svgElement);
+          const img = new Image();
+          img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+
+          img.onload = () => {
+            // Crisp White QR Card Area
+            ctx.fillStyle = '#FAFAFA';
+            ctx.strokeStyle = '#E2E8F0';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(205, 380, 290, 290, 22);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.drawImage(img, 220, 395, 260, 260);
+
+            // Scan Info Text
+            ctx.fillStyle = '#0E1B42';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillText('SCAN FOR EVENT & CEREMONY CHECK-IN', 350, 698);
+
+            ctx.fillStyle = '#10B981';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText('✓ SYSTEM VERIFIED & SECURITY STAMPED', 350, 720);
+
+            // Official Disclaimer Notice Box
+            ctx.fillStyle = '#FEF2F2';
+            ctx.strokeStyle = '#FCA5A5';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.roundRect(70, 745, 560, 68, 14);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#991B1B';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText('DISCLAIMER: NOT VALID FOR OFFICIAL TRANSACTIONS', 350, 767);
+            ctx.font = '10px sans-serif';
+            ctx.fillStyle = '#7F1D1D';
+            ctx.fillText('This digital ID card cannot be used for any official financial or academic transaction.', 350, 784);
+            ctx.fillText('If lost or compromised, please contact system administration immediately.', 350, 799);
+
+            // Loss Contact Notice Footer
+            ctx.fillStyle = '#64748B';
+            ctx.font = '11px sans-serif';
+            ctx.fillText('Notice: If lost or found, please contact the system administration or OSAS.', 350, 955);
+
+            ctx.fillStyle = '#94A3B8';
+            ctx.font = '10px sans-serif';
+            ctx.fillText(`Generated on ${new Date().toLocaleDateString('en-US', { dateStyle: 'medium' })}`, 350, 975);
+
+            // Trigger download
+            const link = document.createElement('a');
+            link.download = `RMC_Student_QR_${profile.student_id}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+
+            setDownloading(false);
+            setDownloadSuccess(true);
+            setTimeout(() => setDownloadSuccess(false), 3000);
+          };
+        } else {
           setDownloading(false);
-          setDownloadSuccess(true);
-          setTimeout(() => setDownloadSuccess(false), 3000);
-        };
-      } else {
-        setDownloading(false);
+        }
+      };
+
+      logoImg.onload = finishExport;
+      logoImg.onerror = finishExport;
+      // In case image is already cached or fails immediately
+      if (logoImg.complete) {
+        finishExport();
       }
     } catch (e) {
       console.error('PNG export error', e);
@@ -174,7 +313,7 @@ const StudentQR: React.FC = () => {
             className="mb-4 w-full max-w-[min(17rem,calc(100vw-4rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-inner transition-all hover:border-gold-400/60 dark:border-slate-700"
           >
             <QRCode 
-              value={profile.uid}
+              value={qrToken}
               size={170} 
               fgColor="#0E1B42" 
               level="H"

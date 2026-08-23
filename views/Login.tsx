@@ -120,15 +120,16 @@ const Login: React.FC = () => {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1">
-                <label htmlFor="login-identifier" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Asset Identifier</label>
+                <label htmlFor="login-identifier" className="ml-1 text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Asset Identifier / Email</label>
                 <input
                   id="login-identifier"
+                  aria-label="Asset Identifier"
                   type="text"
                   required
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIdentifier(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3.5 text-base font-bold text-brand-900 transition-all placeholder:text-slate-400 focus:border-gold-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
-                  placeholder="Username / Email"
+                  placeholder="Email"
                 />
               </div>
 
@@ -137,10 +138,11 @@ const Login: React.FC = () => {
                 <div className="relative">
                   <input
                     id="login-password"
+                    aria-label="Security Key"
                     type={showPassword ? "text" : "password"}
                     required
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3.5 pr-12 text-base font-bold text-brand-900 transition-all placeholder:text-slate-400 focus:border-gold-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
                     placeholder="••••••••"
                   />
@@ -195,7 +197,7 @@ const Login: React.FC = () => {
                   </div>
                   <button 
                     aria-label={`Copy username ${acc.user}`}
-                    onClick={(e) => { e.stopPropagation(); copyToClipboard(acc.user); }}
+                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); copyToClipboard(acc.user); }}
                     className="p-1.5 text-slate-500 hover:text-gold-400 transition-colors bg-brand-950 rounded-md border border-white/5"
                   >
                     {copied === acc.user ? <Check size={10} className="text-green-500"/> : <Copy size={10}/>}

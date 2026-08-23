@@ -153,10 +153,16 @@ const MayorScanner: React.FC = () => {
 
   const handleDecoded = (decodedText: string) => {
     if (handlingScan.current) return;
+    let targetId = decodedText;
+    if (decodedText.startsWith('RMC_SECURE_PASSPORT:')) {
+      const parts = decodedText.split(':');
+      targetId = parts[1] || decodedText;
+    }
+
     const student = isMock
       ? (profile && typeof mockData.getVisibleStudents === 'function'
-        ? mockData.getVisibleStudents(profile.uid).find((candidate) => candidate.uid === decodedText || candidate.student_id === decodedText)
-        : mockData.getUserProfile(decodedText))
+        ? mockData.getVisibleStudents(profile.uid).find((candidate) => candidate.uid === targetId || candidate.student_id === targetId || candidate.uid === decodedText || candidate.student_id === decodedText)
+        : mockData.getUserProfile(targetId) || mockData.getUserProfile(decodedText))
       : null;
     if (student && selectedEvent && profile) {
       identifyStudent(student);
@@ -280,7 +286,7 @@ const MayorScanner: React.FC = () => {
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,.65fr)]">
           <Surface className="overflow-hidden p-0">
             <div className="flex flex-col gap-4 border-b border-slate-200 p-5 dark:border-slate-700 sm:flex-row sm:items-end sm:justify-between sm:p-6">
-              <CustomSelect ariaLabel="Camera selection" className="w-full sm:max-w-sm" label="Camera" options={cameraOptions} value={cameraId} onChange={setCameraId} disabled={scannerState !== 'ready'} />
+              <CustomSelect ariaLabel="Camera selection" className="w-full sm:max-w-sm" label="Camera" options={cameraOptions} value={cameraId} onChange={v => setCameraId(v as string)} disabled={scannerState !== 'ready'} />
               <div className="sm:flex">
                 {scannerState === 'ready' ? (
                   <Button aria-label="Start scanner" variant="gold" className="sm:w-auto" onClick={startScanner}><Play size={16} /> Start</Button>

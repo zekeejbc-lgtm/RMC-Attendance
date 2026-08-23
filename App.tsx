@@ -53,7 +53,7 @@ const App: React.FC = () => {
           <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LandingPage defaultOpenLogin={true} />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/register" element={<LandingPage defaultOpenRegister={true} />} />
           <Route path="/register/status" element={<RegisterStatus />} />
           
           <Route path="/dashboard" element={

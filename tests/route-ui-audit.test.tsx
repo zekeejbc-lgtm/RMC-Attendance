@@ -280,8 +280,8 @@ describe('public route UI behavior', () => {
     await user.click(screen.getByRole('button', { name: /^register$/i }));
     expect(screen.getByRole('dialog', { name: /system enrollment/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /close dialog/i })).toHaveFocus();
-    expect(screen.getByText(/only essential information is required/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /continue to enrollment/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /legal full name/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /next/i })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: /system enrollment/i })).not.toBeInTheDocument();
