@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,300..1000;1,300..1000&family=Outfit:wght@300..900&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* --- CUSTOM UTILITIES & DESIGN TOKENS --- */
 :root {
   --primary-blue: #0081C8;
@@ -10,14 +14,104 @@
   --neutral-bg: #F8FAFC;
   --surface-card: #FFFFFF;
   --border-subtle: #E2E8F0;
+  --motion-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-snappy: cubic-bezier(0.2, 0, 0, 1);
+  --motion-fast: 160ms;
+  --motion-base: 260ms;
 }
 
 .dark {
   --neutral-dark: #F8FAFC;
   --neutral-bg: #0F172A;
   --surface-card: #1E293B;
-  --border-subtle: #334155;
+  --border-subtle: #475569;
   color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--neutral-bg);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  transition-timing-function: var(--motion-snappy);
+}
+
+:focus-visible {
+  outline: 3px solid rgba(255, 140, 0, 0.48);
+  outline-offset: 2px;
+}
+
+.app-scroll-lock {
+  overflow: hidden !important;
+}
+
+.app-page {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding: 1rem;
+}
+
+.app-surface {
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  background-color: var(--surface-card);
+}
+
+.desktop-data-table {
+  display: none;
+}
+
+.mobile-data-card {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .app-page {
+    padding: 1.5rem;
+  }
+
+  .desktop-data-table {
+    display: block;
+  }
+
+  .mobile-data-card {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @layer base {
@@ -29,6 +123,11 @@
     -moz-osx-font-smoothing: grayscale;
     transition: background-color 0.25s ease, color 0.25s ease;
   }
+}
+
+.qr-scanner-container video {
+  border: 4px solid #D4AF37;
+  border-radius: 1rem;
 }
 
 /* --- ANIMATIONS --- */
@@ -53,6 +152,21 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes dropdownEnter {
+  from { opacity: 0; transform: translateY(-8px) scale(0.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes optionEnter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes backdropEnter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -68,6 +182,54 @@
 
 .animate-slide-up {
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.app-modal-backdrop {
+  animation: backdropEnter var(--motion-fast) ease-out both;
+}
+
+.app-modal-panel {
+  animation: modalEnter var(--motion-base) var(--motion-standard) both;
+}
+
+.app-dropdown-menu {
+  animation: dropdownEnter var(--motion-base) var(--motion-standard) both;
+  box-shadow: 0 18px 45px -12px rgba(14, 27, 66, 0.28), 0 4px 12px rgba(14, 27, 66, 0.08);
+}
+
+.app-dropdown-option {
+  animation: optionEnter 220ms var(--motion-standard) both;
+  animation-delay: min(calc(var(--option-index, 0) * 22ms), 154ms);
+}
+
+.app-collapsible {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--motion-base) var(--motion-standard), opacity 180ms ease;
+}
+
+.app-collapsible[data-state='open'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.app-collapsible__inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-collapsible[data-state='open'] .app-collapsible__inner > * {
+  animation: optionEnter var(--motion-base) var(--motion-standard) both;
+}
+
+.app-disclosure-chevron {
+  transition: transform var(--motion-base) var(--motion-standard), background-color var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+
+[aria-expanded='true'] > .app-disclosure-chevron,
+[aria-expanded='true'] .app-disclosure-chevron {
+  transform: rotate(180deg);
 }
 
 /* --- DESIGN TOKEN SHADOWS & GLASSMORPHISM --- */
@@ -94,6 +256,69 @@
 }
 
 /* --- FORM CONTROLS & DROPDOWNS --- */
+.app-search-input {
+  width: 100%;
+  min-height: 2.75rem;
+  appearance: none;
+  border: 1px solid #E2E8F0;
+  border-radius: 0.75rem;
+  background: #F8FAFC;
+  padding: 0.625rem 2.75rem 0.625rem 2.5rem;
+  color: #002859;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  outline: none;
+  transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+}
+
+.app-search-input:hover,
+.app-search-input:focus {
+  border-color: #FFD700;
+  background: #FFFFFF;
+}
+
+.app-search-input:focus {
+  box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.1);
+}
+
+.app-search-input::placeholder {
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+.app-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.app-search-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dark .app-search-input {
+  border-color: #334155;
+  background: #1E293B;
+  color: #F8FAFC;
+}
+
+.dark .app-search-input:hover,
+.dark .app-search-input:focus {
+  background: #111827;
+}
+
+.app-field-label {
+  display: block;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+}
+
+.dark .app-field-label {
+  color: #CBD5E1;
+}
+
 .input-field {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -103,7 +328,7 @@
   font-size: 0.75rem;
   font-weight: 600;
   color: #0E1B42;
-  transition: all 0.15s ease-in-out;
+  transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
   outline: none;
 }
 
@@ -131,7 +356,16 @@
 }
 
 .dark .input-field::placeholder {
-  color: #64748B;
+  color: #94A3B8;
+}
+
+.leaflet-container {
+  background: #E2E8F0;
+  font-family: 'Nunito', 'Outfit', system-ui, sans-serif;
+}
+
+.dark .leaflet-container {
+  background: #0F172A;
 }
 
 .dark .glass-card {

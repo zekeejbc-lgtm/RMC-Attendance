@@ -11,12 +11,14 @@ import { Clock, CheckCircle2, XCircle, AlertCircle, LogOut } from 'lucide-react'
 import { mockData, mockAuth } from '../lib/mockBackend';
 
 const RegisterStatus: React.FC = () => {
-  const { user, isMock } = useAuth();
+  const { user, isMock, loading: authLoading } = useAuth();
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (authLoading) return;
+
     if (!user) {
       navigate('/login');
       return;
@@ -42,7 +44,7 @@ const RegisterStatus: React.FC = () => {
         return () => unsubscribe();
       } catch (e) { console.error(e); }
     }
-  }, [user, isMock]);
+  }, [authLoading, user, isMock]);
 
   const handleLogout = async () => {
     if (isMock) {
@@ -54,25 +56,25 @@ const RegisterStatus: React.FC = () => {
     }
   };
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-900 dark:border-gold-400"></div>
+  if (authLoading || loading) return (
+    <div className="flex min-h-dvh items-center justify-center bg-slate-50 dark:bg-slate-950" role="status" aria-label="Loading application status">
+      <div aria-hidden="true" className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-brand-900 dark:border-gold-400"></div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-brand-900 dark:bg-slate-950 flex items-center justify-center p-4 relative">
+    <div className="relative flex min-h-dvh items-start justify-center overflow-y-auto bg-brand-900 px-4 py-6 pt-20 dark:bg-slate-950 sm:px-6 lg:items-center lg:py-10">
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
       </div>
 
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 text-center border border-slate-100 dark:border-slate-800">
+      <div className="w-full max-w-md min-w-0 rounded-3xl border border-slate-100 bg-white p-5 text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:p-8">
         {!application ? (
           <div className="space-y-6">
             <AlertCircle size={64} className="mx-auto text-gold-500" />
             <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">No Application Found</h2>
-            <p className="text-slate-500 dark:text-slate-400">You haven't submitted a registration application yet.</p>
-            <Button onClick={() => navigate('/register')}>Apply Now</Button>
+            <p className="break-words text-slate-500 dark:text-slate-400">You haven't submitted a registration application yet.</p>
+            <Button onClick={() => navigate('/register')}>Apply</Button>
             <Button variant="secondary" onClick={handleLogout}>Sign Out</Button>
           </div>
         ) : application.status === 'pending' ? (
@@ -81,7 +83,7 @@ const RegisterStatus: React.FC = () => {
                <Clock size={40} />
             </div>
             <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Review Pending</h2>
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-700/60 text-sm text-slate-500 dark:text-slate-400 leading-relaxed text-center">
+            <div className="break-words p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-700/60 text-sm text-slate-500 dark:text-slate-400 leading-relaxed text-center">
               Your application is being verified. Log in as an <span className="font-bold text-brand-900 dark:text-gold-400 underline cursor-pointer" onClick={() => handleLogout()}>Admin</span> to approve it.
             </div>
             <Button variant="secondary" onClick={handleLogout}>
@@ -92,9 +94,9 @@ const RegisterStatus: React.FC = () => {
           <div className="space-y-6">
             <XCircle size={64} className="mx-auto text-red-500" />
             <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Application Rejected</h2>
-            <div className="p-4 bg-red-50 dark:bg-red-950/50 rounded-2xl border border-red-100 dark:border-red-900/50 text-sm text-red-600 dark:text-red-300">
+            <div className="break-words p-4 bg-red-50 dark:bg-red-950/50 rounded-2xl border border-red-100 dark:border-red-900/50 text-sm text-red-600 dark:text-red-300">
               <p className="font-bold mb-1">Reason:</p>
-              <p>{application.rejection_reason || 'Information provided does not match records.'}</p>
+              <p className="break-words [overflow-wrap:anywhere]">{application.rejection_reason || 'Information provided does not match records.'}</p>
             </div>
             <p className="text-xs text-slate-400 dark:text-slate-500">Trial Count: {application.rejection_count}/3 (Monthly)</p>
             {application.rejection_count >= 3 ? (
@@ -102,7 +104,7 @@ const RegisterStatus: React.FC = () => {
                 Form locked. Max rejection limit reached.
               </div>
             ) : (
-              <Button onClick={() => navigate('/register')}>Re-apply (Trial {application.rejection_count + 1})</Button>
+              <Button aria-label={`Re-apply (trial ${application.rejection_count + 1})`} onClick={() => navigate('/register')}>Re-apply</Button>
             )}
             <Button variant="secondary" onClick={handleLogout}>Sign Out</Button>
           </div>
@@ -111,7 +113,7 @@ const RegisterStatus: React.FC = () => {
             <CheckCircle2 size={64} className="mx-auto text-green-500" />
             <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Account Approved!</h2>
             <p className="text-slate-500 dark:text-slate-400">Welcome to the Regal system. Your profile is now active.</p>
-            <Button variant="gold" onClick={() => window.location.reload()}>Go to Dashboard</Button>
+            <Button variant="gold" onClick={() => window.location.reload()}>Dashboard</Button>
           </div>
         )}
       </div>
