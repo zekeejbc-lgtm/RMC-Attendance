@@ -1,0 +1,858 @@
+{
+  "browser": "Chrome/151.0.7922.109",
+  "checks": 80,
+  "consoleMessages": [],
+  "eventModalChecks": [
+    {
+      "width": 320,
+      "dialogs": 1
+    },
+    {
+      "width": 375,
+      "dialogs": 1
+    },
+    {
+      "width": 768,
+      "dialogs": 1
+    },
+    {
+      "width": 1024,
+      "dialogs": 1
+    },
+    {
+      "width": 1440,
+      "dialogs": 1
+    }
+  ],
+  "focusRings": [
+    {
+      "theme": "light",
+      "focusVisible": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "3px",
+      "tag": "button"
+    },
+    {
+      "theme": "dark",
+      "focusVisible": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "3px",
+      "tag": "button"
+    }
+  ],
+  "interactions": [
+    "drawer forward/reverse Tab order, containment, Escape, focus return",
+    "dialog forward/reverse Tab order, containment, Escape, focus return",
+    "protected confirmation backdrop"
+  ],
+  "matrix": [
+    {
+      "routePath": "/",
+      "viewportWidth": 320,
+      "controlCount": 7,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/login",
+      "viewportWidth": 320,
+      "controlCount": 19,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 1
+    },
+    {
+      "routePath": "/register",
+      "viewportWidth": 320,
+      "controlCount": 8,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/dashboard",
+      "viewportWidth": 320,
+      "controlCount": 12,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/qr",
+      "viewportWidth": 320,
+      "controlCount": 4,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/events",
+      "viewportWidth": 320,
+      "controlCount": 15,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/ceremonies",
+      "viewportWidth": 320,
+      "controlCount": 11,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/records",
+      "viewportWidth": 320,
+      "controlCount": 7,
+      "charts": [],
+      "dataTreatment": {
+        "cardCount": 1,
+        "cardVisible": true,
+        "tableCount": 1,
+        "tableVisible": false
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/profile",
+      "viewportWidth": 320,
+      "controlCount": 14,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/mayor/scan",
+      "viewportWidth": 320,
+      "controlCount": 9,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/panel",
+      "viewportWidth": 320,
+      "controlCount": 11,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events",
+      "viewportWidth": 320,
+      "controlCount": 17,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events/create",
+      "viewportWidth": 320,
+      "controlCount": 21,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/attendance",
+      "viewportWidth": 320,
+      "controlCount": 13,
+      "charts": [
+        {
+          "label": "Attendance visualization",
+          "width": 254,
+          "height": 256
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 100,
+        "cardVisible": true,
+        "tableCount": 1,
+        "tableVisible": false
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/members",
+      "viewportWidth": 320,
+      "controlCount": 9,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ossa/dashboard",
+      "viewportWidth": 320,
+      "controlCount": 19,
+      "charts": [
+        {
+          "label": "Sanction status chart",
+          "width": 254,
+          "height": 256
+        },
+        {
+          "label": "Department sanction hours chart",
+          "width": 254,
+          "height": 256
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 7,
+        "cardVisible": true,
+        "tableCount": 1,
+        "tableVisible": false
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/",
+      "viewportWidth": 375,
+      "controlCount": 7,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/login",
+      "viewportWidth": 375,
+      "controlCount": 19,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 1
+    },
+    {
+      "routePath": "/register",
+      "viewportWidth": 375,
+      "controlCount": 8,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/dashboard",
+      "viewportWidth": 375,
+      "controlCount": 12,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/qr",
+      "viewportWidth": 375,
+      "controlCount": 4,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/events",
+      "viewportWidth": 375,
+      "controlCount": 15,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/ceremonies",
+      "viewportWidth": 375,
+      "controlCount": 11,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/records",
+      "viewportWidth": 375,
+      "controlCount": 7,
+      "charts": [],
+      "dataTreatment": {
+        "cardCount": 1,
+        "cardVisible": true,
+        "tableCount": 1,
+        "tableVisible": false
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/profile",
+      "viewportWidth": 375,
+      "controlCount": 14,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/mayor/scan",
+      "viewportWidth": 375,
+      "controlCount": 9,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/panel",
+      "viewportWidth": 375,
+      "controlCount": 11,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events",
+      "viewportWidth": 375,
+      "controlCount": 17,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events/create",
+      "viewportWidth": 375,
+      "controlCount": 21,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/attendance",
+      "viewportWidth": 375,
+      "controlCount": 13,
+      "charts": [
+        {
+          "label": "Attendance visualization",
+          "width": 309,
+          "height": 256
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 100,
+        "cardVisible": true,
+        "tableCount": 1,
+        "tableVisible": false
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/members",
+      "viewportWidth": 375,
+      "controlCount": 9,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ossa/dashboard",
+      "viewportWidth": 375,
+      "controlCount": 19,
+      "charts": [
+        {
+          "label": "Sanction status chart",
+          "width": 309,
+          "height": 256
+        },
+        {
+          "label": "Department sanction hours chart",
+          "width": 309,
+          "height": 256
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 7,
+        "cardVisible": true,
+        "tableCount": 1,
+        "tableVisible": false
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/",
+      "viewportWidth": 768,
+      "controlCount": 12,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/login",
+      "viewportWidth": 768,
+      "controlCount": 24,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 1
+    },
+    {
+      "routePath": "/register",
+      "viewportWidth": 768,
+      "controlCount": 8,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/dashboard",
+      "viewportWidth": 768,
+      "controlCount": 17,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/qr",
+      "viewportWidth": 768,
+      "controlCount": 9,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/events",
+      "viewportWidth": 768,
+      "controlCount": 20,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/ceremonies",
+      "viewportWidth": 768,
+      "controlCount": 16,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/records",
+      "viewportWidth": 768,
+      "controlCount": 12,
+      "charts": [],
+      "dataTreatment": {
+        "cardCount": 1,
+        "cardVisible": false,
+        "tableCount": 1,
+        "tableVisible": true
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/profile",
+      "viewportWidth": 768,
+      "controlCount": 19,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/mayor/scan",
+      "viewportWidth": 768,
+      "controlCount": 15,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/panel",
+      "viewportWidth": 768,
+      "controlCount": 15,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events",
+      "viewportWidth": 768,
+      "controlCount": 21,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events/create",
+      "viewportWidth": 768,
+      "controlCount": 25,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/attendance",
+      "viewportWidth": 768,
+      "controlCount": 21,
+      "charts": [
+        {
+          "label": "Attendance visualization",
+          "width": 414,
+          "height": 288
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 100,
+        "cardVisible": false,
+        "tableCount": 1,
+        "tableVisible": true
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/members",
+      "viewportWidth": 768,
+      "controlCount": 17,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ossa/dashboard",
+      "viewportWidth": 768,
+      "controlCount": 27,
+      "charts": [
+        {
+          "label": "Sanction status chart",
+          "width": 414,
+          "height": 288
+        },
+        {
+          "label": "Department sanction hours chart",
+          "width": 414,
+          "height": 288
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 7,
+        "cardVisible": false,
+        "tableCount": 1,
+        "tableVisible": true
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/",
+      "viewportWidth": 1024,
+      "controlCount": 12,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/login",
+      "viewportWidth": 1024,
+      "controlCount": 24,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 1
+    },
+    {
+      "routePath": "/register",
+      "viewportWidth": 1024,
+      "controlCount": 8,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/dashboard",
+      "viewportWidth": 1024,
+      "controlCount": 17,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/qr",
+      "viewportWidth": 1024,
+      "controlCount": 9,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/events",
+      "viewportWidth": 1024,
+      "controlCount": 20,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/ceremonies",
+      "viewportWidth": 1024,
+      "controlCount": 16,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/records",
+      "viewportWidth": 1024,
+      "controlCount": 12,
+      "charts": [],
+      "dataTreatment": {
+        "cardCount": 1,
+        "cardVisible": false,
+        "tableCount": 1,
+        "tableVisible": true
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/profile",
+      "viewportWidth": 1024,
+      "controlCount": 19,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/mayor/scan",
+      "viewportWidth": 1024,
+      "controlCount": 15,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/panel",
+      "viewportWidth": 1024,
+      "controlCount": 15,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events",
+      "viewportWidth": 1024,
+      "controlCount": 21,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events/create",
+      "viewportWidth": 1024,
+      "controlCount": 25,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/attendance",
+      "viewportWidth": 1024,
+      "controlCount": 21,
+      "charts": [
+        {
+          "label": "Attendance visualization",
+          "width": 422,
+          "height": 288
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 100,
+        "cardVisible": false,
+        "tableCount": 1,
+        "tableVisible": true
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/members",
+      "viewportWidth": 1024,
+      "controlCount": 17,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ossa/dashboard",
+      "viewportWidth": 1024,
+      "controlCount": 27,
+      "charts": [
+        {
+          "label": "Sanction status chart",
+          "width": 323,
+          "height": 288
+        },
+        {
+          "label": "Department sanction hours chart",
+          "width": 323,
+          "height": 288
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 7,
+        "cardVisible": false,
+        "tableCount": 1,
+        "tableVisible": true
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/",
+      "viewportWidth": 1440,
+      "controlCount": 12,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/login",
+      "viewportWidth": 1440,
+      "controlCount": 24,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 1
+    },
+    {
+      "routePath": "/register",
+      "viewportWidth": 1440,
+      "controlCount": 8,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/dashboard",
+      "viewportWidth": 1440,
+      "controlCount": 17,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/qr",
+      "viewportWidth": 1440,
+      "controlCount": 9,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/events",
+      "viewportWidth": 1440,
+      "controlCount": 20,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/ceremonies",
+      "viewportWidth": 1440,
+      "controlCount": 16,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/records",
+      "viewportWidth": 1440,
+      "controlCount": 12,
+      "charts": [],
+      "dataTreatment": {
+        "cardCount": 1,
+        "cardVisible": false,
+        "tableCount": 1,
+        "tableVisible": true
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/student/profile",
+      "viewportWidth": 1440,
+      "controlCount": 19,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/mayor/scan",
+      "viewportWidth": 1440,
+      "controlCount": 15,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/panel",
+      "viewportWidth": 1440,
+      "controlCount": 15,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events",
+      "viewportWidth": 1440,
+      "controlCount": 21,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ssg/events/create",
+      "viewportWidth": 1440,
+      "controlCount": 25,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/attendance",
+      "viewportWidth": 1440,
+      "controlCount": 21,
+      "charts": [
+        {
+          "label": "Attendance visualization",
+          "width": 699,
+          "height": 288
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 100,
+        "cardVisible": false,
+        "tableCount": 1,
+        "tableVisible": true
+      },
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/admin/members",
+      "viewportWidth": 1440,
+      "controlCount": 17,
+      "charts": [],
+      "dataTreatment": null,
+      "dialogCount": 0
+    },
+    {
+      "routePath": "/ossa/dashboard",
+      "viewportWidth": 1440,
+      "controlCount": 27,
+      "charts": [
+        {
+          "label": "Sanction status chart",
+          "width": 531,
+          "height": 288
+        },
+        {
+          "label": "Department sanction hours chart",
+          "width": 531,
+          "height": 288
+        }
+      ],
+      "dataTreatment": {
+        "cardCount": 7,
+        "cardVisible": false,
+        "tableCount": 1,
+        "tableVisible": true
+      },
+      "dialogCount": 0
+    }
+  ],
+  "screenshots": 16,
+  "viewports": [
+    320,
+    375,
+    768,
+    1024,
+    1440
+  ]
+}
