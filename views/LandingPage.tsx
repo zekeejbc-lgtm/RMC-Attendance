@@ -6,24 +6,30 @@ import { auth, db } from '../firebase';
 import { useAuth } from '../components/AuthContext';
 import { useTheme } from '../components/ThemeContext';
 import ThemeToggle from '../components/ui/ThemeToggle';
-import { mockAuth, mockSeed, getDB, mockData } from '../lib/mockBackend';
+import { ensureMockReferenceData, mockAuth, mockData } from '../lib/mockBackend';
 import { TEST_ACCOUNTS } from '../lib/seed';
 import { SchoolNode } from '../types';
 import Button from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
+import { Collapsible } from '../components/ui/Collapsible';
+import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
+import { serializeAcademicAssignment } from '../lib/academicDirectory';
+import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 import { 
   ArrowRight, Shield, Target, Users, 
   MapPin, Mail, Phone, Facebook, Instagram,
   Globe, X, Eye, EyeOff, Loader2,
   ShieldAlert, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Copy, Check, ExternalLink,
-  UserCircle, Camera, CreditCard, Calendar,
+  UserCircle, Camera, CreditCard, Calendar, KeyRound,
   FileText, QrCode, ShieldCheck, Clock, FileCheck2, BarChart3, UserCheck, Smartphone, CheckCircle2, Layers, Lock, Zap, Building2, GraduationCap
 } from 'lucide-react';
 
 interface LandingPageProps {
   defaultOpenLogin?: boolean;
+  defaultOpenRegister?: boolean;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, defaultOpenRegister = false }) => {
   const navigate = useNavigate();
   const { isMock, user, profile } = useAuth();
   
@@ -34,7 +40,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   
   // Modals
   const [showLoginModal, setShowLoginModal] = useState(defaultOpenLogin);
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(defaultOpenRegister);
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
 
   // Login Logic State
@@ -48,23 +54,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   // Register Logic State
   const [regStep, setRegStep] = useState(1);
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [regError, setRegError] = useState('');
   const [structure, setStructure] = useState<SchoolNode[]>([]);
-  const [selectedSchool, setSelectedSchool] = useState<SchoolNode | null>(null);
-  const [selectedDept, setSelectedDept] = useState<SchoolNode | null>(null);
-  const [selectedTrack, setSelectedTrack] = useState<SchoolNode | null>(null);
-  const [selectedStrand, setSelectedStrand] = useState<SchoolNode | null>(null);
-  const [selectedLvl, setSelectedLvl] = useState<SchoolNode | null>(null);
-  const [selectedSec, setSelectedSec] = useState<SchoolNode | null>(null);
+  const [academicPath, setAcademicPath] = useState<SchoolNode[]>([]);
+  const [securityKey, setSecurityKey] = useState('');
+  const [regSuccess, setRegSuccess] = useState(false);
   const [regData, setRegData] = useState({
-    name: '', username: '', email: '', password: '', student_id: '',
+    name: '', username: '', email: '', password: '', confirmPassword: '', student_id: '',
     guardianName: '', guardianPhone: '', profilePic: '', idFront: '', idBack: ''
   });
 
   // --- EFFECTS ---
   useEffect(() => {
     if (defaultOpenLogin) setShowLoginModal(true);
-  }, [defaultOpenLogin]);
+    if (defaultOpenRegister) setShowRegisterModal(true);
+  }, [defaultOpenLogin, defaultOpenRegister]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -79,7 +86,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   useEffect(() => {
     if (user) {
-      if (profile?.role === 'ossa') {
+      if (profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
         navigate('/ossa/dashboard');
       } else {
         navigate('/dashboard');
@@ -89,8 +96,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   useEffect(() => {
     if (isMock) {
-      const currentDB = getDB();
-      if (Object.keys(currentDB.users).length === 0) mockSeed();
+      ensureMockReferenceData();
       setShowTestPanel(true);
       setStructure(mockData.getSchoolStructure());
     }
@@ -141,12 +147,34 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   // Register Handlers
   const handleRegUpload = (field: string) => {
-    setRegData(prev => ({ ...prev, [field]: `https://picsum.photos/400/400?sig=${field}_${Math.random()}` }));
+    setRegData((prev: any) => ({ ...prev, [field]: `https://picsum.photos/400/400?sig=${field}_${Math.random()}` }));
   };
 
+  const terminal = academicPath[academicPath.length - 1];
+  const isMayorRegistered = terminal && ['section', 'block'].includes(terminal.type)
+    ? mockData.isMayorRegisteredForSection(terminal.id, terminal.name)
+    : false;
+
   const handleRegisterSubmit = async () => {
+    const terminalNode = academicPath[academicPath.length - 1];
+    if (!terminalNode || !['section', 'block'].includes(terminalNode.type)) return;
+    if (regData.password !== regData.confirmPassword) {
+      setRegError('Passwords do not match.');
+      return;
+    }
+    if (terminalNode && mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name)) {
+      if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !securityKey.trim()) {
+        setRegError('Section Enrollment Security Key is required for enrollment into this section.');
+        return;
+      }
+      if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !mockData.validateSectionSecurityKey(terminalNode.id, securityKey.trim(), terminalNode.name)) {
+        setRegError('Invalid Section Security Key. Please verify the security key with your Class Mayor or SSG officer.');
+        return;
+      }
+    }
     setIsRegistering(true);
     const uid = `user_${Date.now()}`;
+    const serialized = serializeAcademicAssignment(academicPath);
     const profile: any = {
       uid,
       name: regData.name,
@@ -155,22 +183,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
       student_id: regData.student_id,
       role: 'student',
       photo_url: regData.profilePic || `https://i.pravatar.cc/150?u=${uid}`,
-      school_data: {
-        type: selectedDept?.name.toLowerCase().includes('high') ? 'High School' : 'College',
-        department: selectedDept?.name,
-        track: selectedTrack?.name,
-        strand: selectedStrand?.name,
-        level: selectedLvl?.name,
-        section: selectedSec?.name,
-        school_id: selectedSchool?.id
-      }
+      school_data: { ...serialized.schoolData, school_id: serialized.assignment.campusId, academic_assignment: serialized.assignment }
     };
 
-    mockData.submitApplication(profile);
-    localStorage.setItem('rmc_mock_session', uid);
-    window.dispatchEvent(new Event('rmc_auth_update'));
-    setShowRegisterModal(false);
-    navigate('/register/status');
+    try {
+      mockData.submitApplication(profile, regData.password, securityKey.trim());
+      localStorage.setItem('rmc_mock_session', uid);
+      window.dispatchEvent(new Event('rmc_auth_update'));
+      setIsRegistering(false);
+      setRegSuccess(true);
+    } catch (submissionError) {
+      setIsRegistering(false);
+      setRegError(submissionError instanceof Error ? submissionError.message : 'Unable to submit the application.');
+      setIsRegistering(false);
+    }
   };
 
   // --- DATA FOR IARS FEATURES & MODULES ---
@@ -277,20 +303,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   ];
 
   return (
-    <div className={`min-h-screen font-inter transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
+    <div className={`min-h-dvh overflow-x-hidden font-inter transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
       
       {/* NAVBAR */}
       <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-white/85 dark:bg-slate-900/85 backdrop-blur-md shadow-sm py-4 border-b border-slate-200/50 dark:border-slate-800/50' : 'bg-transparent py-6'}`}>
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => scrollTo('home')}>
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 sm:flex-nowrap sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 cursor-pointer sm:gap-3" onClick={() => scrollTo('home')}>
              <img 
                src="https://i.imgur.com/K3T5yIT.jpeg" 
                alt="IARS Academic Seal" 
                className="w-10 h-10 rounded-full object-cover shadow-lg ring-2 ring-gold-400/50 hover:scale-105 transition-transform shrink-0" 
              />
-             <div>
+             <div className="min-w-0">
                 <h1 className="font-black uppercase tracking-tighter leading-none text-brand-900 dark:text-white text-base">IARS</h1>
-                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">Attendance & Records System</p>
+                <p className="hidden text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400 sm:block">Attendance & Records System</p>
              </div>
           </div>
           
@@ -312,10 +338,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
              ))}
           </div>
 
-          <div className="flex gap-3 items-center">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
              <ThemeToggle />
-             <button onClick={() => setShowLoginModal(true)} className="px-6 py-2.5 bg-brand-900 dark:bg-gold-500 text-white dark:text-brand-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-800 dark:hover:bg-gold-400 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5">
-                Portal Login
+             <button onClick={() => setShowLoginModal(true)} className="px-3 py-2.5 bg-brand-900 dark:bg-gold-500 text-white dark:text-brand-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-800 dark:hover:bg-gold-400 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 sm:px-6">
+                Log In
              </button>
           </div>
         </div>
@@ -324,90 +350,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
       {/* --- MODALS --- */}
 
       {/* LOGIN MODAL */}
-      {showLoginModal && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/75 backdrop-blur-md overflow-y-auto p-3 sm:p-6 md:p-8 flex items-center justify-center animate-in fade-in duration-300 min-h-full">
-           <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-3xl sm:rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.5)] relative border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-300 flex flex-col md:grid md:grid-cols-12 md:h-[620px] md:max-h-[85vh] max-h-[92vh] my-auto overflow-hidden">
-              
-              {/* CLOSE BUTTON */}
-              <button 
-                onClick={() => { setShowLoginModal(false); if(defaultOpenLogin) navigate('/'); }}
-                className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 p-2.5 bg-white/80 hover:bg-white dark:bg-slate-800/80 dark:hover:bg-slate-700 rounded-full text-slate-700 dark:text-slate-200 transition-all z-30 shadow-md hover:scale-105 border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-sm"
-                title="Close Portal Login"
-              >
-                <X size={18} />
-              </button>
-
-              {/* MOBILE TOP COMPACT BANNER (Mobile Only) */}
-              <div className="md:hidden bg-brand-gradient p-5 text-white flex items-center gap-3 border-b border-gold-400/20 shrink-0 pr-14">
-                <img 
-                  src="https://i.imgur.com/K3T5yIT.jpeg" 
-                  alt="IARS Academic Seal" 
-                  className="w-12 h-12 rounded-full object-cover shadow-lg ring-2 ring-gold-400/50 shrink-0" 
-                />
-                <div className="min-w-0">
-                  <h2 className="text-base font-black uppercase tracking-tight leading-none text-white truncate">IARS Portal</h2>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gold-300 mt-1 truncate">Attendance & Records Verification</p>
-                </div>
-              </div>
-
-              {/* LEFT BRAND PANEL (Desktop / Tablet) */}
-              <div className="hidden md:flex md:col-span-5 bg-brand-gradient p-8 md:p-10 text-white flex-col justify-between relative overflow-hidden border-r border-gold-400/20 h-full min-h-0 max-h-full">
-                <div className="absolute top-0 right-0 w-48 h-48 bg-gold-400/10 rounded-full blur-2xl -mr-16 -mt-16 pointer-events-none"></div>
-                <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl -ml-16 -mb-16 pointer-events-none"></div>
-
-                <div className="relative z-10 space-y-6 overflow-y-auto custom-scrollbar pr-1">
-                   <div className="flex items-center gap-3">
-                      <img 
-                        src="https://i.imgur.com/K3T5yIT.jpeg" 
-                        alt="IARS Academic Seal" 
-                        className="w-14 h-14 rounded-full object-cover shadow-xl ring-4 ring-gold-400/50" 
-                      />
-                      <div>
-                         <h2 className="text-xl font-black uppercase tracking-tighter leading-none text-white">IARS</h2>
-                         <p className="text-[10px] font-bold uppercase tracking-widest text-gold-300 mt-1">Attendance & Records</p>
-                      </div>
-                   </div>
-
-                   <div className="space-y-2 pt-2">
-                      <h3 className="text-base font-black text-white leading-tight uppercase tracking-tight">
-                         Institutional Portal Identity Hub
-                      </h3>
-                      <p className="text-xs text-slate-200 font-medium leading-relaxed">
-                         Secure single sign-on access for Students, Section Mayors, SSG Governance Officers, and Administrators.
-                      </p>
-                   </div>
-
-                   <div className="space-y-2.5 pt-2">
-                      <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/10">
-                         <ShieldCheck size={18} className="text-emerald-400 shrink-0" />
-                         <div className="text-left">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-white">Encrypted Verification</p>
-                            <p className="text-[10px] text-slate-300">Protected student QR token authentication</p>
-                         </div>
-                      </div>
-                      <div className="flex items-center gap-3 bg-white/10 p-3 rounded-2xl backdrop-blur-sm border border-white/10">
-                         <MapPin size={18} className="text-gold-400 shrink-0" />
-                         <div className="text-left">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-white">Geofenced Scanning</p>
-                            <p className="text-[10px] text-slate-300">GPS validated ceremony check-ins</p>
-                         </div>
-                      </div>
-                   </div>
-                </div>
-
-                <div className="relative z-10 pt-4 mt-4 border-t border-white/15 text-[10px] text-slate-300 font-medium shrink-0">
-                   Authorized Institutional Access Only • v2.4
-                </div>
-              </div>
-
-              {/* RIGHT FORM PANEL */}
-              <div className="md:col-span-7 p-6 sm:p-8 md:p-10 overflow-y-auto custom-scrollbar flex flex-col justify-between bg-white dark:bg-slate-900 h-full min-h-0 max-h-full">
+      <Modal
+        open={showLoginModal}
+        onClose={() => { setShowLoginModal(false); if (defaultOpenLogin) navigate('/'); }}
+        size="md"
+        title="Portal Login"
+        description="Enter your credentials to connect to your academic workspace"
+      >
+           <div className="min-w-0">
+              <div className="flex flex-col justify-between">
                 <div>
-                   <div className="mb-5 sm:mb-6">
-                      <h2 className="text-xl sm:text-2xl font-black text-brand-900 dark:text-white uppercase tracking-tight">Portal Login</h2>
-                      <p className="text-slate-500 dark:text-slate-400 text-xs font-medium mt-1">Enter your credentials to connect to your academic workspace</p>
-                   </div>
-
                    {loginError && (
                      <div className="mb-4 sm:mb-5 p-3.5 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl border border-red-200 dark:border-red-800 flex items-center gap-3 text-xs font-bold uppercase animate-in shake">
                        <ShieldAlert size={18} className="shrink-0" /> 
@@ -416,34 +368,39 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                    )}
 
                    <form onSubmit={handleLogin} className="space-y-4">
-                     <div className="space-y-1.5">
-                       <label className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Asset Identifier</label>
-                       <div className="relative">
-                         <UserCircle size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-                         <input
-                           type="text"
+                      <div className="space-y-1.5">
+                        <label htmlFor="landing-login-identifier" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Asset Identifier / Email</label>
+                        <div className="relative">
+                          <UserCircle size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+                          <input
+                            id="landing-login-identifier"
+                            aria-label="Asset Identifier"
+                            type="text"
                            required
                            value={identifier}
                            onChange={(e) => setIdentifier(e.target.value)}
-                           className="w-full py-3.5 pl-12 pr-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-sm text-brand-900 dark:text-white"
+                           className="w-full py-3.5 pl-12 pr-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-base text-brand-900 dark:text-white"
                            placeholder="Username or Email address"
                          />
                        </div>
                      </div>
 
                      <div className="space-y-1.5">
-                       <label className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Security Key</label>
+                       <label htmlFor="landing-login-password" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Security Key</label>
                        <div className="relative">
                          <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                          <input
+                           id="landing-login-password"
+                           aria-label="Security Key"
                            type={showPassword ? "text" : "password"}
                            required
                            value={password}
                            onChange={(e) => setPassword(e.target.value)}
-                           className="w-full py-3.5 pl-12 pr-12 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-sm text-brand-900 dark:text-white"
+                           className="w-full py-3.5 pl-12 pr-12 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-base text-brand-900 dark:text-white"
                            placeholder="••••••••"
                          />
                          <button 
+                           aria-label={showPassword ? 'Hide password' : 'Show password'}
                            type="button" 
                            onClick={() => setShowPassword(!showPassword)} 
                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-900 dark:hover:text-gold-400 transition-colors p-1"
@@ -454,7 +411,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                      </div>
 
                      <Button type="submit" disabled={isLoggingIn} className="!rounded-2xl text-xs font-black uppercase tracking-widest py-4 mt-2 shadow-lg hover:shadow-xl transition-all">
-                       {isLoggingIn ? <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={18}/> Authenticating...</span> : 'Connect to Portal Hub'}
+                       {isLoggingIn ? <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={18}/> Logging in...</span> : 'Log In'}
                      </Button>
                    </form>
                 </div>
@@ -464,23 +421,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                     onClick={() => { setShowLoginModal(false); setShowRegisterModal(true); }} 
                     className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-brand-900 dark:text-slate-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2"
                   >
-                    <span>Register New Student Asset</span>
+                    <span>Register</span>
                     <ArrowRight size={14} />
                   </button>
 
                   {isMock && (
                      <div className="space-y-2 pt-1">
                        <button 
+                         aria-controls="landing-test-accounts"
+                         aria-expanded={showTestPanel}
                          type="button"
                          onClick={() => setShowTestPanel(!showTestPanel)} 
                          className="w-full text-[10px] font-black text-gold-600 dark:text-gold-400 uppercase tracking-widest flex items-center justify-between p-2.5 rounded-xl bg-gold-50/60 dark:bg-gold-950/30 border border-gold-200/60 dark:border-gold-900/40 hover:bg-gold-100/60 transition-colors"
                        >
-                         <span className="flex items-center gap-1.5"><Zap size={13}/> Quick Role Access Accounts</span>
-                         {showTestPanel ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                         <span className="flex items-center gap-1.5"><Zap size={13}/> Tests</span>
+                         <ChevronDown className="app-disclosure-chevron" size={14}/>
                        </button>
 
-                       {showTestPanel && (
-                          <div className="bg-slate-50 dark:bg-slate-800/90 rounded-2xl p-2.5 space-y-1.5 border border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-2">
+                       <Collapsible id="landing-test-accounts" open={showTestPanel} innerClassName="bg-slate-50 dark:bg-slate-800/90 rounded-2xl p-2.5 space-y-1.5 border border-slate-200 dark:border-slate-700">
                             <p className="text-[10px] text-slate-400 dark:text-slate-400 font-bold px-1 uppercase tracking-wider">Click to auto-fill test credentials:</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                               {TEST_ACCOUNTS.map((acc) => (
@@ -500,127 +458,258 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                                 </button>
                               ))}
                             </div>
-                          </div>
-                       )}
+                       </Collapsible>
                      </div>
                   )}
                 </div>
 
               </div>
            </div>
-        </div>
-      )}
+      </Modal>
 
       {/* REGISTRATION MODAL */}
-      {showRegisterModal && (
-         <div className="fixed inset-0 z-[100] bg-slate-950/75 backdrop-blur-md overflow-y-auto p-4 sm:p-6 md:p-8 flex items-center justify-center animate-in fade-in duration-300 min-h-full">
-           <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-[2rem] shadow-[0_0_60px_rgba(0,0,0,0.3)] overflow-hidden relative border border-white/20 dark:border-slate-700 animate-in zoom-in-95 duration-300 flex flex-col max-h-[88vh] my-auto">
-              <button onClick={() => setShowRegisterModal(false)} className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/40 dark:bg-black/20 dark:hover:bg-black/40 rounded-full text-white transition-colors z-20 backdrop-blur-sm">
-                <X size={18} />
-              </button>
+      <Modal
+        open={showRegisterModal}
+        onClose={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); if (defaultOpenRegister) navigate('/'); }}
+        size="md"
+        title={regSuccess ? "Enrollment Submitted" : "System Enrollment"}
+        description={regSuccess ? "Application Submitted • Status Pending Review" : `Stage ${regStep} of 3 • Protocol`}
+      >
+        {regSuccess ? (
+          <div className="space-y-5 text-center py-2 animate-in fade-in zoom-in-95">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 border-2 border-emerald-500 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-lg shadow-emerald-500/10">
+              <CheckCircle2 size={36} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Registration Submitted!</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">Your application is pending section officer review.</p>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-left space-y-2 text-xs">
+              <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Legal Name</span>
+                <span className="font-bold text-slate-900 dark:text-white">{regData.name}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Student ID</span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{regData.student_id}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Assigned Section</span>
+                <span className="font-bold text-slate-900 dark:text-white">{academicPath[academicPath.length - 1]?.name || 'Assigned Section'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Status</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Pending Approval
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Button variant="gold" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); navigate('/register/status'); }}>
+                View Application Status
+              </Button>
+              <Button variant="secondary" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); }}>
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : (
+           <div className="space-y-5">
+              {regStep === 1 && (
+                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                    <div className="flex flex-col items-center mb-4">
+                       <button aria-label="Upload profile photo" type="button" onClick={() => handleRegUpload('profilePic')} className="w-20 h-20 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 hover:bg-gold-50/10 transition-all overflow-hidden relative group">
+                          {regData.profilePic ? <img src={regData.profilePic} alt="Uploaded profile" className="w-full h-full object-cover" /> : <><UserCircle size={28} /><span className="text-[8px] font-black uppercase mt-1">Photo</span></>}
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={18} className="text-white" /></div>
+                       </button>
+                       <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">Digital Identity Picture (Optional)</p>
+                    </div>
 
-              <div className="bg-brand-gradient p-6 flex justify-between items-center border-b-2 border-emerald-500 shrink-0">
-                 <div className="flex items-center gap-3">
-                    <img 
-                      src="https://i.imgur.com/K3T5yIT.jpeg" 
-                      alt="IARS Academic Seal" 
-                      className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/50 shadow-md" 
-                    />
-                    <div>
-                       <h2 className="text-lg font-black text-white uppercase tracking-tight leading-none">System Enrollment</h2>
-                       <p className="text-emerald-300 text-[10px] font-bold tracking-widest uppercase mt-1">Stage {regStep} of 3 • Protocol</p>
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Legal Full Name</label>
+                       <input id="landing-register-name" placeholder="Ex. Juan Dela Cruz" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                       <div className="space-y-1">
+                          <label htmlFor="landing-register-username" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Username <span className="normal-case text-slate-400">(optional)</span></label>
+                          <input id="landing-register-username" placeholder="Defaults to email" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.username} onChange={e => setRegData({...regData, username: e.target.value})} />
+                       </div>
+                       <div className="space-y-1">
+                          <label htmlFor="landing-register-email" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Email Address</label>
+                          <input id="landing-register-email" placeholder="name@email.com" type="email" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} />
+                       </div>
+                    </div>
+
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-password" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Password</label>
+                       <div className="relative">
+                         <input
+                           id="landing-register-password"
+                           placeholder="••••••••"
+                           type={showRegPassword ? "text" : "password"}
+                           className="w-full p-3.5 pr-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none"
+                           value={regData.password}
+                           onChange={e => setRegData({...regData, password: e.target.value})}
+                         />
+                         <button 
+                           aria-label={showRegPassword ? 'Hide password' : 'Show password'}
+                           type="button" 
+                           onClick={() => setShowRegPassword(!showRegPassword)} 
+                           className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-900 dark:hover:text-gold-400 transition-colors p-1"
+                         >
+                           {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                         </button>
+                       </div>
+                       <PasswordStrengthMeter password={regData.password} />
+                    </div>
+
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-confirm-password" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Confirm Password</label>
+                       <div className="relative">
+                         <input
+                           id="landing-register-confirm-password"
+                           placeholder="••••••••"
+                           type={showRegConfirmPassword ? "text" : "password"}
+                           className="w-full p-3.5 pr-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none"
+                           value={regData.confirmPassword}
+                           onChange={e => setRegData({...regData, confirmPassword: e.target.value})}
+                         />
+                         <button 
+                           aria-label={showRegConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                           type="button" 
+                           onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)} 
+                           className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-900 dark:hover:text-gold-400 transition-colors p-1"
+                         >
+                           {showRegConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                         </button>
+                       </div>
+                       {regData.confirmPassword && regData.password !== regData.confirmPassword && (
+                         <p className="mt-1 text-[10px] font-bold text-red-500">Passwords do not match.</p>
+                       )}
+                       {regData.confirmPassword && regData.password === regData.confirmPassword && (
+                         <p className="mt-1 text-[10px] font-bold text-emerald-500 flex items-center gap-1">
+                           <CheckCircle2 size={12} /> Passwords match.
+                         </p>
+                       )}
                     </div>
                  </div>
+              )}
+
+              {regStep === 2 && (
+                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-student-id" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Official Student ID #</label>
+                       <input id="landing-register-student-id" placeholder="2024-XXXXX" className="w-full min-w-0 p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
+                    </div>
+
+                    <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
+
+                    {terminal && mockData.isMayorRegisteredForSection(terminal.id, terminal.name) && (
+                      <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+                        <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                          <KeyRound size={18} />
+                          <label htmlFor="landing-register-security-key" className="text-xs font-black uppercase tracking-widest">
+                            Section Enrollment Security Key <span className="text-red-500">*</span>
+                          </label>
+                        </div>
+                        <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                          Please enter the section enrollment security key for &ldquo;{terminal.name}&rdquo;. Request this key from your Class Mayor, SSG, or Section Officer.
+                        </p>
+                        <input
+                          id="landing-register-security-key"
+                          placeholder="Enter Section Security Key (e.g. SEC-XXXXX)"
+                          className="w-full rounded-xl border border-amber-300 bg-white p-3.5 text-base font-bold text-brand-900 outline-none focus:border-amber-500 dark:border-amber-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
+                          value={securityKey}
+                          onChange={(e) => setSecurityKey(e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    <p className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+                      Your ID number and academic assignment will be verified against school records. ID image uploads are not needed.
+                    </p>
+                 </div>
+              )}
+
+              {regStep === 3 && (
+                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
+                    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800">
+                       <Shield size={28} className="text-brand-900 dark:text-gold-400 shrink-0" />
+                       <div>
+                          <h4 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase">Optional Emergency Contact</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Not required for attendance enrollment</p>
+                       </div>
+                    </div>
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-guardian-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Guardian Name</label>
+                       <input id="landing-register-guardian-name" placeholder="Legal Full Name" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianName} onChange={e => setRegData({...regData, guardianName: e.target.value})} />
+                    </div>
+                    <div className="space-y-1">
+                       <label htmlFor="landing-register-guardian-phone" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Emergency Contact #</label>
+                       <input id="landing-register-guardian-phone" placeholder="+63 9XX XXX XXXX" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianPhone} onChange={e => setRegData({...regData, guardianPhone: e.target.value})} />
+                    </div>
+                 </div>
+              )}
+
+              {regError && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-800 text-xs font-semibold">
+                  {regError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:gap-4">
+                 {regStep > 1 && (
+                   <Button variant="secondary" aria-label="Previous registration phase" className="!w-full !rounded-xl sm:!w-16 sm:!p-0" onClick={() => setRegStep(regStep - 1)}>
+                     <ChevronLeft size={20} />
+                   </Button>
+                 )}
+                 {regStep < 3 ? (
+                   <Button className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { 
+                     if (regStep === 1 && regData.password !== regData.confirmPassword) {
+                       setRegError('Passwords do not match.');
+                       return;
+                     }
+                     if (regStep === 2) {
+                       if (!regData.student_id.trim()) {
+                         setRegError('Official Student ID # is required.');
+                         return;
+                       }
+                       const terminalNode = academicPath[academicPath.length - 1];
+                       if (!terminalNode || !['section', 'block'].includes(terminalNode.type)) {
+                         setRegError('Please select a valid section to proceed.');
+                         return;
+                       }
+                       if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !securityKey.trim()) {
+                         setRegError('Section Enrollment Security Key is required for enrollment into this section.');
+                         return;
+                       }
+                       if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !mockData.validateSectionSecurityKey(terminalNode.id, securityKey.trim(), terminalNode.name)) {
+                         setRegError('Invalid Section Security Key. Please verify the security key with your Class Mayor or SSG officer.');
+                         return;
+                       }
+                     }
+                     setRegError(''); 
+                     setRegStep(regStep + 1); 
+                   }} disabled={regStep === 1 && (!regData.name.trim() || !regData.email.trim() || regData.password.length < 6 || !regData.confirmPassword || regData.password !== regData.confirmPassword)}>
+                     Next
+                   </Button>
+                 ) : (
+                   <Button variant="gold" className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={handleRegisterSubmit} disabled={isRegistering}>
+                     {isRegistering ? 'Submitting...' : 'Register'}
+                   </Button>
+                 )}
               </div>
 
-              <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
-                 {regStep === 1 && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                       <div className="flex flex-col items-center mb-4">
-                          <button onClick={() => handleRegUpload('profilePic')} className="w-24 h-24 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 hover:bg-gold-50/10 transition-all overflow-hidden relative group">
-                             {regData.profilePic ? <img src={regData.profilePic} className="w-full h-full object-cover" /> : <><UserCircle size={32} /><span className="text-[9px] font-black uppercase mt-1">Photo</span></>}
-                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={20} className="text-white" /></div>
-                          </button>
-                       </div>
-                       <div className="space-y-1">
-                          <label className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Legal Full Name</label>
-                          <input placeholder="Ex. Juan Dela Cruz" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-sm dark:text-white" value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} />
-                       </div>
-                       <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                             <label className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Username</label>
-                             <input placeholder="Choose alias" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-sm dark:text-white" value={regData.username} onChange={e => setRegData({...regData, username: e.target.value})} />
-                          </div>
-                          <div className="space-y-1">
-                             <label className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Email</label>
-                             <input placeholder="name@email.com" type="email" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-sm dark:text-white" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} />
-                          </div>
-                       </div>
-                       <div className="space-y-1">
-                          <label className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Password</label>
-                          <input placeholder="••••••••" type="password" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-sm dark:text-white" value={regData.password} onChange={e => setRegData({...regData, password: e.target.value})} />
-                       </div>
-                    </div>
-                 )}
-                 {regStep === 2 && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                       <div className="space-y-1">
-                          <label className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Official ID #</label>
-                          <input placeholder="2024-XXXXX" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-sm dark:text-white" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
-                       </div>
-                       <div className="grid grid-cols-1 gap-2">
-                         <select className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-brand-900 dark:text-white text-xs" onChange={e => {
-                             const s = structure.find(x => x.id === e.target.value); setSelectedSchool(s || null); setSelectedDept(null);
-                           }}><option value="">Campus Location</option>{structure.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
-                         {selectedSchool && (
-                           <select className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-brand-900 dark:text-white text-xs" onChange={e => {
-                               const d = selectedSchool.children?.find(x => x.id === e.target.value); setSelectedDept(d || null);
-                             }}><option value="">Department</option>{selectedSchool.children?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
-                         )}
-                         {selectedDept && (
-                           <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 text-center text-xs text-slate-400 font-medium">
-                             Additional academic details (Track/Strand/Level) will be verified by admin.
-                           </div>
-                         )}
-                       </div>
-                       <div className="grid grid-cols-2 gap-3 pt-2">
-                          <button onClick={() => handleRegUpload('idFront')} className="p-3 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 aspect-video">
-                             {regData.idFront ? <img src={regData.idFront} className="w-full h-full object-cover rounded-lg" /> : <CreditCard size={24} />}
-                          </button>
-                          <button onClick={() => handleRegUpload('idBack')} className="p-3 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 aspect-video">
-                             {regData.idBack ? <img src={regData.idBack} className="w-full h-full object-cover rounded-lg" /> : <CreditCard size={24} />}
-                          </button>
-                       </div>
-                    </div>
-                 )}
-                 {regStep === 3 && (
-                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                       <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center gap-3">
-                          <Shield size={28} className="text-brand-900 dark:text-white" />
-                          <div><h4 className="text-xs font-black text-brand-900 dark:text-white uppercase">Guardian Protocol</h4></div>
-                       </div>
-                       <div className="space-y-1">
-                          <label className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Guardian Name</label>
-                          <input placeholder="Legal Full Name" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-sm dark:text-white" value={regData.guardianName} onChange={e => setRegData({...regData, guardianName: e.target.value})} />
-                       </div>
-                       <div className="space-y-1">
-                          <label className="text-xs font-black uppercase text-slate-400 ml-1 tracking-widest">Emergency Contact #</label>
-                          <input placeholder="+63 9XX XXX XXXX" className="w-full p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 font-bold text-sm dark:text-white" value={regData.guardianPhone} onChange={e => setRegData({...regData, guardianPhone: e.target.value})} />
-                       </div>
-                    </div>
-                 )}
-              </div>
-
-              <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex gap-3 shrink-0">
-                  {regStep > 1 && <Button variant="secondary" className="!w-14" onClick={() => setRegStep(regStep-1)}>←</Button>}
-                  {regStep < 3 ? 
-                    <Button onClick={() => setRegStep(regStep+1)} className="!text-xs font-black uppercase">Next Phase</Button> :
-                    <Button variant="gold" onClick={handleRegisterSubmit} disabled={isRegistering} className="!text-xs font-black uppercase">{isRegistering ? 'Processing...' : 'Submit Application'}</Button>
-                  }
+              <div className="text-center pt-1 border-t border-slate-100 dark:border-slate-800">
+                <button onClick={() => { setShowRegisterModal(false); setShowLoginModal(true); }} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-brand-900 dark:hover:text-gold-400 transition-colors">
+                  Already have an account? <span className="text-gold-500 underline">Log In</span>
+                </button>
               </div>
            </div>
-         </div>
-      )}
+        )}
+      </Modal>
 
       {/* HERO SECTION */}
       <section id="home" className="relative pt-32 pb-20 lg:pt-44 lg:pb-28 px-6 overflow-hidden">
@@ -639,10 +728,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
               <button onClick={() => setShowLoginModal(true)} className="w-full sm:w-auto px-8 py-4 bg-brand-900 dark:bg-gold-500 text-white dark:text-brand-950 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-800 dark:hover:bg-gold-400 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-3">
-                 Access Portal <ArrowRight size={16} />
+                 Log In <ArrowRight size={16} />
               </button>
               <button onClick={() => setShowRegisterModal(true)} className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-slate-800 text-brand-900 dark:text-white border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-gold-400 hover:text-gold-600 dark:hover:text-gold-400 transition-all flex items-center justify-center gap-3 shadow-sm">
-                 Student Enrollment
+                 Register
               </button>
            </div>
         </div>
@@ -737,11 +826,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
                        <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/80 space-y-2">
                           <h4 className="text-[10px] font-black uppercase tracking-widest text-gold-600 dark:text-gold-400">Key Functional Highlights</h4>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                              {mod.highlights.map((h, hIdx) => (
                                <div key={hIdx} className="flex items-center gap-2 text-xs font-bold text-brand-900 dark:text-slate-200">
                                   <span className="w-1.5 h-1.5 rounded-full bg-gold-500"></span>
-                                  <span className="truncate">{h}</span>
+                                  <span className="break-words">{h}</span>
                                </div>
                              ))}
                           </div>
@@ -818,9 +907,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                     </div>
                     <div className="min-w-0">
                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">{link.label}</p>
-                       <p className="text-brand-900 dark:text-white font-bold text-xs truncate">{link.value}</p>
+                       <p className="break-words text-xs font-bold text-brand-900 dark:text-white">{link.value}</p>
                     </div>
-                    <button className="ml-auto p-2 text-slate-300 hover:text-brand-900 dark:hover:text-white transition-colors">
+                    <button aria-label={`Open ${link.label}`} className="ml-auto shrink-0 p-2 text-slate-300 hover:text-brand-900 dark:hover:text-white transition-colors">
                        <ExternalLink size={16} />
                     </button>
                  </div>
@@ -830,8 +919,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-12 text-center">
-         <div className="flex items-center justify-center gap-2 mb-3">
+      <footer className="bg-white px-4 py-12 text-center dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+         <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
             <img src="https://i.imgur.com/K3T5yIT.jpeg" alt="IARS Seal" className="w-6 h-6 rounded-full object-cover" />
             <p className="text-brand-900 dark:text-white font-black uppercase text-xs tracking-widest">IARS • Institution Attendance & Records System</p>
          </div>

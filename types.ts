@@ -1,5 +1,121 @@
 
-export type UserRole = 'student' | 'mayor' | 'ssg' | 'admin' | 'ossa';
+export type UserRole = 'student' | 'mayor' | 'ssg' | 'admin' | 'ossa' | 'ossa_staff' | string;
+export type AccountStatus = 'pending' | 'active' | 'suspended' | 'inactive' | 'graduated';
+
+export type AppPermission =
+  | 'system.manage_accounts'
+  | 'system.view_audit'
+  | 'system.freeze'
+  | 'system.health'
+  | 'system.payment_reminders'
+  | 'system.manage_rbac'
+  | 'directory.manage_structure'
+  | 'directory.delete_structure'
+  | 'directory.manage_members'
+  | 'attendance.scan'
+  | 'attendance.manage'
+  | 'events.manage'
+  | 'ossa.manage_cases';
+
+export interface SystemFreezeState {
+  isFrozen: boolean;
+  reason: string;
+  frozenAt?: number;
+  frozenBy?: string;
+}
+
+export interface NodeFreezeState {
+  isFrozen: boolean;
+  reason: string;
+  frozenAt: number;
+  frozenBy?: string;
+}
+
+export interface PaymentReminderLog {
+  id: string;
+  sentAt: number;
+  sentBy: string;
+  recipientRole: string;
+  recipientEmail: string;
+  subject: string;
+  message: string;
+  urgency: 'normal' | 'urgent' | 'critical';
+  status: 'sent' | 'delivered';
+}
+
+export interface PaymentInfo {
+  status: 'paid' | 'due_soon' | 'overdue' | 'unpaid';
+  amountDue: number;
+  currency: string;
+  dueDate: number;
+  billingCycle: string;
+  accountName: string;
+  schoolId: string;
+  lastPaymentDate?: number;
+  reminders: PaymentReminderLog[];
+}
+
+export interface CustomRole {
+  id: string;
+  name: string;
+  description: string;
+  isPositionOnly: boolean;
+  permissions: AppPermission[];
+  createdBy: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export interface CoreRole {
+  id: string;
+  name: string;
+  description: string;
+  isPositionOnly: boolean;
+  permissions: AppPermission[];
+  isBuiltIn: boolean;
+  updatedAt?: number;
+}
+
+export interface SystemHealthMetric {
+  dbStatus: 'operational' | 'degraded' | 'maintenance';
+  authStatus: 'operational' | 'degraded';
+  geofenceStatus: 'operational' | 'degraded';
+  storageUsedBytes: number;
+  storageMaxBytes: number;
+  storageUsagePercent: number;
+  latencyMs: number;
+  activeSessions: number;
+  totalUsersCount: number;
+  studentsCount: number;
+  eventsCount: number;
+  attendanceLogsCount: number;
+  excuseAppsCount: number;
+  auditLogsCount: number;
+  lastBackupTime: number;
+  healthScore: number;
+}
+
+export type AcademicNodeType =
+  | 'campus' | 'education_unit' | 'curriculum' | 'college' | 'department'
+  | 'track' | 'elective_cluster' | 'strand' | 'program' | 'major'
+  | 'grade_level' | 'year_level' | 'section' | 'block' | 'specialization' | 'custom'
+  // Legacy aliases retained while saved structures migrate.
+  | 'school' | 'sub_department' | 'level' | 'secondary' | 'elementary' | 'special';
+
+export type AcademicPresetId = 'jhs' | 'strengthened_shs' | 'legacy_shs' | 'higher_ed' | 'blank';
+
+export interface AcademicAssignment {
+  campusId: string;
+  nodePathIds: string[];
+  terminalGroupId: string;
+  curriculumCode?: string;
+  academicYear?: string;
+  affiliations?: Array<{
+    nodeId?: string;
+    type: 'tle_specialization' | 'academic_elective' | 'techpro_elective' | 'major' | 'other';
+    name: string;
+  }>;
+}
 
 export interface ExcuseApplication {
   id: string;
@@ -9,10 +125,12 @@ export interface ExcuseApplication {
   department: string;
   section: string;
   event_title: string;
+  event_date?: string;
   category: 'medical' | 'personal' | 'institutional' | 'emergency';
   reason: string;
   proof_url?: string;
   submission_date: number;
+  submitted_at?: number;
   status: 'pending' | 'approved' | 'rejected';
   review_notes?: string;
   waived_hours?: number;
@@ -21,10 +139,12 @@ export interface ExcuseApplication {
 }
 
 export interface UserProfile {
+  positionRoleIds?: string[];
   uid: string;
   name: string;
   username: string;
   role: UserRole;
+  account_status?: AccountStatus;
   student_id: string;
   photo_url: string;
   email: string;
@@ -32,7 +152,14 @@ export interface UserProfile {
   guardian?: {
     name: string;
     contact: string;
-    email: string;
+    email?: string;
+  };
+  official_data?: {
+    body: 'SSG' | 'OSSA' | 'Administration';
+    position?: string;
+    scope?: string;
+    assignment_node_id?: string;
+    assignment_node_path_ids?: string[];
   };
   school_data: {
     type: 'High School' | 'College';
@@ -44,6 +171,7 @@ export interface UserProfile {
     program?: string; 
     major?: string;
     school_id?: string;
+    academic_assignment?: AcademicAssignment;
   };
 }
 
@@ -54,12 +182,31 @@ export interface UserStats {
   events_missed: number;
 }
 
+export interface EventAttendanceWindow {
+  id: string;
+  label?: string;
+  timeIn: string;
+  timeOut: string;
+  lateAfterMinutes: number;
+}
+
+export interface EventSanctionRule {
+  value: number;
+  unit: 'hours' | 'minutes';
+}
+
 export interface AppEvent {
+  kind?: 'attendance' | 'service' | 'merit' | 'flag_ceremony';
+  meritHours?: number;
+  recurrence?: { frequency: 'weekly'; occurrences: number };
+  seriesId?: string;
+  scopeNodeId?: string;
   id: string;
   title: string;
   description?: string;
   created_by: string;
   status: 'upcoming' | 'active' | 'done';
+  cancellationStatus?: 'cancelled' | 'dropped';
   startTime: number;
   endTime: number;
   penaltyValue: number;
@@ -79,15 +226,51 @@ export interface AppEvent {
     radius_meters: number;
   };
   timestamp: number;
+  startDate?: string;
+  endDate?: string;
+  attendanceWindows?: EventAttendanceWindow[];
+  sanctionRules?: {
+    late: EventSanctionRule;
+    absent: EventSanctionRule;
+  };
+  recipientGroups?: string[];
+  geofenceEnabled?: boolean;
+  audienceTarget?: {
+    mode: 'all' | 'directory_node' | 'specific_people' | 'group_list';
+    nodeId?: string;
+    includeDescendants?: boolean;
+    specificUserIds?: string[];
+    snapshotLabel?: string;
+    groups?: string[];
+  };
 }
 
 export interface SchoolNode {
   id: string;
   name: string;
-  type: 'school' | 'department' | 'sub_department' | 'track' | 'strand' | 'specialization' | 'level' | 'section' | 'college' | 'program' | 'major' | 'secondary' | 'elementary' | 'special';
+  code?: string;
+  type: AcademicNodeType;
   logo_url?: string;
   children?: SchoolNode[];
-  metadata?: any;
+  metadata?: {
+    schemaVersion?: number;
+    educationLevel?: 'elementary' | 'jhs' | 'shs' | 'higher_ed' | 'graduate' | 'other';
+    curriculumCode?: string;
+    academicYearStart?: number;
+    academicYearEnd?: number;
+    officialGrouping?: boolean;
+    selectableForRegistration?: boolean;
+    selectableForEvents?: boolean;
+    allowedChildTypes?: AcademicNodeType[];
+    shortCode?: string;
+    programLevel?: string;
+    durationYears?: number;
+    copcNumber?: string;
+    archived?: boolean;
+    legacyType?: string;
+    migrationStatus?: 'migrated' | 'needs_review';
+    customFields?: Record<string, string | number | boolean>;
+  };
 }
 
 export interface Application {

@@ -1,9 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { 
-  FileText, Search, Filter, CheckCircle2, Clock, XCircle, FileSpreadsheet, 
+  FileText, Filter, CheckCircle2, Clock, XCircle, FileSpreadsheet,
   Download, ShieldAlert, Award, Calendar, AlertCircle, ArrowUpRight, Sparkles
 } from 'lucide-react';
+import Button from '../components/ui/Button';
+import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
+import CustomSelect from '../components/ui/CustomSelect';
+import SearchInput from '../components/ui/SearchInput';
 
 interface AttendanceRecord {
   id: string;
@@ -238,117 +242,91 @@ const StudentRecords: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-5 max-w-6xl mx-auto space-y-4 animate-in fade-in duration-200">
+    <Page className="max-w-6xl animate-in fade-in duration-200">
       
       {/* HEADER & PDF EXPORT */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-1.5 text-gold-600 dark:text-gold-400 font-bold text-[10px] uppercase tracking-wider mb-0.5">
-            <FileText size={14} /> Verified History
+      <PageHeader
+        eyebrow={<span className="inline-flex items-center gap-1.5"><FileText size={14} /> Verified History</span>}
+        title="Attendance & Sanction Records"
+        description="Consolidated attendance history for mandatory campus events, ceremonies, and sanction hour balances."
+        actions={
+          <div className="w-[calc(100vw-2rem)] max-w-full sm:w-auto">
+            <Button onClick={handleExportPDF} className="border border-gold-400/30 uppercase tracking-wider sm:w-auto">
+              <Download size={15} className="text-gold-400" /> Export
+            </Button>
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-brand-900 dark:text-slate-100 uppercase tracking-tight">Attendance & Sanction Records</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-[11px] font-medium">Consolidated attendance history for mandatory campus events, ceremonies, and sanction hour balances.</p>
-        </div>
-
-        <button
-          onClick={handleExportPDF}
-          className="px-4 py-2 bg-brand-900 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-brand-800 active:scale-98 transition-all flex items-center justify-center gap-1.5 border border-gold-400/30 self-start md:self-auto shrink-0"
-        >
-          <Download size={15} className="text-gold-400" /> Export PDF Transcript
-        </button>
-      </div>
+        }
+      />
 
       {/* KPI METRICS OVERVIEW */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
-            <CheckCircle2 size={18} />
-          </div>
-          <div>
-            <p className="text-[9px] font-extrabold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Attendance Rate</p>
-            <h3 className="text-lg font-bold text-brand-900 dark:text-slate-100">{stats.rate}%</h3>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0">
-            <Clock size={18} />
-          </div>
-          <div>
-            <p className="text-[9px] font-extrabold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Late Check-Ins</p>
-            <h3 className="text-lg font-bold text-brand-900 dark:text-slate-100">{stats.lateCount}</h3>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center font-bold shrink-0">
-            <XCircle size={18} />
-          </div>
-          <div>
-            <p className="text-[9px] font-extrabold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Unexcused Absences</p>
-            <h3 className="text-lg font-bold text-brand-900 dark:text-slate-100">{stats.absentCount}</h3>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 flex items-center justify-center font-bold shrink-0">
-            <ShieldAlert size={18} />
-          </div>
-          <div>
-            <p className="text-[9px] font-extrabold text-red-500 dark:text-red-400 uppercase tracking-wider">Active Sanctions</p>
-            <h3 className="text-lg font-bold text-red-700 dark:text-red-400">{stats.totalSanctionHours} Hours</h3>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Attendance summary">
+        <MetricCard icon={<CheckCircle2 size={20} />} label="Attendance Rate" value={`${stats.rate}%`} detail="Present, late, and excused" />
+        <MetricCard icon={<Clock size={20} />} label="Late Check-Ins" value={stats.lateCount} detail="Recorded tardy arrivals" />
+        <MetricCard icon={<XCircle size={20} />} label="Unexcused Absences" value={stats.absentCount} detail="Attendance violations" />
+        <MetricCard icon={<ShieldAlert size={20} />} label="Active Sanctions" value={`${stats.totalSanctionHours} Hours`} detail="Community service balance" />
       </div>
 
       {/* SEARCH AND FILTERS */}
-      <div className="bg-white dark:bg-slate-800 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-          <input 
-            type="text" 
-            placeholder="Search event/ceremony title..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input-field pl-9 pr-3 py-1.5"
-          />
-        </div>
+      <Surface className="flex flex-col items-stretch justify-between gap-3 p-4 md:flex-row md:items-center">
+        <SearchInput ariaLabel="Search attendance records" className="flex-1" onChange={setSearchTerm} placeholder="Search event/ceremony title..." value={searchTerm} />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="input-field select-field py-1.5 cursor-pointer text-xs"
-          >
-            <option value="all">All Categories</option>
-            <option value="Event">Events Only</option>
-            <option value="Ceremony">Ceremonies Only</option>
-          </select>
-
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="input-field select-field py-1.5 cursor-pointer text-xs"
-          >
-            <option value="all">All Statuses</option>
-            <option value="present">Present</option>
-            <option value="late">Late</option>
-            <option value="absent">Absent</option>
-            <option value="excused">Excused</option>
-          </select>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <CustomSelect ariaLabel="Filter by category" combobox label="Category" onChange={(value) => setCategoryFilter(value as string)} options={[{ value: 'all', label: 'All Categories' }, { value: 'Event', label: 'Events Only' }, { value: 'Ceremony', label: 'Ceremonies Only' }]} value={categoryFilter} />
+          <CustomSelect ariaLabel="Filter by status" combobox label="Status" onChange={(value) => setStatusFilter(value as string)} options={[{ value: 'all', label: 'All Statuses' }, { value: 'present', label: 'Present' }, { value: 'late', label: 'Late' }, { value: 'absent', label: 'Absent' }, { value: 'excused', label: 'Excused' }]} value={statusFilter} />
         </div>
-      </div>
+      </Surface>
 
       {/* ATTENDANCE RECORDS TABLE */}
-      <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <Surface className="overflow-hidden">
         <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between">
           <h2 className="text-sm font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
             <Calendar size={18} className="text-gold-600 dark:text-gold-400" /> Attendance Ledger ({filteredRecords.length})
           </h2>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="mobile-data-card space-y-3 p-4" aria-label="Mobile attendance ledger">
+          {filteredRecords.map(record => (
+            <article
+              key={record.id}
+              aria-labelledby={`mobile-record-${record.id}`}
+              className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <time className="font-mono text-sm font-bold text-slate-500 dark:text-slate-400" dateTime={record.date}>{record.date}</time>
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${
+                  record.status === 'present' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/60 dark:text-emerald-400' :
+                  record.status === 'late' ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/60 dark:text-amber-400' :
+                  record.status === 'absent' ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/60 dark:bg-red-950/60 dark:text-red-400' :
+                  'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/60 dark:text-blue-400'
+                }`}>
+                  {record.status === 'present' && <CheckCircle2 size={12} />}
+                  {record.status === 'late' && <Clock size={12} />}
+                  {record.status === 'absent' && <XCircle size={12} />}
+                  {record.status === 'excused' && <FileText size={12} />}
+                  {record.status === 'late' ? `Late (+${record.sanctionIncurred}h)` : record.status === 'absent' ? `Unexcused (+${record.sanctionIncurred}h)` : record.status}
+                </span>
+              </div>
+              <div className="mt-3">
+                <h3 id={`mobile-record-${record.id}`} className="text-sm font-black uppercase tracking-tight text-brand-900 dark:text-slate-100">{record.title}</h3>
+                <p className="mt-1 text-xs font-bold text-gold-700 dark:text-gold-300">{record.category}</p>
+              </div>
+              <dl className="mt-3 grid gap-2 border-t border-slate-200 pt-3 text-xs dark:border-slate-700">
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="font-semibold text-slate-500 dark:text-slate-400">Time-In</dt>
+                  <dd className="font-mono font-bold text-slate-700 dark:text-slate-200">{record.timeIn}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="shrink-0 font-semibold text-slate-500 dark:text-slate-400">Verified By</dt>
+                  <dd className="min-w-0 text-right font-medium text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{record.scannedBy}</dd>
+                </div>
+              </dl>
+            </article>
+          ))}
+          {filteredRecords.length === 0 ? <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No attendance records match these filters.</p> : null}
+        </div>
+
+        <div className="desktop-data-table overflow-x-auto">
+          <table className="w-full border-collapse text-left" aria-label="Attendance ledger">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50/50 dark:bg-slate-900/30">
                 <th className="p-4 pl-6">Date</th>
@@ -398,11 +376,11 @@ const StudentRecords: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </Surface>
 
       {/* SANCTION RECORDS SECTION */}
-      <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-red-50/50 dark:bg-red-950/30 flex items-center justify-between">
+      <Surface className="overflow-hidden">
+        <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-200 bg-red-50/50 p-5 dark:border-slate-700 dark:bg-red-950/30 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
             <ShieldAlert size={20} className="text-red-600 dark:text-red-400" />
             <h2 className="text-sm font-black text-red-900 dark:text-red-300 uppercase tracking-widest">Sanctions & Demerits Ledger</h2>
@@ -442,9 +420,9 @@ const StudentRecords: React.FC = () => {
             ))}
           </div>
         </div>
-      </div>
+      </Surface>
 
-    </div>
+    </Page>
   );
 };
 
