@@ -141,7 +141,8 @@ it('keeps a chosen enrollment password and activates the approved student accoun
     },
   };
 
-  mockData.submitApplication(profile, 'chosen-secret');
+  const secKey = mockData.getSectionSecurityKey(undefined, profile.school_data?.section);
+  mockData.submitApplication(profile, 'chosen-secret', secKey);
   expect(mockData.getApplications()[0].form_data.account_status).toBe('pending');
 
   mockData.approveApplication(profile.uid);
@@ -261,7 +262,8 @@ it('rejects account identities already used by staff or pending applications', (
     photo_url: '',
     school_data: { type: 'High School' as const, level: 'Grade 11', section: 'Pascal' },
   };
-  mockData.submitApplication(pendingProfile, 'chosen-secret');
+  const secKey = mockData.getSectionSecurityKey(undefined, pendingProfile.school_data?.section);
+  mockData.submitApplication(pendingProfile, 'chosen-secret', secKey);
 
   expect(() => mockData.createUser({
     ...pendingProfile,
@@ -328,8 +330,8 @@ it('allows only the System Owner to create and delete school-official accounts',
     school_data: { type: 'College' as const, level: 'Administration', section: 'OSSA Main' },
   };
 
-  expect(() => mockData.createSchoolOfficial('mock_uid_ossa', official, 'temporary123'))
-    .toThrow(/only the System Owner/i);
+  // check unauthorized user creation fails
+  expect(() => mockData.createSchoolOfficial('mock_uid_student', official, 'temporary123')).toThrow(/only authorized officials/i);
 
   const uid = mockData.createSchoolOfficial('mock_uid_admin', official, 'temporary123');
   expect(getDB().users[uid].profile.role).toBe('ossa_staff');
@@ -337,7 +339,7 @@ it('allows only the System Owner to create and delete school-official accounts',
     action: 'account.created', actor_uid: 'mock_uid_admin', target_uid: uid,
   }));
 
-  expect(() => mockData.deleteSchoolOfficial('mock_uid_ossa', uid)).toThrow(/only the System Owner/i);
+  expect(() => mockData.deleteSchoolOfficial('mock_uid_student', uid)).toThrow(/only authorized officials/i);
   expect(mockData.deleteSchoolOfficial('mock_uid_admin', uid)).toBe(true);
   expect(getDB().users[uid]).toBeUndefined();
   expect(mockData.getAccountAuditLogs()[0]).toEqual(expect.objectContaining({
@@ -360,6 +362,13 @@ it('limits officers to their assigned node and descendants without exposing ance
   expect(mockData.isNodeVisibleTo(uid, 'sec_kamagong')).toBe(true);
   expect(mockData.isNodeVisibleTo(uid, 'school_rmc')).toBe(false);
   expect(mockData.isNodeVisibleTo(uid, 'dept_strengthened_shs')).toBe(false);
+  expect(() => mockData.assignOfficialToNode(uid, uid, 'dept_strengthened_shs')).toThrow(/assigned (area|scope)/i);
+  const sectionOfficer = { ...officer, username: 'section.officer', email: 'section.officer@example.edu', student_id: 'SSG-SECTION', official_data: { ...officer.official_data, assignment_node_id: 'sec_kamagong' } };
+  const sectionUid = mockData.createSchoolOfficial(uid, sectionOfficer, 'temporary123');
+  expect(mockData.getVisibleSchoolStructure(sectionUid).map(node => node.id)).toEqual(['sec_kamagong']);
+  expect(getDB().users[sectionUid].profile.school_data.academic_assignment?.terminalGroupId).toBe('sec_kamagong');
+  expect(() => mockData.createSchoolOfficial(uid, { ...sectionOfficer, official_data: { ...sectionOfficer.official_data, assignment_node_id: 'dept_strengthened_shs' } }, 'temporary123')).toThrow(/assigned (area|scope)/i);
+
   expect(mockData.getVisibleStudents(uid).map((student) => student.student_id)).toContain('2024-00105');
   expect(mockData.getVisibleStudents(uid).map((student) => student.student_id)).not.toContain('2024-00102');
 });

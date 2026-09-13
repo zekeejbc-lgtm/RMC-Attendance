@@ -20,9 +20,18 @@ import LandingPage from './views/LandingPage';
 
 import AttendanceDashboard from './views/AttendanceDashboard';
 import OSSADashboard from './views/OSSADashboard';
+import AdminControls from './views/AdminControls';
 import { UserRole } from './types';
+import { hasPermission, AppPermission } from './lib/accessControl';
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: UserRole[] }> = ({ children, roles }) => {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  roles?: UserRole[];
+  permission?: AppPermission;
+  permissionAny?: AppPermission[];
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permission, permissionAny }) => {
   const { user, loading, profile } = useAuth();
 
   if (loading) return (
@@ -38,7 +47,16 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: UserRole[] }
     return <Navigate to="/register/status" replace />;
   }
 
-  if (roles && !roles.includes(profile.role)) {
+  let isAllowed = true;
+  if (permission) {
+    isAllowed = hasPermission(profile.role, permission);
+  } else if (permissionAny) {
+    isAllowed = permissionAny.some(p => hasPermission(profile.role, p));
+  } else if (roles) {
+    isAllowed = roles.includes(profile.role);
+  }
+
+  if (!isAllowed) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -57,73 +75,79 @@ const App: React.FC = () => {
           <Route path="/register/status" element={<RegisterStatus />} />
           
           <Route path="/dashboard" element={
-            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'ossa', 'ossa_staff', 'admin']}>
+            <ProtectedRoute>
               <Dashboard />
             </ProtectedRoute>
           } />
 
           <Route path="/student/qr" element={
-            <ProtectedRoute roles={['student', 'mayor']}>
+            <ProtectedRoute roles={['student', 'mayor', 'ssg']}>
               <StudentQR />
             </ProtectedRoute>
           } />
 
           <Route path="/student/events" element={
-            <ProtectedRoute roles={['student', 'mayor']}>
+            <ProtectedRoute roles={['student', 'mayor', 'ssg']}>
               <StudentEvents />
             </ProtectedRoute>
           } />
 
           <Route path="/student/ceremonies" element={
-            <ProtectedRoute roles={['student', 'mayor']}>
+            <ProtectedRoute roles={['student', 'mayor', 'ssg']}>
               <StudentCeremonies />
             </ProtectedRoute>
           } />
 
           <Route path="/student/records" element={
-            <ProtectedRoute roles={['student', 'mayor']}>
+            <ProtectedRoute roles={['student', 'mayor', 'ssg']}>
               <StudentRecords />
             </ProtectedRoute>
           } />
 
           <Route path="/student/profile" element={
-            <ProtectedRoute roles={['student', 'mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
+            <ProtectedRoute>
               <StudentProfile />
             </ProtectedRoute>
           } />
 
           <Route path="/mayor/scan" element={
-            <ProtectedRoute roles={['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
+            <ProtectedRoute permission="attendance.scan" roles={['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
               <MayorScanner />
             </ProtectedRoute>
           } />
 
           <Route path="/ssg/panel" element={
-            <ProtectedRoute roles={['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
+            <ProtectedRoute permissionAny={['directory.manage_structure', 'directory.manage_members', 'attendance.scan', 'events.manage']} roles={['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
               <SSGPanel />
             </ProtectedRoute>
           } />
 
           <Route path="/ssg/events" element={
-            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
+            <ProtectedRoute permission="events.manage" roles={['ssg', 'admin', 'ossa']}>
               <SSGEventCreation />
             </ProtectedRoute>
           } />
 
           <Route path="/ssg/events/create" element={
-            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
+            <ProtectedRoute permission="events.manage" roles={['ssg', 'admin', 'ossa']}>
               <SSGCreateEvent />
             </ProtectedRoute>
           } />
           <Route path="/ssg/events/:eventId/edit" element={
-            <ProtectedRoute roles={['ssg', 'admin', 'ossa']}>
+            <ProtectedRoute permission="events.manage" roles={['ssg', 'admin', 'ossa']}>
               <SSGCreateEvent />
             </ProtectedRoute>
           } />
 
           <Route path="/admin/attendance" element={
-            <ProtectedRoute roles={['admin', 'ossa', 'ossa_staff']}>
+            <ProtectedRoute permission="attendance.manage" roles={['admin', 'ossa', 'ossa_staff']}>
               <AttendanceDashboard />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/admin/controls" element={
+            <ProtectedRoute permissionAny={['system.manage_rbac', 'system.health', 'system.freeze', 'system.payment_reminders']}>
+              <AdminControls />
             </ProtectedRoute>
           } />
 
@@ -132,7 +156,7 @@ const App: React.FC = () => {
           } />
 
           <Route path="/ossa/dashboard" element={
-            <ProtectedRoute roles={['ossa', 'ossa_staff', 'admin']}>
+            <ProtectedRoute permission="ossa.manage_cases" roles={['ossa', 'ossa_staff', 'admin']}>
               <OSSADashboard />
             </ProtectedRoute>
           } />

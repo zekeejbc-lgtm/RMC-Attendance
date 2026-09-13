@@ -11,7 +11,7 @@ import { flattenDirectory } from '../lib/academicDirectory';
 import { mockData } from '../lib/mockBackend';
 import { AppEvent, EventAttendanceWindow, EventSanctionRule } from '../types';
 
-const quickRecipientGroups = ['All Students', 'JHS', 'SHS', 'College'];
+const quickRecipientGroups = ['All Students', 'All SSG Officers', 'All Mayors', 'JHS', 'SHS', 'College'];
 
 const newWindow = (index: number): EventAttendanceWindow => ({
   id: `window-${Date.now()}-${index}`,
@@ -30,6 +30,10 @@ const SSGCreateEvent: React.FC = () => {
   const editingActiveEvent = editingEvent?.status === 'active';
   const datePart = (value: number) => new Date(value - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const timePart = (value: number) => new Date(value).toTimeString().slice(0, 5);
+  const [kind, setKind] = useState<AppEvent['kind']>(editingEvent?.kind || 'attendance');
+  const [meritHours, setMeritHours] = useState(editingEvent?.meritHours || 1);
+  const [occurrences, setOccurrences] = useState(1);
+  const [saveError, setSaveError] = useState('');
   const [title, setTitle] = useState(editingEvent?.title || '');
   const [description, setDescription] = useState(editingEvent?.description || '');
   const [startDate, setStartDate] = useState(editingEvent?.startDate || (editingEvent ? datePart(editingEvent.startTime) : ''));
@@ -82,10 +86,13 @@ const SSGCreateEvent: React.FC = () => {
     const targetValue = recipientGroups.join(', ');
 
     const payload = {
+      kind, meritHours: kind === 'merit' ? meritHours : undefined,
+      recurrence: !isEditing && occurrences > 1 ? { frequency: 'weekly' as const, occurrences } : undefined,
+      scopeNodeId: profile?.role === 'admin' ? undefined : profile?.official_data?.assignment_node_id,
       title: title.trim(),
       description: description.trim(),
       status: editingEvent?.status || 'upcoming',
-      created_by: profile?.name || 'System',
+      created_by: profile?.uid || 'System',
       startDate,
       endDate,
       startTime: new Date(`${startDate}T${firstWindow.timeIn}`).getTime(),
@@ -95,11 +102,11 @@ const SSGCreateEvent: React.FC = () => {
       penaltyValue: absentSanction.value,
       penaltyUnit: absentSanction.unit,
       recipientGroups,
-      participantsType: allStudents ? 'all' : 'specific',
+      participantsType: (allStudents ? 'all' : 'specific') as any,
       targetValue,
-      audienceTarget: allStudents
+      audienceTarget: (allStudents
         ? { mode: 'all' }
-        : { mode: 'group_list', groups: recipientGroups, snapshotLabel: targetValue },
+        : { mode: 'group_list', groups: recipientGroups, snapshotLabel: targetValue }) as any,
       target: { all: allStudents },
       geofenceEnabled,
       location: geofenceEnabled
@@ -107,8 +114,11 @@ const SSGCreateEvent: React.FC = () => {
         : { lat: 0, lng: 0, radius_meters: 0 },
       timestamp: Date.now(),
     };
-    if (editingEvent) mockData.updateEvent(editingEvent.id, payload);
-    else mockData.createEvent(payload);
+    try {
+      if (profile && mockData.isUserScopeFrozen(profile) && profile.role !== 'admin') throw new Error('Events are frozen for your scope.');
+      if (editingEvent) mockData.updateEvent(editingEvent.id, payload);
+      else mockData.createEvent(payload);
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'Unable to save event.'); return; }
 
     navigate('/ssg/events');
   };
@@ -123,6 +133,16 @@ const SSGCreateEvent: React.FC = () => {
       />
 
       <form aria-label={isEditing ? 'Edit attendance event' : 'Schedule attendance event'} className="space-y-6" onSubmit={scheduleEvent}>
+        {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
+        <Surface className="space-y-4 p-4 sm:p-6">
+          <h2 className="text-lg font-bold text-brand-900 dark:text-white">Activity and service schedule</h2>
+          <p className="text-sm text-slate-500">Schedule sanction clearing as a service activity. Scan in and out to deduct rendered hours. Merit activities deduct the configured hours once after scan-out.</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <CustomSelect label="Activity type" value={kind} onChange={value => setKind(value as AppEvent['kind'])} options={[{value:'attendance',label:'Attendance event'},{value:'service',label:'Sanction clearing / service'},{value:'merit',label:'Merit activity'},{value:'flag_ceremony',label:'Flag ceremony'}]} />
+            {kind === 'merit' && <label className="app-field-label">Merit hours<input type="number" min="0.01" step="0.01" required className="input-field mt-2" value={meritHours} onChange={event => setMeritHours(Number(event.target.value))}/></label>}
+            {!isEditing && <label className="app-field-label">Weekly occurrences<input type="number" min="1" max="52" required className="input-field mt-2" value={occurrences} onChange={event => setOccurrences(Number(event.target.value))}/><span className="mt-1 block text-xs font-normal normal-case">1 for a single activity; up to 52 weeks.</span></label>}
+          </div>
+        </Surface>
         <Surface className="space-y-5 p-4 sm:p-6">
           <div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><CalendarRange size={20} className="text-gold-500" /> Event information</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Provide the complete event schedule and instructions.</p></div>
           <div className="space-y-2"><label htmlFor="event-title" className="app-field-label">Event Title</label><input id="event-title" required disabled={editingActiveEvent} className="input-field min-h-12 text-sm disabled:cursor-not-allowed disabled:opacity-60" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. College General Assembly" /></div>

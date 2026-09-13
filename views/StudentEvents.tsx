@@ -116,13 +116,7 @@ const StudentEvents: React.FC = () => {
   const [submittedExcuse, setSubmittedExcuse] = useState(false);
 
   // Combine backend mock events + additional student events
-  const allEvents = useMemo(() => {
-    const backendEvs = mockData.getEvents();
-    const map = new Map<string, AppEvent>();
-    MOCK_EVENTS.forEach(e => map.set(e.id, e));
-    backendEvs.forEach(e => map.set(e.id, e));
-    return Array.from(map.values());
-  }, []);
+  const allEvents = useMemo(() => profile ? mockData.getRecipientEvents(profile.uid) : [], [profile]);
 
   // Filtered lists
   const filteredEvents = useMemo(() => {

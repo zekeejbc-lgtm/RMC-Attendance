@@ -12,17 +12,19 @@ import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 import { 
   User, School, Shield, ChevronRight, ChevronLeft, 
   Camera, CheckCircle2, AlertCircle, ImageIcon, Upload, CreditCard,
-  UserCircle, Eye, EyeOff
+  UserCircle, Eye, EyeOff, KeyRound
 } from 'lucide-react';
 
 const Register: React.FC = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const [structure, setStructure] = useState<SchoolNode[]>([]);
   const [academicPath, setAcademicPath] = useState<SchoolNode[]>([]);
+  const [securityKey, setSecurityKey] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -45,6 +47,11 @@ const Register: React.FC = () => {
     setStructure(mockData.getSchoolStructure());
   }, []);
 
+  const terminalNode = academicPath[academicPath.length - 1];
+  const isMayorRegistered = terminalNode && ['section', 'block'].includes(terminalNode.type)
+    ? mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name)
+    : false;
+
   const handleFileUpload = (field: string) => {
     // Mocking file capture for this environment
     setFormData(prev => ({ ...prev, [field]: `https://picsum.photos/400/400?sig=${field}_${Math.random()}` }));
@@ -63,6 +70,16 @@ const Register: React.FC = () => {
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
       return;
+    }
+    if (terminal && mockData.isMayorRegisteredForSection(terminal.id, terminal.name)) {
+      if (mockData.isMayorRegisteredForSection(terminal.id, terminal.name) && !securityKey.trim()) {
+        setError('Section Enrollment Security Key is required for enrollment into this section.');
+        return;
+      }
+      if (mockData.isMayorRegisteredForSection(terminal.id, terminal.name) && !mockData.validateSectionSecurityKey(terminal.id, securityKey.trim(), terminal.name)) {
+        setError('Invalid Section Security Key. Please verify the security key with your Class Mayor or SSG officer.');
+        return;
+      }
     }
     setLoading(true);
     const uid = `user_${Date.now()}`;
@@ -83,10 +100,11 @@ const Register: React.FC = () => {
     };
 
     try {
-      mockData.submitApplication(profile, formData.password);
+      mockData.submitApplication(profile, formData.password, securityKey.trim());
       localStorage.setItem('rmc_mock_session', uid);
       window.dispatchEvent(new Event('rmc_auth_update'));
-      navigate('/register/status');
+      setLoading(false);
+      setIsSuccess(true);
     } catch (submissionError) {
       setError(submissionError instanceof Error ? submissionError.message : 'Unable to submit the application.');
       setLoading(false);
@@ -107,13 +125,54 @@ const Register: React.FC = () => {
               className="w-11 h-11 rounded-full object-cover ring-2 ring-gold-400/50 shadow-md shrink-0" 
             />
             <div>
-              <h2 className="text-xl font-black uppercase tracking-tight">System Enrollment</h2>
-              <p className="text-emerald-300 text-[9px] font-bold tracking-widest uppercase mt-0.5">Stage {step} of 3 • Protocol</p>
+              <h2 className="text-xl font-black uppercase tracking-tight">{isSuccess ? 'Enrollment Submitted' : 'System Enrollment'}</h2>
+              <p className="text-emerald-300 text-[9px] font-bold tracking-widest uppercase mt-0.5">{isSuccess ? 'Application Submitted • Status Pending' : `Stage ${step} of 3 • Protocol`}</p>
             </div>
           </div>
         </div>
 
         <div className="p-6 lg:p-8 space-y-6">
+          {isSuccess ? (
+            <div className="space-y-5 text-center py-2 animate-in fade-in zoom-in-95">
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 border-2 border-emerald-500 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-lg shadow-emerald-500/10">
+                <CheckCircle2 size={36} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Registration Submitted!</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">Your enrollment application is pending review by your department or section officer.</p>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-left space-y-2 text-xs">
+                <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Legal Name</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{formData.name}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Student ID</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{formData.student_id}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Assigned Section</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{academicPath[academicPath.length - 1]?.name || 'Assigned Section'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Status</span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    Pending Approval
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <Button variant="gold" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => navigate('/register/status')}>
+                  View Application Status
+                </Button>
+                <Button variant="secondary" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => navigate('/')}>
+                  Go to Home
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
           {step === 1 && (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
               <div className="flex flex-col items-center mb-4">
@@ -194,6 +253,27 @@ const Register: React.FC = () => {
 
               <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
 
+              {terminalNode && mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && (
+                <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                    <KeyRound size={18} />
+                    <label htmlFor="register-security-key" className="text-xs font-black uppercase tracking-widest">
+                      Section Enrollment Security Key <span className="text-red-500">*</span>
+                    </label>
+                  </div>
+                  <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                    Please enter the section enrollment security key for &ldquo;{terminalNode.name}&rdquo;. Request this key from your Class Mayor, SSG, or Section Officer.
+                  </p>
+                  <input
+                    id="register-security-key"
+                    placeholder="Enter Section Security Key (e.g. SEC-XXXXX)"
+                    className="w-full rounded-xl border border-amber-300 bg-white p-3.5 text-base font-bold text-brand-900 outline-none focus:border-amber-500 dark:border-amber-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
+                    value={securityKey}
+                    onChange={(e) => setSecurityKey(e.target.value)}
+                  />
+                </div>
+              )}
+
               <p className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">Your ID number and academic assignment will be verified against school records. ID image uploads are not needed.</p>
             </div>
           )}
@@ -234,6 +314,25 @@ const Register: React.FC = () => {
                   setError('Passwords do not match.');
                   return;
                 }
+                if (step === 2) {
+                  if (!formData.student_id.trim()) {
+                    setError('Official Student ID # is required.');
+                    return;
+                  }
+                  const terminal = academicPath[academicPath.length - 1];
+                  if (!terminal || !['section', 'block'].includes(terminal.type)) {
+                    setError('Please select a valid section to proceed.');
+                    return;
+                  }
+                  if (mockData.isMayorRegisteredForSection(terminal.id, terminal.name) && !securityKey.trim()) {
+                    setError('Section Enrollment Security Key is required for enrollment into this section.');
+                    return;
+                  }
+                  if (mockData.isMayorRegisteredForSection(terminal.id, terminal.name) && !mockData.validateSectionSecurityKey(terminal.id, securityKey.trim(), terminal.name)) {
+                    setError('Invalid Section Security Key. Please verify the security key with your Class Mayor or SSG officer.');
+                    return;
+                  }
+                }
                 setError(''); 
                 setStep(step + 1); 
               }} disabled={step === 1 && (!formData.name.trim() || !formData.email.trim() || formData.password.length < 6 || (Boolean(formData.confirmPassword) && formData.password !== formData.confirmPassword))}>
@@ -251,6 +350,8 @@ const Register: React.FC = () => {
               <span className="text-gold-500 underline decoration-2">Log In</span>
             </button>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

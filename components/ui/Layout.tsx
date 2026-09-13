@@ -1,14 +1,17 @@
+import type { AppPermission } from '../../types';
+import { mockData } from '../../lib/mockBackend';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Award, BarChart3, Bell, Building2, Calendar, CalendarPlus, ChevronDown, ChevronRight, FileText,
   LayoutDashboard, Menu, PanelLeftClose, QrCode,
-  ScanLine, ShieldCheck, User, X,
+  ScanLine, ShieldCheck, Sliders, User, X,
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import { ThemeToggle } from './ThemeToggle';
 import { Collapsible } from './Collapsible';
 import { hasPermission } from '../../lib/accessControl';
+import { FreezeBanner } from '../admin/FreezeBanner';
 
 const mobileDrawerId = 'mobile-main-navigation';
 
@@ -80,19 +83,29 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const role = profile?.role || '';
   const navItems = [
-    { label: 'OSSA Hub', icon: Building2, path: '/ossa/dashboard', roles: ['ossa', 'ossa_staff', 'admin'] },
+    { label: 'OSSA Hub', icon: Building2, path: '/ossa/dashboard', permission: 'ossa.manage_cases', roles: ['ossa', 'ossa_staff', 'admin'] },
     { label: 'Home', icon: LayoutDashboard, path: '/dashboard', roles: ['student', 'mayor', 'ssg', 'admin', 'ossa', 'ossa_staff'] },
-    { label: 'My QR', icon: QrCode, path: '/student/qr', roles: ['student', 'mayor'] },
-    { label: 'Events', icon: Calendar, path: '/student/events', roles: ['student', 'mayor'] },
-    { label: 'Ceremonies', icon: Award, path: '/student/ceremonies', roles: ['student', 'mayor'] },
-    { label: 'Records', icon: FileText, path: '/student/records', roles: ['student', 'mayor'] },
-    { label: 'Mayor Hub', icon: ScanLine, path: '/mayor/scan', roles: ['mayor'] },
-    { label: 'Attendance Scanner', icon: ScanLine, path: '/mayor/scan', roles: ['ssg', 'admin', 'ossa', 'ossa_staff'] },
-    { label: role === 'admin' ? 'School Hierarchy' : role === 'ossa' || role === 'ossa_staff' ? 'OSSA Hierarchy' : role === 'mayor' ? 'My Classroom' : 'SSG Panel', icon: ShieldCheck, path: '/ssg/panel', roles: ['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff'] },
-    { label: 'Event Management', icon: CalendarPlus, path: '/ssg/events', roles: ['ssg', 'admin', 'ossa'] },
+    { label: 'My QR', icon: QrCode, path: '/student/qr', roles: ['student', 'mayor', 'ssg'] },
+    { label: 'Events', icon: Calendar, path: '/student/events', roles: ['student', 'mayor', 'ssg'] },
+    { label: 'Ceremonies', icon: Award, path: '/student/ceremonies', roles: ['student', 'mayor', 'ssg'] },
+    { label: 'Records', icon: FileText, path: '/student/records', roles: ['student', 'mayor', 'ssg'] },
+    { label: 'Mayor Hub', icon: ScanLine, path: '/mayor/scan', permission: 'attendance.scan', roles: ['mayor'] },
+    { label: 'Attendance Scanner', icon: ScanLine, path: '/mayor/scan', permission: 'attendance.scan', roles: ['ssg', 'admin', 'ossa', 'ossa_staff'] },
+    { label: role === 'admin' ? 'School Hierarchy' : role === 'ossa' || role === 'ossa_staff' ? 'OSSA Hierarchy' : role === 'mayor' ? 'My Classroom' : 'SSG Panel', icon: ShieldCheck, path: '/ssg/panel', permissionAny: ['directory.manage_structure', 'directory.manage_members', 'attendance.scan', 'events.manage'], roles: ['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff'] },
+    { label: 'Event Management', icon: CalendarPlus, path: '/ssg/events', permission: 'events.manage', roles: ['ssg', 'admin', 'ossa'] },
+    { label: 'System Controls', icon: Sliders, path: '/admin/controls', permissionAny: ['system.manage_rbac', 'system.health', 'system.freeze', 'system.payment_reminders'], roles: ['admin'] },
   ];
   const identityLabel = role === 'student' || role === 'mayor' ? 'Student ID' : 'Official ID';
-  const allowedNavItems = navItems.filter((item) => item.roles.includes(role));
+  const allowedNavItems = navItems.filter((item) => {
+    if (!item.permission && !(item as any).permissionAny && item.path !== '/dashboard' && !item.roles.includes(role)) return false;
+    if (item.permission) {
+      return hasPermission(profile?.role, item.permission as AppPermission);
+    }
+    if ((item as any).permissionAny) {
+      return (item as any).permissionAny.some((p: AppPermission) => hasPermission(profile?.role, p));
+    }
+    return true;
+  });
   const hasDirectory = hasPermission(profile?.role, 'attendance.manage');
   const canViewAttendance = hasPermission(profile?.role, 'attendance.manage');
 
@@ -139,6 +152,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               >
                 <BarChart3 size={18} />
                 <span className="text-xs">Attendance</span>
+              </button>
+            )}
+            {role === 'admin' && (
+              <button
+                type="button"
+                aria-current={location.pathname.startsWith('/admin/controls') ? 'page' : undefined}
+                onClick={() => mobile ? navigateAndClose('/admin/controls') : navigate('/admin/controls')}
+                className={itemClass('/admin/controls')}
+              >
+                <Sliders size={18} />
+                <span className="text-xs">System Controls</span>
               </button>
             )}
         </Collapsible>
@@ -239,14 +263,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             const isActive = location.pathname === item.path;
             return <button type="button" key={item.path} aria-label={isSidebarCollapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined} onClick={() => navigate(item.path)} className={navButtonClass(isActive, isSidebarCollapsed)}><Icon size={22} />{!isSidebarCollapsed && <span className="truncate font-medium text-sm">{item.label}</span>}</button>;
           })}
-          {isSidebarCollapsed && hasDirectory ? <div className="pt-4 mt-4 border-t border-brand-800/80 space-y-2">{canViewAttendance && <button type="button" aria-label="Attendance dashboard" aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined} onClick={() => navigate('/admin/attendance')} className={navButtonClass(location.pathname === '/admin/attendance', true)}><BarChart3 size={22} /></button>}</div> : renderDirectory()}
+          {isSidebarCollapsed && hasDirectory ? <div className="pt-4 mt-4 border-t border-brand-800/80 space-y-2">{canViewAttendance && <button type="button" aria-label="Attendance dashboard" aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined} onClick={() => navigate('/admin/attendance')} className={navButtonClass(location.pathname === '/admin/attendance', true)}><BarChart3 size={22} /></button>}{role === 'admin' && <button type="button" aria-label="System Controls" aria-current={location.pathname.startsWith('/admin/controls') ? 'page' : undefined} onClick={() => navigate('/admin/controls')} className={navButtonClass(location.pathname.startsWith('/admin/controls'), true)}><Sliders size={22} /></button>}</div> : renderDirectory()}
         </nav>
         <div className="shrink-0 p-3 border-t border-brand-800 space-y-2.5">
           {!isSidebarCollapsed ? <><div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-widest text-gold-400/80">Theme Mode</span><ThemeToggle size="sm" className="min-h-11 min-w-11" /></div><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="w-full min-h-14 group flex items-center gap-3 p-2.5 rounded-2xl bg-brand-950/80 hover:bg-brand-800/90 border border-gold-400/30 hover:border-gold-400/60 transition-all text-left"><img src={profile?.photo_url || 'https://i.pravatar.cc/150'} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/70" /><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-white truncate">{profile?.name || 'Account'}</span><span className="block text-[10px] font-mono font-bold text-gold-400/90 truncate">{identityLabel}: {profile?.student_id || 'Not assigned'}</span></span><User size={16} className="text-gold-400/80 shrink-0" /></button></> : <div className="flex flex-col items-center gap-2.5"><ThemeToggle size="sm" className="min-h-11 min-w-11" /><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="min-h-11 min-w-11 relative rounded-full ring-2 ring-gold-400/70"><img src={profile?.photo_url || 'https://i.pravatar.cc/150'} alt="" className="w-10 h-10 rounded-full object-cover" /></button></div>}
         </div>
       </aside>
+      <FreezeBanner />
+      {['ossa', 'ossa_staff'].includes(role) && mockData.getPaymentInfo().reminders.slice(0, 1).map(reminder => <div key={reminder.id} role="status" className="border-b border-amber-200 bg-amber-50 p-4 text-amber-950"><strong>{reminder.subject}</strong><p className="mt-1 whitespace-pre-line text-sm">{reminder.message}</p><p className="mt-1 text-xs">Payment due: {new Date(mockData.getPaymentInfo().dueDate).toLocaleDateString()}</p></div>)}
 
-      <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
+      <main className="min-w-0 flex-1 overflow-x-hidden">{profile?.role !== 'admin' && mockData.isUserScopeFrozen(profile) ? <div role="alert" className="m-6 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900"><h1 className="text-xl font-bold">Access temporarily frozen</h1><p className="mt-2">Contact your school administration to restore access.</p></div> : children}</main>
     </div>
   );
 };

@@ -20,7 +20,7 @@ import {
   MapPin, Mail, Phone, Facebook, Instagram,
   Globe, X, Eye, EyeOff, Loader2,
   ShieldAlert, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Copy, Check, ExternalLink,
-  UserCircle, Camera, CreditCard, Calendar,
+  UserCircle, Camera, CreditCard, Calendar, KeyRound,
   FileText, QrCode, ShieldCheck, Clock, FileCheck2, BarChart3, UserCheck, Smartphone, CheckCircle2, Layers, Lock, Zap, Building2, GraduationCap
 } from 'lucide-react';
 
@@ -60,6 +60,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const [regError, setRegError] = useState('');
   const [structure, setStructure] = useState<SchoolNode[]>([]);
   const [academicPath, setAcademicPath] = useState<SchoolNode[]>([]);
+  const [securityKey, setSecurityKey] = useState('');
+  const [regSuccess, setRegSuccess] = useState(false);
   const [regData, setRegData] = useState({
     name: '', username: '', email: '', password: '', confirmPassword: '', student_id: '',
     guardianName: '', guardianPhone: '', profilePic: '', idFront: '', idBack: ''
@@ -148,12 +150,27 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     setRegData((prev: any) => ({ ...prev, [field]: `https://picsum.photos/400/400?sig=${field}_${Math.random()}` }));
   };
 
+  const terminal = academicPath[academicPath.length - 1];
+  const isMayorRegistered = terminal && ['section', 'block'].includes(terminal.type)
+    ? mockData.isMayorRegisteredForSection(terminal.id, terminal.name)
+    : false;
+
   const handleRegisterSubmit = async () => {
-    const terminal = academicPath[academicPath.length - 1];
-    if (!terminal || !['section', 'block'].includes(terminal.type)) return;
+    const terminalNode = academicPath[academicPath.length - 1];
+    if (!terminalNode || !['section', 'block'].includes(terminalNode.type)) return;
     if (regData.password !== regData.confirmPassword) {
       setRegError('Passwords do not match.');
       return;
+    }
+    if (terminalNode && mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name)) {
+      if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !securityKey.trim()) {
+        setRegError('Section Enrollment Security Key is required for enrollment into this section.');
+        return;
+      }
+      if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !mockData.validateSectionSecurityKey(terminalNode.id, securityKey.trim(), terminalNode.name)) {
+        setRegError('Invalid Section Security Key. Please verify the security key with your Class Mayor or SSG officer.');
+        return;
+      }
     }
     setIsRegistering(true);
     const uid = `user_${Date.now()}`;
@@ -169,11 +186,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       school_data: { ...serialized.schoolData, school_id: serialized.assignment.campusId, academic_assignment: serialized.assignment }
     };
 
-    mockData.submitApplication(profile);
-    localStorage.setItem('rmc_mock_session', uid);
-    window.dispatchEvent(new Event('rmc_auth_update'));
-    setShowRegisterModal(false);
-    navigate('/register/status');
+    try {
+      mockData.submitApplication(profile, regData.password, securityKey.trim());
+      localStorage.setItem('rmc_mock_session', uid);
+      window.dispatchEvent(new Event('rmc_auth_update'));
+      setIsRegistering(false);
+      setRegSuccess(true);
+    } catch (submissionError) {
+      setIsRegistering(false);
+      setRegError(submissionError instanceof Error ? submissionError.message : 'Unable to submit the application.');
+      setIsRegistering(false);
+    }
   };
 
   // --- DATA FOR IARS FEATURES & MODULES ---
@@ -447,11 +470,51 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       {/* REGISTRATION MODAL */}
       <Modal
         open={showRegisterModal}
-        onClose={() => { setShowRegisterModal(false); if (defaultOpenRegister) navigate('/'); }}
+        onClose={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); if (defaultOpenRegister) navigate('/'); }}
         size="md"
-        title="System Enrollment"
-        description={`Stage ${regStep} of 3 • Protocol`}
+        title={regSuccess ? "Enrollment Submitted" : "System Enrollment"}
+        description={regSuccess ? "Application Submitted • Status Pending Review" : `Stage ${regStep} of 3 • Protocol`}
       >
+        {regSuccess ? (
+          <div className="space-y-5 text-center py-2 animate-in fade-in zoom-in-95">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 border-2 border-emerald-500 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-lg shadow-emerald-500/10">
+              <CheckCircle2 size={36} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Registration Submitted!</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">Your application is pending section officer review.</p>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-left space-y-2 text-xs">
+              <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Legal Name</span>
+                <span className="font-bold text-slate-900 dark:text-white">{regData.name}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Student ID</span>
+                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{regData.student_id}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Assigned Section</span>
+                <span className="font-bold text-slate-900 dark:text-white">{academicPath[academicPath.length - 1]?.name || 'Assigned Section'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Status</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Pending Approval
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Button variant="gold" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); navigate('/register/status'); }}>
+                View Application Status
+              </Button>
+              <Button variant="secondary" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); }}>
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : (
            <div className="space-y-5">
               {regStep === 1 && (
                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
@@ -543,6 +606,27 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
 
                     <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
 
+                    {terminal && mockData.isMayorRegisteredForSection(terminal.id, terminal.name) && (
+                      <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+                        <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                          <KeyRound size={18} />
+                          <label htmlFor="landing-register-security-key" className="text-xs font-black uppercase tracking-widest">
+                            Section Enrollment Security Key <span className="text-red-500">*</span>
+                          </label>
+                        </div>
+                        <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                          Please enter the section enrollment security key for &ldquo;{terminal.name}&rdquo;. Request this key from your Class Mayor, SSG, or Section Officer.
+                        </p>
+                        <input
+                          id="landing-register-security-key"
+                          placeholder="Enter Section Security Key (e.g. SEC-XXXXX)"
+                          className="w-full rounded-xl border border-amber-300 bg-white p-3.5 text-base font-bold text-brand-900 outline-none focus:border-amber-500 dark:border-amber-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
+                          value={securityKey}
+                          onChange={(e) => setSecurityKey(e.target.value)}
+                        />
+                      </div>
+                    )}
+
                     <p className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
                       Your ID number and academic assignment will be verified against school records. ID image uploads are not needed.
                     </p>
@@ -587,6 +671,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                        setRegError('Passwords do not match.');
                        return;
                      }
+                     if (regStep === 2) {
+                       if (!regData.student_id.trim()) {
+                         setRegError('Official Student ID # is required.');
+                         return;
+                       }
+                       const terminalNode = academicPath[academicPath.length - 1];
+                       if (!terminalNode || !['section', 'block'].includes(terminalNode.type)) {
+                         setRegError('Please select a valid section to proceed.');
+                         return;
+                       }
+                       if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !securityKey.trim()) {
+                         setRegError('Section Enrollment Security Key is required for enrollment into this section.');
+                         return;
+                       }
+                       if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !mockData.validateSectionSecurityKey(terminalNode.id, securityKey.trim(), terminalNode.name)) {
+                         setRegError('Invalid Section Security Key. Please verify the security key with your Class Mayor or SSG officer.');
+                         return;
+                       }
+                     }
                      setRegError(''); 
                      setRegStep(regStep + 1); 
                    }} disabled={regStep === 1 && (!regData.name.trim() || !regData.email.trim() || regData.password.length < 6 || !regData.confirmPassword || regData.password !== regData.confirmPassword)}>
@@ -605,6 +708,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                 </button>
               </div>
            </div>
+        )}
       </Modal>
 
       {/* HERO SECTION */}

@@ -11,7 +11,7 @@ export function Page({ className, ...props }: ComponentPropsWithoutRef<'main'>) 
   return <main className={withClassName('app-page space-y-5 sm:space-y-6', className)} {...props} />;
 }
 
-interface PageHeaderProps extends ClassNameProps, ComponentPropsWithoutRef<'header'> {
+interface PageHeaderProps extends ClassNameProps, Omit<ComponentPropsWithoutRef<'header'>, 'title'> {
   eyebrow?: ReactNode;
   title: ReactNode;
   description?: ReactNode;

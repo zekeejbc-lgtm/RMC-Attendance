@@ -25,6 +25,7 @@ const routedViews = [
   { path: '/ssg/events', role: 'ssg', ready: 'main' },
   { path: '/ssg/events/create', role: 'ssg', ready: 'main' },
   { path: '/admin/attendance', role: 'admin', ready: 'main' },
+  { path: '/admin/controls', role: 'admin', ready: 'main' },
   { path: '/admin/members', role: 'admin', ready: 'main' },
   { path: '/ossa/dashboard', role: 'ossa', ready: 'main' },
 ];

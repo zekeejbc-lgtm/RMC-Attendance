@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  profileMatchesDirectorySection,
   createAcademicPreset,
   createEventAudienceTarget,
   findNodePath,
@@ -158,4 +159,19 @@ describe('semantic directory behavior', () => {
       targetValue: 'BS Information Technology',
     });
   });
+});
+
+it('keeps same-named sections separate by assignment ID or an unambiguous department', () => {
+  const nodes: any = ['Engineering', 'Business'].map((name, index) => ({
+    id: `dept-${index}`, name, type: 'department',
+    children: [{ id: `section-${index}`, name: 'A', type: 'section' }],
+  }));
+  const profile: any = { school_data: { section: 'A', department: 'Engineering', academic_assignment: { terminalGroupId: 'section-1' } } };
+  expect(profileMatchesDirectorySection(profile, 'section-0', nodes)).toBe(false);
+  expect(profileMatchesDirectorySection(profile, 'section-1', nodes)).toBe(true);
+  delete profile.school_data.academic_assignment;
+  expect(profileMatchesDirectorySection(profile, 'section-0', nodes)).toBe(true);
+  expect(profileMatchesDirectorySection(profile, 'section-1', nodes)).toBe(false);
+  delete profile.school_data.department;
+  expect(profileMatchesDirectorySection(profile, 'section-0', nodes)).toBe(false);
 });

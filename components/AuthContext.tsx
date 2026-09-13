@@ -49,13 +49,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       syncMock();
       
       // Listen for both cross-tab storage and same-tab custom events
-      window.addEventListener('storage', (e) => {
-        if (e.key === 'rmc_mock_session') syncMock();
-      });
+      const onStorage = (e: StorageEvent) => { if (e.key === 'rmc_mock_session' || e.key === 'rmc_regalia_db') syncMock(); };
+      window.addEventListener('storage', onStorage);
       window.addEventListener('rmc_auth_update', syncMock);
       
       return () => {
         window.removeEventListener('rmc_auth_update', syncMock);
+        window.removeEventListener('storage', onStorage);
       };
     } else if (auth?.onAuthStateChanged) {
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {

@@ -73,7 +73,7 @@ export const createAcademicPreset = (preset: AcademicPresetId, campusName = 'Cam
   });
 };
 
-export const getAllowedChildTypes = (parent: Pick<SchoolNode, 'type' | 'metadata'>): AcademicNodeType[] =>
+export const getAllowedChildTypes = (parent: Partial<SchoolNode> & { type: AcademicNodeType }): AcademicNodeType[] =>
   parent.metadata?.allowedChildTypes || childRules[parent.type] || [];
 
 export const validateChildType = (parent: Pick<SchoolNode, 'type' | 'metadata'>, childType: AcademicNodeType): boolean =>
@@ -254,4 +254,19 @@ export const createEventAudienceTarget = (path: SchoolNode[]): {
     participantsType,
     targetValue: selected?.name || 'Selected directory group',
   };
+};
+
+// IDs take precedence; legacy names must resolve to one section across the directory.
+export const profileMatchesDirectorySection = (profile: UserProfile, sectionId: string, nodes: SchoolNode[]): boolean => {
+  const data = profile.school_data;
+  const assignment = data?.academic_assignment;
+  if (assignment?.terminalGroupId) return assignment.terminalGroupId === sectionId;
+  if (assignment?.nodePathIds?.length) return assignment.nodePathIds.includes(sectionId);
+  const normalize = (value?: string) => value?.trim().toLowerCase();
+  const matches = flattenDirectory(nodes).filter(node => {
+    if (!['section', 'block'].includes(node.type) || normalize(node.name) !== normalize(data?.section)) return false;
+    const path = findNodePath(nodes, node.id) || [];
+    return !data?.department || path.some(parent => normalize(parent.name) === normalize(data.department));
+  });
+  return matches.length === 1 && matches[0].id === sectionId;
 };

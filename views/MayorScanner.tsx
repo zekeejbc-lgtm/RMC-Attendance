@@ -18,7 +18,7 @@ import { Page, PageHeader, Surface } from '../components/ui/Page';
 type EventGroup = 'current' | 'scheduled' | 'archived';
 type ScannerState = 'ready' | 'starting' | 'scanning' | 'paused' | 'stopping';
 type CameraOption = { value: string; label: string };
-type AttendanceReceipt = { time_in: number; status: 'present' | 'late'; already_recorded?: boolean };
+type AttendanceReceipt = { time_out?: number; rendered_hours?: number; deducted_hours?: number; time_in: number; status: 'present' | 'late'; already_recorded?: boolean };
 
 const eventTime = (value: unknown, fallback: number) => {
   const parsed = typeof value === 'number' ? value : Date.parse(String(value || ''));
@@ -35,6 +35,7 @@ const groupEvent = (event: AppEvent, now = Date.now()): EventGroup => {
 
 const MayorScanner: React.FC = () => {
   const { profile, isMock } = useAuth();
+  const [direction, setDirection] = useState<'in' | 'out'>('in');
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [tab, setTab] = useState<EventGroup>('current');
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
@@ -89,7 +90,7 @@ const MayorScanner: React.FC = () => {
   const distance = selectedEvent && location
     ? Math.round(getDistanceFromLatLonInMeters(location.latitude, location.longitude, selectedEvent.location.lat, selectedEvent.location.lng))
     : null;
-  const insideGeofence = distance !== null && distance <= (selectedEvent?.location.radius_meters || 0);
+  const insideGeofence = selectedEvent?.geofenceEnabled === false || (distance !== null && distance <= (selectedEvent?.location.radius_meters || 0));
 
   const requestLocation = () => {
     if (!navigator.geolocation) {
@@ -112,7 +113,7 @@ const MayorScanner: React.FC = () => {
     setSelectedEvent(event);
     setLocation(null);
     setLocationError('');
-    requestLocation();
+    if (event.geofenceEnabled !== false) requestLocation();
   };
 
   const discoverCameras = async () => {
@@ -192,7 +193,9 @@ const MayorScanner: React.FC = () => {
 
   const recordAttendance = () => {
     if (!scanResult || !selectedEvent || !profile || attendanceReceipt) return;
-    const record = mockData.logAttendance(selectedEvent.id, scanResult.uid, profile.uid, profile.name, proposedRecordTime || Date.now()) as AttendanceReceipt;
+    let record: AttendanceReceipt;
+    try { record = mockData.logAttendance(selectedEvent.id, scanResult.uid, profile.uid, profile.name, proposedRecordTime || Date.now(), direction) as AttendanceReceipt; }
+    catch (error) { setScanError(error instanceof Error ? error.message : 'Unable to record attendance.'); return; }
     setAttendanceReceipt(record);
     if (!record.already_recorded) setScannedCount((count) => count + 1);
   };
@@ -278,7 +281,8 @@ const MayorScanner: React.FC = () => {
         />
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40"><ShieldCheck size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Location</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">Geofence verified</span></span></Surface>
+          <Surface className="p-4"><CustomSelect label="Scan action" value={direction} onChange={value => setDirection(value as 'in' | 'out')} options={[{value:'in',label:'Scan in'},{value:'out',label:'Scan out / compute rendered hours'}]} />{scanError && <p role="alert" className="mt-2 text-sm text-red-600">{scanError}</p>}{attendanceReceipt?.time_out && <p role="status" className="mt-2 text-sm">Rendered: {attendanceReceipt.rendered_hours?.toFixed(2)} hours. Deducted: {attendanceReceipt.deducted_hours?.toFixed(2)} hours.</p>}</Surface>
+      <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40"><ShieldCheck size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Location</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">Geofence verified</span></span></Surface>
           <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-gold-50 text-gold-600 dark:bg-gold-950/40"><Users size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">This session</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{scannedCount} recorded</span></span></Surface>
           <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40"><Clock3 size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Event closes</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{selectedEvent ? format(selectedEvent.endTime, 'h:mm a') : '—'}</span></span></Surface>
         </div>

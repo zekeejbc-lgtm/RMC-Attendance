@@ -1,3 +1,4 @@
+import { mockData } from '../lib/mockBackend';
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { Modal } from '../components/ui/Modal';
@@ -101,13 +102,20 @@ const StudentCeremonies: React.FC = () => {
   const [submittedExcuse, setSubmittedExcuse] = useState(false);
 
   const filteredCeremonies = useMemo(() => {
-    return MOCK_CEREMONIES.filter(ceremony => {
+    const ceremonies: SchoolCeremony[] = (profile ? mockData.getRecipientEvents(profile.uid) : []).filter(event => event.kind === 'flag_ceremony').map(event => ({
+      id: event.id, title: event.title, type: 'flag_ceremony', scheduleDay: new Date(event.startTime).toLocaleDateString(),
+      timeFrame: `${new Date(event.startTime).toLocaleTimeString()} - ${new Date(event.endTime).toLocaleTimeString()}`,
+      locationName: event.geofenceEnabled ? 'Designated event area' : 'See event instructions', geofenceRadius: event.location.radius_meters,
+      attire: 'See event instructions', description: event.description || '', penaltyValue: event.penaltyUnit === 'minutes' ? event.penaltyValue / 60 : event.penaltyValue,
+      status: event.status === 'upcoming' ? 'scheduled' : event.status === 'done' ? 'archived' : 'active',
+    }));
+    return ceremonies.filter(ceremony => {
       const matchesSearch = ceremony.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             ceremony.locationName.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = typeFilter === 'all' ? true : ceremony.type === typeFilter;
       return matchesSearch && matchesType;
     });
-  }, [searchTerm, typeFilter]);
+  }, [searchTerm, typeFilter, profile]);
 
   const activeCeremonies = useMemo(
     () => filteredCeremonies.filter(ceremony => ceremony.status === 'active'),

@@ -9,7 +9,7 @@ import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { DirectoryNodeModal } from '../components/academic/DirectoryNodeModal';
 import { PresetPickerModal } from '../components/academic/PresetPickerModal';
-import { getAcademicNodeLabel } from '../lib/academicDirectory';
+import { profileMatchesDirectorySection, getAcademicNodeLabel } from '../lib/academicDirectory';
 import { createEventAudienceTarget, serializeAcademicAssignment } from '../lib/academicDirectory';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { NodeOfficerManager, NodeOfficerSummary } from '../components/academic/NodeOfficerManager';
@@ -20,20 +20,30 @@ import {
   Mail, Phone, User as UserIcon, Minus, ImageIcon, LayoutGrid,
   Upload, Trash2, Home, Clock, Lock, CalendarPlus, MapPin, Target,
   AlignLeft, Info, Users2, AlertTriangle, Compass, Crosshair, Map,
-  Globe, ChevronDown, FileText, Fingerprint, Trash, Building2, CalendarDays, Inbox, Pencil, Archive, WandSparkles
+  Globe, ChevronDown, FileText, Fingerprint, Trash, Building2, CalendarDays, Inbox, Pencil, Archive, WandSparkles,
+  Eye, EyeOff, AlertCircle, CheckCircle2,
 } from 'lucide-react';
 
 const memberFieldClass = 'mt-1.5 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
 
 const SSGPanel: React.FC = () => {
   const { profile, isMock } = useAuth();
-  const [tab, setTab] = useState<'hub' | 'applicants' | 'events'>('hub');
+  const [tab, setTab] = useState<'hub' | 'events'>('hub');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+    const tabParam = params.get('tab');
+    if (tabParam && ['hub', 'events'].includes(tabParam)) {
+      setTab(tabParam as any);
+    }
+  }, []);
   const [apps, setApps] = useState<Application[]>([]);
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [structure, setStructure] = useState<SchoolNode[]>([]);
   
   const [path, setPath] = useState<SchoolNode[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<(UserProfile & { stats: UserStats }) | null>(null);
+  const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null);
 
   const [nodeEditor, setNodeEditor] = useState<{ parentId: string | null; node?: SchoolNode } | null>(null);
   const [showPresetModal, setShowPresetModal] = useState(false);
@@ -66,8 +76,9 @@ const SSGPanel: React.FC = () => {
 
   const isPresident = profile?.role === 'ssg' || profile?.role === 'admin' || profile?.role === 'ossa';
   const canManageStructure = hasPermission(profile?.role, 'directory.manage_structure');
+  const canDeleteStructure = hasPermission(profile?.role, 'directory.delete_structure');
   const canManageMembers = hasPermission(profile?.role, 'directory.manage_members');
-  const canManageOfficers = profile?.role === 'admin';
+  const canManageOfficers = profile?.role === 'admin' || profile?.role === 'ossa' || profile?.role === 'ssg';
   const canReviewApplicants = profile?.role === 'admin' || profile?.role === 'ossa' || profile?.role === 'ssg';
 
   // Fix: Enhanced refresh to update selected student details if a modal is active
@@ -89,7 +100,9 @@ const SSGPanel: React.FC = () => {
 
   // Fix: Implemented missing handleApprove function for the applicants tab
   const handleApprove = (id: string, asMayor: boolean = false) => {
+    if (!canReviewApplicants || !currentNode || !nodeApplicants.some(app => app.id === id)) return;
     mockData.approveApplication(id, asMayor ? 'mayor' : 'student');
+    if (asMayor) mockData.assignSectionMayor(id, currentNode.id, currentNode.name);
     refresh();
   };
 
@@ -194,21 +207,72 @@ const SSGPanel: React.FC = () => {
     refresh();
   };
 
+  // Node deletion confirmation modal state
+  const [deleteTargetNode, setDeleteTargetNode] = useState<SchoolNode | null>(null);
+  const [deleteTypedName, setDeleteTypedName] = useState('');
+  const [deleteTypedConfirmText, setDeleteTypedConfirmText] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirmPassword, setDeleteConfirmPassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [showDeletePass, setShowDeletePass] = useState(false);
+  const [showDeleteConfirmPass, setShowDeleteConfirmPass] = useState(false);
+
   const handleArchiveNode = (node: SchoolNode) => {
     mockData.archiveSchoolNode(node.id);
     refresh();
   };
 
-  const handleDeleteNode = (node: SchoolNode) => {
-    if (!window.confirm(`Delete ${node.name}? Units with children or active references cannot be deleted.`)) return;
-    if (!mockData.deleteSchoolNode(node.id)) window.alert('This unit has children or active references. Archive it instead.');
+  const handleDeleteNodeClick = (node: SchoolNode) => {
+    setDeleteTargetNode(node);
+    setDeleteTypedName('');
+    setDeleteTypedConfirmText('');
+    setDeletePassword('');
+    setDeleteConfirmPassword('');
+    setDeleteError('');
+    setShowDeletePass(false);
+    setShowDeleteConfirmPass(false);
+  };
+
+  const handleConfirmDeleteNode = () => {
+    if (!deleteTargetNode) return;
+    setDeleteError('');
+
+    const isPassValid = isMock
+      ? mockData.verifyUserPassword(profile?.uid || '', deletePassword)
+      : true;
+
+    if (!isPassValid) {
+      setDeleteError('Incorrect password. Please enter your valid account password.');
+      return;
+    }
+
+    const success = mockData.deleteSchoolNode(deleteTargetNode.id, profile?.uid);
+    if (!success) {
+      setDeleteError(
+        `Cannot delete "${deleteTargetNode.name}". Units with sub-units or active references (students, officers, or events) cannot be deleted. Please archive the unit instead.`
+      );
+      return;
+    }
+
+    setDeleteTargetNode(null);
     refresh();
   };
+
+  const isDeleteFormValid =
+    deleteTargetNode !== null &&
+    deleteTypedName.trim() === deleteTargetNode.name.trim() &&
+    deleteTypedConfirmText.trim() === 'DELETE' &&
+    deletePassword.length > 0 &&
+    deleteConfirmPassword.length > 0 &&
+    deletePassword === deleteConfirmPassword;
 
   const currentNode = path.length > 0 ? path[path.length - 1] : null;
   const subUnits = currentNode ? (currentNode.children || []) : structure;
   const isAtSection = currentNode?.type === 'section' || currentNode?.type === 'block';
   const students = isAtSection ? mockData.getStudentsBySection(currentNode.name, currentNode.id) : [];
+  const nodeApplicants = isAtSection && currentNode
+    ? apps.filter(app => profileMatchesDirectorySection(app.form_data, currentNode.id, structure))
+    : [];
 
   const createMember = () => {
     if (!currentNode) return;
@@ -234,8 +298,7 @@ const SSGPanel: React.FC = () => {
   };
 
   const tabs = [
-    { id: 'hub' as const, label: 'Directory', icon: Building2, count: structure.length },
-    ...(canReviewApplicants ? [{ id: 'applicants' as const, label: 'Applicants', icon: UserCheck, count: apps.length }] : []),
+    { id: 'hub' as const, label: 'Directory', icon: Building2, count: structure.length }
   ];
 
   const mapUrl = `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d15844.0!2d${eventData.lng}!3d${eventData.lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2sph!4v1620000000000!5m2!1sen!2sph&maptype=satellite`;
@@ -307,13 +370,21 @@ const SSGPanel: React.FC = () => {
               {canManageStructure && currentNode && ['campus', 'school'].includes(currentNode.type) && <button onClick={() => setShowPresetModal(true)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-50 px-3 text-xs font-bold text-brand-900 hover:bg-gold-50 dark:bg-brand-900/40 dark:text-brand-200"><WandSparkles size={15} /> Add template</button>}
             </div>
 
-            {currentNode && <NodeOfficerManager actor={profile!} canManage={canManageOfficers} node={currentNode} onChanged={refresh} />}
+            {currentNode && <NodeOfficerManager actor={profile!} canManage={canManageOfficers} key={currentNode.id} node={currentNode} onChanged={refresh} />}
 
             {!isAtSection ? (
               <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
                 {subUnits.filter((node) => !node.metadata?.archived).map(node => (
                   <article key={node.id} className="group relative flex min-h-44 flex-col rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-gold-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
-                    {canManageStructure && <div className="absolute right-2 top-2 flex gap-1 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-within:opacity-100"><button aria-label="Edit unit" title={`Edit ${node.name}`} onClick={() => setNodeEditor({ parentId: currentNode?.id || null, node })} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-brand-900 dark:bg-slate-700 dark:text-slate-300"><Pencil size={13} /></button><button aria-label="Archive unit" title={`Archive ${node.name}`} onClick={() => handleArchiveNode(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-amber-700 dark:bg-slate-700 dark:text-slate-300"><Archive size={13} /></button><button aria-label="Delete unit" title={`Delete ${node.name}`} onClick={() => handleDeleteNode(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-950/40"><Trash2 size={13} /></button></div>}
+                    {canManageStructure && (
+                      <div className="absolute right-2 top-2 flex gap-1 opacity-100 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+                        <button aria-label="Edit unit" title={`Edit ${node.name}`} onClick={() => setNodeEditor({ parentId: currentNode?.id || null, node })} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-brand-900 dark:bg-slate-700 dark:text-slate-300"><Pencil size={13} /></button>
+                        <button aria-label="Archive unit" title={`Archive ${node.name}`} onClick={() => handleArchiveNode(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 hover:text-amber-700 dark:bg-slate-700 dark:text-slate-300"><Archive size={13} /></button>
+                        {canDeleteStructure && (
+                          <button aria-label="Delete unit" title={`Delete ${node.name}`} onClick={() => handleDeleteNodeClick(node)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-950/40"><Trash2 size={13} /></button>
+                        )}
+                      </div>
+                    )}
                     <button onClick={() => navigateTo(node)} className="flex flex-1 flex-col items-center justify-center px-3 pt-5">
                       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-900 transition-transform group-hover:scale-105 dark:border-brand-800 dark:bg-brand-900/40 dark:text-brand-300">{['school', 'campus'].includes(node.type) ? <School size={22} /> : ['section', 'block'].includes(node.type) ? <LayoutGrid size={22} /> : <BookOpen size={22} />}</div>
                       <h4 className="flex min-h-8 items-center text-[11px] font-bold uppercase tracking-tight text-brand-900 dark:text-slate-100">{node.name}</h4>
@@ -328,11 +399,12 @@ const SSGPanel: React.FC = () => {
                 </button>}
               </div>
             ) : (
-              <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-lg overflow-hidden">
+              <>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-lg overflow-hidden">
                  <div className="p-5 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-700">
-                    <h3 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest">{currentNode.name} Registry</h3>
+                    <h3 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest">Members ? {currentNode.name}</h3>
                     <div className="flex items-center gap-2">
-                       <span className="bg-white dark:bg-slate-800 px-3 py-1 rounded-lg text-[8px] font-bold text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{students.length} Personnel</span>
+                       <span className="bg-white dark:bg-slate-800 px-3 py-1 rounded-lg text-[8px] font-bold text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{students.length} Members</span>
                        {canManageMembers && <Button className="w-auto" onClick={() => { setMemberError(''); setShowMemberModal(true); }} size="sm"><Plus size={14} /> Add member</Button>}
                     </div>
                  </div>
@@ -367,25 +439,41 @@ const SSGPanel: React.FC = () => {
                    ))}
                  </div>
               </div>
+               {canReviewApplicants && <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                 <div className="flex items-center justify-between mb-4">
+                   <div>
+                     <h3 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
+                       <UserCheck size={16} className="text-gold-500" /> Pending Applicants ({nodeApplicants.length})
+                     </h3>
+                     <p className="text-[10px] text-slate-400 mt-0.5">Section applications requiring verification.</p>
+                   </div>
+                 </div>
+                 {nodeApplicants.length > 0 ? (
+                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                     {nodeApplicants.map((app) => (
+                       <div key={app.id} onClick={() => setSelectedApplicant(app)} className="cursor-pointer bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-gold-400 transition-all flex flex-col justify-between space-y-3">
+                         <div className="flex items-center gap-3">
+                           <img alt={app.form_data.name} src={app.form_data.photo_url || `https://i.pravatar.cc/150?u=${app.id}`} className="w-12 h-12 rounded-xl object-cover shadow-sm border border-slate-200 dark:border-slate-700 shrink-0" />
+                           <div className="min-w-0 flex-1">
+                             <h4 className="text-xs font-black uppercase tracking-tight text-brand-900 dark:text-slate-100 truncate">{app.form_data.name}</h4>
+                             <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">{app.form_data.student_id}</p>
+                             <p className="text-[10px] text-slate-400 truncate">{app.form_data.email}</p>
+                           </div>
+                         </div>
+                         <div className="flex gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800">
+                           <button onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); }} className="flex-1 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-[9px] font-black rounded-lg uppercase tracking-wider hover:bg-slate-300 dark:hover:bg-slate-700">Details</button>
+                           <button onClick={(e) => { e.stopPropagation(); handleApprove(app.id); }} className="flex-1 py-1.5 bg-emerald-500 text-white text-[9px] font-black rounded-lg uppercase tracking-wider hover:bg-emerald-600">Verify</button>
+                           <button onClick={(e) => { e.stopPropagation(); handleApprove(app.id, true); }} className="flex-1 py-1.5 bg-brand-900 text-white text-[9px] font-black rounded-lg uppercase tracking-wider hover:bg-brand-800">Mayor</button>
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 ) : (
+                   <p className="text-xs text-slate-400 py-2 italic">No pending applications for {currentNode?.name}.</p>
+                 )}
+               </div>}
+              </>
             )}
-          </div>
-        )}
-
-        {tab === 'applicants' && (
-          <div className="grid grid-cols-1 gap-4 animate-in fade-in sm:grid-cols-2 xl:grid-cols-3">
-            {apps.map(app => (
-              <div key={app.id} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
-                <img alt="" src={app.form_data.photo_url || undefined} className="w-12 h-12 rounded-xl object-cover shadow-sm border border-slate-100 dark:border-slate-700" />
-                <div className="flex-1 min-w-0">
-                  <h4 className="mb-2 text-[11px] font-bold uppercase tracking-tight text-brand-900 [overflow-wrap:anywhere] dark:text-slate-100">{app.form_data.name}</h4>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleApprove(app.id)} className="flex-1 py-1.5 bg-green-500 text-white text-[8px] font-black rounded-lg uppercase tracking-widest hover:bg-green-600">Verify</button>
-                    <button onClick={() => handleApprove(app.id, true)} className="flex-1 py-1.5 bg-brand-900 text-white text-[8px] font-black rounded-lg uppercase tracking-widest hover:bg-brand-800">Mayor</button>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {apps.length === 0 && <EmptyState icon={Inbox} title="No pending applications" description="New student and mayor applications will appear here for review." />}
           </div>
         )}
 
@@ -676,6 +764,235 @@ const SSGPanel: React.FC = () => {
         )}
       >
         <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">The adjustment is recorded as an administrative action and updates the member's service-hour total immediately.</p>
+      </Modal>
+      {/* APPLICANT DETAIL MODAL */}
+      <Modal
+        open={Boolean(selectedApplicant)}
+        onClose={() => setSelectedApplicant(null)}
+        size="md"
+        title="Applicant Details"
+        description="Review student registration submission and select approval tier."
+      >
+        {selectedApplicant && (
+          <div className="space-y-5 animate-in fade-in">
+            <div className="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <img
+                src={selectedApplicant.form_data.photo_url || `https://i.pravatar.cc/150?u=${selectedApplicant.id}`}
+                alt={selectedApplicant.form_data.name}
+                className="w-16 h-16 rounded-2xl object-cover ring-2 ring-gold-400/50 shadow-md shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-tight truncate">{selectedApplicant.form_data.name}</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 shrink-0">
+                    Pending
+                  </span>
+                </div>
+                <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{selectedApplicant.form_data.student_id}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{selectedApplicant.form_data.email}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Username</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedApplicant.form_data.username || selectedApplicant.form_data.email}</span>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assigned Section / Department</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedApplicant.form_data.school_data?.section || selectedApplicant.form_data.school_data?.department || 'Unassigned'}</span>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Guardian Name</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedApplicant.form_data.guardian?.name || 'Not provided'}</span>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Emergency Contact</span>
+                <span className="font-bold text-slate-900 dark:text-white">{selectedApplicant.form_data.guardian?.contact || 'Not provided'}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Button
+                variant="gold"
+                className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest"
+                onClick={() => {
+                  handleApprove(selectedApplicant.id, false);
+                  setSelectedApplicant(null);
+                }}
+              >
+                Verify & Approve
+              </Button>
+              <Button
+                variant="primary"
+                className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest"
+                onClick={() => {
+                  handleApprove(selectedApplicant.id, true);
+                  setSelectedApplicant(null);
+                }}
+              >
+                Approve as Mayor
+              </Button>
+              <Button
+                variant="secondary"
+                className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest"
+                onClick={() => setSelectedApplicant(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* DELETE UNIT CONFIRMATION MODAL */}
+      <Modal
+        open={Boolean(deleteTargetNode)}
+        onClose={() => setDeleteTargetNode(null)}
+        title={deleteTargetNode ? `Delete Unit: ${deleteTargetNode.name}` : 'Confirm Unit Deletion'}
+        description="Permanently remove an academic unit from the campus directory hierarchy."
+        size="md"
+        footer={(
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setDeleteTargetNode(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              aria-label="Confirm Delete Unit"
+              variant="danger"
+              disabled={!isDeleteFormValid}
+              onClick={handleConfirmDeleteNode}
+            >
+              <Trash2 size={16} /> Confirm Delete
+            </Button>
+          </>
+        )}
+      >
+        {deleteTargetNode && (
+          <div className="space-y-4 text-left">
+            {/* IMPACT PREVIEW BOX */}
+            <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 dark:border-red-900/60 dark:bg-red-950/40">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+                <div className="space-y-1 text-xs text-red-800 dark:text-red-200">
+                  <h4 className="font-black uppercase tracking-wider text-red-900 dark:text-red-100">
+                    What will happen if deleting this unit?
+                  </h4>
+                  <ul className="list-disc pl-4 space-y-1 font-medium">
+                    <li>
+                      <strong>"{deleteTargetNode.name}"</strong> ({getAcademicNodeLabel(deleteTargetNode.type)}) will be permanently deleted from the directory structure.
+                    </li>
+                    <li>
+                      Sub-units, sections, or assigned records will lose this node in their hierarchy path.
+                    </li>
+                    <li>
+                      <strong>Protection rule:</strong> If this unit currently has sub-units (child nodes) or active members/events assigned, deletion will be rejected automatically and you will be advised to archive it.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {deleteError && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-red-300 bg-red-100 p-3 text-xs font-bold text-red-800 dark:border-red-800 dark:bg-red-900/60 dark:text-red-200" role="alert">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            {/* CONFIRMATION INPUT 1: Unit Name */}
+            <div>
+              <label htmlFor="delete-unit-name" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                1. Type first the name of what will be deleted ({`"${deleteTargetNode.name}"`})
+              </label>
+              <input
+                id="delete-unit-name"
+                type="text"
+                value={deleteTypedName}
+                onChange={(e) => setDeleteTypedName(e.target.value)}
+                placeholder={deleteTargetNode.name}
+                className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              />
+              {deleteTypedName && deleteTypedName.trim() !== deleteTargetNode.name.trim() && (
+                <p className="mt-1 text-[11px] font-semibold text-red-500">Name does not match "{deleteTargetNode.name}"</p>
+              )}
+            </div>
+
+            {/* CONFIRMATION INPUT 2: Type DELETE */}
+            <div>
+              <label htmlFor="delete-unit-confirm-text" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                2. Type DELETE
+              </label>
+              <input
+                id="delete-unit-confirm-text"
+                type="text"
+                value={deleteTypedConfirmText}
+                onChange={(e) => setDeleteTypedConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white p-2.5 font-mono text-sm uppercase outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              />
+              {deleteTypedConfirmText && deleteTypedConfirmText.trim() !== 'DELETE' && (
+                <p className="mt-1 text-[11px] font-semibold text-red-500">Must match exact text "DELETE"</p>
+              )}
+            </div>
+
+            {/* CONFIRMATION INPUT 3: Password */}
+            <div>
+              <label htmlFor="delete-unit-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                3. Password of the person
+              </label>
+              <div className="relative mt-1.5">
+                <input
+                  id="delete-unit-password"
+                  type={showDeletePass ? 'text' : 'password'}
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter your login password"
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 pr-10 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  aria-label={showDeletePass ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowDeletePass(!showDeletePass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  {showDeletePass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* CONFIRMATION INPUT 4: Confirm Password */}
+            <div>
+              <label htmlFor="delete-unit-confirm-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                4. Confirm Password
+              </label>
+              <div className="relative mt-1.5">
+                <input
+                  id="delete-unit-confirm-password"
+                  type={showDeleteConfirmPass ? 'text' : 'password'}
+                  value={deleteConfirmPassword}
+                  onChange={(e) => setDeleteConfirmPassword(e.target.value)}
+                  placeholder="Re-enter your login password"
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 pr-10 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                />
+                <button
+                  type="button"
+                  aria-label={showDeleteConfirmPass ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowDeleteConfirmPass(!showDeleteConfirmPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  {showDeleteConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {deleteConfirmPassword && deletePassword !== deleteConfirmPassword && (
+                <p className="mt-1 text-[11px] font-semibold text-red-500">Passwords do not match</p>
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
     </Page>
   );

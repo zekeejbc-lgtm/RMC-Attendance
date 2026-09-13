@@ -21,6 +21,7 @@ import SSGEventCreation from '../views/SSGEventCreation';
 import SSGCreateEvent from '../views/SSGCreateEvent';
 import AttendanceDashboard from '../views/AttendanceDashboard';
 import OSSADashboard from '../views/OSSADashboard';
+import AdminControls from '../views/AdminControls';
 
 const studentProfile = {
   uid: 'student-1',
@@ -30,6 +31,8 @@ const studentProfile = {
   student_id: 'RMC-2026-0001',
   photo_url: '',
   email: 'juan.delacruz@example.edu',
+  phone: '0917 000 0000',
+  guardian: { name: 'Original Guardian', contact: '0918 000 0000' },
   school_data: {
     type: 'High School',
     level: 'Grade 12',
@@ -145,6 +148,20 @@ vi.mock('../lib/mockBackend', () => ({
     reviewExcuseApplication: staffState.reviewExcuseApplication,
     updateContactDetails: staffState.updateContactDetails,
     submitApplication: vi.fn(),
+    getSystemFreezeStatus: () => ({ isFrozen: false, reason: '' }),
+    getFrozenNodes: () => ({}),
+    isNodeOrParentFrozen: () => false,
+    setSystemFreezeStatus: vi.fn(),
+    setNodeFreezeStatus: vi.fn(),
+    isUserScopeFrozen: () => false,
+    getPaymentInfo: () => ({ status: 'paid', dueDate: '2026-12-31', amountDue: 0, logs: [] }),
+    sendPaymentReminderToOSAS: vi.fn(),
+    updatePaymentInfo: vi.fn(),
+    getCustomRoles: () => ({}),
+    saveCustomRole: vi.fn(),
+    deleteCustomRole: vi.fn(),
+    getSystemHealthMetrics: () => ({ status: 'healthy', activeSessions: 1, totalAccounts: 10, totalEvents: 2, totalAttendanceLogs: 50, databaseSize: 1024, cacheHitRate: 98, cpuUsage: 12, memoryUsage: 45 }),
+    getAccountAuditLogs: () => [],
   },
   mockSeed: backendState.mockSeed,
 }));
@@ -618,6 +635,7 @@ describe('complete routed view render matrix', () => {
     { path: '/ssg/events', file: 'views/SSGEventCreation.tsx', element: <SSGEventCreation />, setup: staffRoute, usesPage: true },
     { path: '/ssg/events/create', file: 'views/SSGCreateEvent.tsx', element: <SSGCreateEvent />, setup: staffRoute, usesPage: true },
     { path: '/admin/attendance', file: 'views/AttendanceDashboard.tsx', element: <AttendanceDashboard />, setup: staffRoute, usesPage: true },
+    { path: '/admin/controls', file: 'views/AdminControls.tsx', element: <AdminControls />, setup: staffRoute, usesPage: true },
     { path: '/admin/members', file: 'views/ManageMembers.tsx', element: <ManageMembers />, setup: staffRoute, usesPage: true },
     { path: '/ossa/dashboard', file: 'views/OSSADashboard.tsx', element: <OSSADashboard />, setup: staffRoute, usesPage: true },
   ];
@@ -1169,7 +1187,10 @@ describe('staff route UI behavior', () => {
     }];
     renderRoute(<SSGPanel />);
 
-    await user.click(screen.getByRole('button', { name: /^applicants$/i }));
+    expect(screen.queryByRole('button', { name: /^applicants$/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /RMC Campus/i }));
+    await user.click(screen.getByRole('button', { name: /Senior High School/i }));
+    await user.click(screen.getByRole('button', { name: /Newton/i }));
     await user.click(screen.getByRole('button', { name: /^verify$/i }));
     expect(staffState.approveApplication).toHaveBeenCalledWith('application-1', 'student');
   });

@@ -1,8 +1,9 @@
+import { isEventRecipient } from './eventAudience';
 
 import { TEST_ACCOUNTS } from './seed';
 import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, UserRole } from '../types';
-import { schoolOfficialRoles } from './accessControl';
-import { findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNodeInSubtree, migrateAcademicDirectory } from './academicDirectory';
+import { schoolOfficialRoles, DEFAULT_CORE_ROLES, setMockDataRef, hasPermission } from './accessControl';
+import { serializeAcademicAssignment, profileMatchesDirectorySection, findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNodeInSubtree, migrateAcademicDirectory } from './academicDirectory';
 
 const STORAGE_KEY = 'rmc_regalia_db';
 
@@ -18,6 +19,11 @@ interface MockDB {
   schema_version?: number;
   application_credentials?: Record<string, string>;
   deleted_seed_accounts?: string[];
+  system_freeze?: import('../types').SystemFreezeState;
+  frozen_nodes?: Record<string, import('../types').NodeFreezeState>;
+  payment_info?: import('../types').PaymentInfo;
+  core_roles?: Record<string, import('../types').CoreRole>;
+  custom_roles?: Record<string, import('../types').CustomRole>;
   audit_logs?: Array<{
     id: string;
     action: 'account.created' | 'account.deleted';
@@ -28,6 +34,7 @@ interface MockDB {
     target_role: UserRole;
     timestamp: number;
   }>;
+  section_security_keys?: Record<string, string>;
 }
 
 type NewUserProfile = Omit<UserProfile, 'uid' | 'photo_url'>;
@@ -96,15 +103,25 @@ const getAssignmentNodeId = (profile: UserProfile) =>
 
 const canRoleBeAssignedToNode = (role: UserRole, node: SchoolNode) => {
   if (role === 'ossa' || role === 'ossa_staff') return ['campus', 'school'].includes(node.type);
-  if (role === 'ssg') return ['education_unit', 'department', 'college'].includes(node.type);
+  if (role === 'ssg') return !['campus', 'school'].includes(node.type);
   if (role === 'mayor') return ['section', 'block'].includes(node.type);
   return false;
+};
+
+const assertOfficerScope = (db: MockDB, actor: UserProfile, nodeId: string) => {
+  if (actor.role === 'admin') return;
+  const scopeId = getAssignmentNodeId(actor);
+  if (!scopeId || !isNodeInSubtree(db.school_structure, scopeId, nodeId)) {
+    throw new Error('Officers can only be managed inside your assigned area.');
+  }
 };
 
 const applyAssignment = (profile: UserProfile | NewUserProfile, path: SchoolNode[]) => {
   const node = path.at(-1);
   if (!node) throw new Error('Select a valid directory unit.');
   if (!canRoleBeAssignedToNode(profile.role, node)) throw new Error(`${profile.role} cannot be assigned to this type of directory unit.`);
+  const serialized = serializeAcademicAssignment(path);
+  profile.school_data = { ...profile.school_data, ...serialized.schoolData, academic_assignment: serialized.assignment };
   profile.official_data = {
     ...(profile.official_data || { body: profile.role === 'ssg' || profile.role === 'mayor' ? 'SSG' : 'OSSA' }),
     scope: node.name,
@@ -135,13 +152,8 @@ const migrateOfficerAssignments = (db: MockDB) => {
 };
 
 const profileBelongsToScope = (db: MockDB, profile: UserProfile, scopeNodeId: string) => {
-  const assignment = profile.school_data.academic_assignment;
-  if (assignment?.nodePathIds.includes(scopeNodeId)) return true;
-  if (assignment?.terminalGroupId && isNodeInSubtree(db.school_structure, scopeNodeId, assignment.terminalGroupId)) return true;
-  const scopedNodes = flattenDirectory(getDirectorySubtree(db.school_structure, scopeNodeId));
-  return scopedNodes.some((node) =>
-    ['section', 'block'].includes(node.type) && node.name === profile.school_data.section,
-  );
+  return flattenDirectory(getDirectorySubtree(db.school_structure, scopeNodeId)).some(node =>
+    ['section', 'block'].includes(node.type) && profileMatchesDirectorySection(profile, node.id, db.school_structure));
 };
 
 export const getDB = (): MockDB => {
@@ -165,6 +177,50 @@ export const getDB = (): MockDB => {
   if (!db.application_credentials) db.application_credentials = {};
   if (!db.deleted_seed_accounts) db.deleted_seed_accounts = [];
   if (!db.audit_logs) db.audit_logs = [];
+  if (!db.section_security_keys) db.section_security_keys = {};
+  if (!db.system_freeze) {
+    db.system_freeze = { isFrozen: false, reason: '' };
+  }
+  if (!db.frozen_nodes) {
+    db.frozen_nodes = {};
+  }
+  if (!db.payment_info) {
+    db.payment_info = {
+      status: 'due_soon',
+      amountDue: 45000,
+      currency: 'PHP',
+      dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      billingCycle: 'Annual Institution License',
+      accountName: 'Rizal Memorial Colleges Inc.',
+      schoolId: 'school_rmc',
+      reminders: []
+    };
+  }
+  if (!db.core_roles) {
+    db.core_roles = JSON.parse(JSON.stringify(DEFAULT_CORE_ROLES));
+  }
+  if (!db.custom_roles) {
+    db.custom_roles = {
+      'role_discipline_officer': {
+        id: 'role_discipline_officer',
+        name: 'Discipline Officer',
+        description: 'Position for managing student conduct, sanctions, and appeals',
+        isPositionOnly: false,
+        permissions: ['ossa.manage_cases', 'attendance.manage', 'system.view_audit'],
+        createdBy: 'System Admin',
+        createdAt: Date.now() - 86400000 * 30
+      },
+      'role_treasurer': {
+        id: 'role_treasurer',
+        name: 'Class Treasurer',
+        description: 'Position role for section level finances (No extra system privileges)',
+        isPositionOnly: true,
+        permissions: [],
+        createdBy: 'System Admin',
+        createdAt: Date.now() - 86400000 * 14
+      }
+    };
+  }
 
   let updated = false;
   if ('directory_backups' in db) {
@@ -292,6 +348,7 @@ export const getDB = (): MockDB => {
         reason: 'Severe flu with high fever. Medical certificate attached.',
         proof_url: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=600&auto=format&fit=crop&q=80',
         status: 'pending',
+        submission_date: Date.now() - 86400000 * 2,
         submitted_at: Date.now() - 86400000 * 2
       },
       'exc_02': {
@@ -307,6 +364,7 @@ export const getDB = (): MockDB => {
         reason: 'Represented school in Regional Academic Quiz Bee competition.',
         proof_url: 'https://images.unsplash.com/photo-1567427017947-545c5f8d16ad?w=600&auto=format&fit=crop&q=80',
         status: 'pending',
+        submission_date: Date.now() - 86400000 * 1,
         submitted_at: Date.now() - 86400000 * 1
       }
     };
@@ -763,13 +821,30 @@ export const mockSeed = () => {
   saveDB(db);
 };
 
+const requireSessionPermission = (permission: import('../types').AppPermission, allowFrozen = false) => {
+  const db = getDB();
+  const actor = db.users[localStorage.getItem('rmc_mock_session') || '']?.profile;
+  if (!actor || !hasPermission(actor.role, permission)) throw new Error(`Permission required: ${permission}`);
+  if (!allowFrozen && actor.role !== 'admin' && mockData.isUserScopeFrozen(actor)) throw new Error('Operations are frozen for your school or class.');
+  return actor;
+};
+
+const requireEventManagement = (event?: AppEvent) => {
+  const actor = requireSessionPermission('events.manage');
+  if (event && actor.role !== 'admin' && event.created_by !== actor.uid && (!event.scopeNodeId || !mockData.isNodeVisibleTo(actor.uid, event.scopeNodeId))) throw new Error('This event is outside your management scope.');
+  return actor;
+};
+
 export const mockData = {
   getEvents: () => {
     const db = ensureMockReferenceData();
     const now = Date.now();
     let changed = false;
     Object.values(db.events).forEach((event) => {
-      if (event.status === 'active' && event.endTime <= now) { event.status = 'done'; changed = true; }
+      if (event.status !== 'done' && !event.cancellationStatus) {
+        const status = event.endTime <= now ? 'done' : event.startTime <= now ? 'active' : 'upcoming';
+        if (event.status !== status) { event.status = status; changed = true; }
+      }
     });
     if (changed) saveDB(db);
     return Object.values(db.events);
@@ -806,7 +881,7 @@ export const mockData = {
   ) => {
     const db = getDB();
     const actor = db.users[actorUid]?.profile;
-    if (actor?.role !== 'admin') throw new Error('Only the System Owner can create school-official accounts.');
+    if (actor?.role !== 'admin' && actor?.role !== 'ossa' && actor?.role !== 'ssg') throw new Error('Only authorized officials (Admin, OSSA, SSG) can create school-official accounts.');
     if (!schoolOfficialRoles.includes(profile.role)) throw new Error('That role cannot be created from School Accounts.');
     if (password.length < 8) throw new Error('Temporary password must contain at least 8 characters.');
 
@@ -814,6 +889,7 @@ export const mockData = {
     const assignmentNodeId = normalized.official_data?.assignment_node_id;
     const assignmentPath = assignmentNodeId ? findNodePath(db.school_structure, assignmentNodeId) : undefined;
     if (!assignmentPath) throw new Error('Assign the account to a valid school unit.');
+    assertOfficerScope(db, actor, assignmentNodeId!);
     applyAssignment(normalized, assignmentPath);
     assertNewUserProfile(db, normalized);
     const uid = addUserToDB(db, normalized, password);
@@ -831,11 +907,14 @@ export const mockData = {
     const db = getDB();
     const actor = db.users[actorUid]?.profile;
     const target = db.users[targetUid]?.profile;
-    if (actor?.role !== 'admin') throw new Error('Only the System Owner can delete school-official accounts.');
+    if (actor?.role !== 'admin' && actor?.role !== 'ossa' && actor?.role !== 'ssg') throw new Error('Only authorized officials (Admin, OSSA, SSG) can delete school-official accounts.');
     if (!target) throw new Error('Account not found.');
     if (actorUid === targetUid || target.role === 'admin') throw new Error('System Owner accounts cannot be deleted here.');
     if (target.role === 'student') throw new Error('Student accounts must be managed from the school directory.');
 
+    const targetNodeId = getAssignmentNodeId(target);
+    if (actor.role !== 'admin' && !targetNodeId) throw new Error('This officer has no assigned area.');
+    if (targetNodeId) assertOfficerScope(db, actor, targetNodeId);
     delete db.usernames[target.username.toLowerCase()];
     delete db.users[targetUid];
     if (targetUid.startsWith('mock_uid_') && !db.deleted_seed_accounts?.includes(targetUid)) {
@@ -856,10 +935,20 @@ export const mockData = {
     const actor = db.users[actorUid]?.profile;
     const target = db.users[targetUid]?.profile;
     const path = findNodePath(db.school_structure, nodeId);
-    if (actor?.role !== 'admin') throw new Error('Only the System Owner can assign officer scopes.');
-    if (!target || target.role === 'admin' || target.role === 'student') throw new Error('Select a school-official account.');
+    if (actor?.role !== 'admin' && actor?.role !== 'ossa' && actor?.role !== 'ssg') throw new Error('Only authorized officials (Admin, OSSA, SSG) can assign officer scopes.');
+    if (!target || target.role === 'admin') throw new Error('Select a student or school-official account.');
+    if (!mockData.isNodeVisibleTo(actorUid, nodeId)) throw new Error('This unit is outside your assigned scope.');
+    if (target.role === 'student') {
+      if (!['admin', 'ossa'].includes(actor.role)) throw new Error('Only Admin or OSAS can appoint students as SSG officers.');
+      target.role = 'ssg';
+    }
     if (!path) throw new Error('Directory unit not found.');
+    const enrolledSchoolData = structuredClone(target.school_data);
+    assertOfficerScope(db, actor, nodeId);
+    const previousNodeId = getAssignmentNodeId(target);
+    if (previousNodeId) assertOfficerScope(db, actor, previousNodeId);
     applyAssignment(target, path);
+    if (enrolledSchoolData.academic_assignment) target.school_data = enrolledSchoolData;
     saveDB(db);
     notifyAuthChange();
     return true;
@@ -875,7 +964,7 @@ export const mockData = {
   getAllStudents: () => {
     const db = getDB();
     return Object.values(db.users)
-      .filter(u => u.profile.role === 'student' || u.profile.role === 'mayor')
+      .filter(u => ['student', 'mayor', 'ssg'].includes(u.profile.role))
       .map(u => ({
         ...u.profile,
         stats: u.stats,
@@ -887,7 +976,7 @@ export const mockData = {
     const actor = db.users[actorUid]?.profile;
     const scopeNodeId = actor ? getAssignmentNodeId(actor) : undefined;
     return Object.values(db.users)
-      .filter(({ profile }) => profile.role === 'student' || profile.role === 'mayor')
+      .filter(({ profile }) => ['student', 'mayor', 'ssg'].includes(profile.role))
       .filter(({ profile }) => actor?.role === 'admin' || Boolean(scopeNodeId && profileBelongsToScope(db, profile, scopeNodeId)))
       .map(({ profile, stats }) => ({ ...profile, stats, sanction_logs: db.sanction_logs[profile.uid] || [] }));
   },
@@ -908,31 +997,31 @@ export const mockData = {
     if (actor?.role === 'admin') return Object.values(db.events);
     const scopeNodeId = actor ? getAssignmentNodeId(actor) : undefined;
     if (!scopeNodeId) return [];
-    return Object.values(db.events).filter((event) => {
-      if (!event.audienceTarget || event.audienceTarget.mode === 'all') return true;
-      if (event.audienceTarget.mode === 'specific_people') return event.audienceTarget.specificUserIds?.includes(actorUid);
-      const eventNodeId = event.audienceTarget.nodeId;
-      return Boolean(eventNodeId && (
-        isNodeInSubtree(db.school_structure, scopeNodeId, eventNodeId)
-        || isNodeInSubtree(db.school_structure, eventNodeId, scopeNodeId)
-      ));
-    });
+    const students = mockData.getVisibleStudents(actorUid);
+    return mockData.getEvents().filter(event => event.created_by === actorUid || students.some(student => isEventRecipient(event, student, db.school_structure)) || isEventRecipient(event, actor!, db.school_structure));
   },
+  getRecipientEvents: (uid: string) => {
+    const db = getDB();
+    const profile = db.users[uid]?.profile;
+    return profile ? mockData.getEvents().filter(event => isEventRecipient(event, profile, db.school_structure)) : [];
+  },
+  isEventRecipient: (event: AppEvent, profile: UserProfile) => isEventRecipient(event, profile, getDB().school_structure),
+  getAttendanceLogs: (eventId: string) => getDB().attendance_logs[eventId] || {},
+
   getStudentsBySection: (sectionName: string, terminalGroupId?: string) => {
     const db = getDB();
     return Object.values(db.users)
       .filter(({ profile }) => terminalGroupId
-        ? profile.school_data.academic_assignment?.terminalGroupId === terminalGroupId
-          || (!profile.school_data.academic_assignment && profile.school_data.section === sectionName)
+        ? profileMatchesDirectorySection(profile, terminalGroupId, db.school_structure)
         : profile.school_data.section === sectionName)
-      .filter(({ profile }) => profile.role === 'student' || profile.role === 'mayor')
+      .filter(({ profile }) => ['student', 'mayor', 'ssg'].includes(profile.role))
       .map(u => ({ ...u.profile, stats: u.stats }));
   },
   getUserProfile: (studentIdentifier: string) => {
     const db = getDB();
     return Object.values(db.users).find(u => 
       (u.profile.uid === studentIdentifier || u.profile.student_id === studentIdentifier) &&
-      (u.profile.role === 'student' || u.profile.role === 'mayor') &&
+      (['student', 'mayor', 'ssg'].includes(u.profile.role)) &&
       (u.profile.account_status || 'active') === 'active'
     )?.profile;
   },
@@ -994,6 +1083,7 @@ export const mockData = {
     return created;
   },
   addSchoolNode: (parentId: string | null, node: SchoolNode) => {
+    requireSessionPermission('directory.manage_structure', false);
     const db = getDB();
     if (!parentId) {
       db.school_structure.push(node);
@@ -1013,13 +1103,87 @@ export const mockData = {
     }
     saveDB(db);
   },
+  assignAccountRole: (actorUid: string, uid: string, roleId: string) => {
+    const db = getDB();
+    const actor = db.users[actorUid]?.profile, target = db.users[uid]?.profile;
+    if (!actor || !hasPermission(actor.role, 'system.manage_rbac')) throw new Error('Role administration permission is required.');
+    if (!target || target.role === 'admin' || roleId === 'admin') throw new Error('System Owner access cannot be reassigned here.');
+    const role = db.core_roles?.[roleId] || DEFAULT_CORE_ROLES[roleId] || db.custom_roles?.[roleId];
+    if (!role) throw new Error('Role not found.');
+    if (role.isPositionOnly) target.positionRoleIds = [...new Set([...(target.positionRoleIds || []), roleId])];
+    else target.role = roleId;
+    saveDB(db); notifyAuthChange();
+  },
   assignRole: (uid: string, role: any) => {
+    requireSessionPermission('system.manage_rbac', false);
     const db = getDB();
     if (db.users[uid]) {
       db.users[uid].profile.role = role;
       saveDB(db);
       notifyAuthChange();
     }
+  },
+  isMayorRegisteredForSection: (terminalGroupId?: string, sectionName?: string) => {
+    if (!terminalGroupId && !sectionName) return false;
+    const db = getDB();
+    const normGroup = terminalGroupId?.trim().toLowerCase();
+    const normName = sectionName?.trim().toLowerCase();
+
+    return Object.values(db.users).some(({ profile }) => {
+      if (profile.role !== 'mayor' || profile.account_status === 'suspended' || profile.account_status === 'inactive') {
+        return false;
+      }
+      const userGroup = profile.school_data?.academic_assignment?.terminalGroupId?.trim().toLowerCase();
+      const userSection = profile.school_data?.section?.trim().toLowerCase();
+      const userNodeId = profile.official_data?.assignment_node_id?.trim().toLowerCase();
+
+      if (normGroup && (userGroup || userNodeId)) return userGroup === normGroup || userNodeId === normGroup;
+      if (normName && userSection) {
+        if (userSection === normName) {
+          return true;
+        }
+      }
+      return false;
+    });
+  },
+  getSectionSecurityKey: (terminalGroupId?: string, sectionName?: string) => {
+    const db = getDB();
+    if (!db.section_security_keys) db.section_security_keys = {};
+
+    if (terminalGroupId && db.section_security_keys[terminalGroupId]) {
+      return db.section_security_keys[terminalGroupId];
+    }
+    if (!terminalGroupId && sectionName && db.section_security_keys[sectionName]) {
+      return db.section_security_keys[sectionName];
+    }
+
+    const normGroup = terminalGroupId?.trim().toLowerCase();
+    const normName = sectionName?.trim().toLowerCase();
+    for (const [k, v] of Object.entries(db.section_security_keys)) {
+      const nk = k.trim().toLowerCase();
+      if (normGroup && nk === normGroup) return v;
+      if (!normGroup && normName && nk === normName) return v;
+    }
+
+    const defaultKey = `SEC-${Math.floor(10000 + Math.random() * 90000)}`;
+    const keyToUse = terminalGroupId || sectionName || 'default';
+    db.section_security_keys[keyToUse] = defaultKey;
+    saveDB(db);
+    return defaultKey;
+  },
+  setSectionSecurityKey: (terminalGroupIdOrName: string, key: string) => {
+    const db = getDB();
+    if (!db.section_security_keys) db.section_security_keys = {};
+    db.section_security_keys[terminalGroupIdOrName] = key.trim().toUpperCase();
+    saveDB(db);
+    notifyAuthChange();
+    return true;
+  },
+  validateSectionSecurityKey: (terminalGroupId?: string, securityKey?: string, sectionName?: string) => {
+    if (!securityKey || !securityKey.trim()) return false;
+    const expectedKey = mockData.getSectionSecurityKey(terminalGroupId, sectionName);
+    if (!expectedKey) return true;
+    return securityKey.trim().toUpperCase() === expectedKey.trim().toUpperCase();
   },
   assignSectionMayor: (uid: string, terminalGroupId: string, sectionName?: string) => {
     const db = getDB();
@@ -1036,6 +1200,15 @@ export const mockData = {
       if (belongsToGroup(profile) && profile.role === 'mayor') profile.role = 'student';
     });
     selected.role = 'mayor';
+    const assignmentPath = findNodePath(db.school_structure, terminalGroupId);
+    if (assignmentPath) applyAssignment(selected, assignmentPath);
+
+    if (!db.section_security_keys) db.section_security_keys = {};
+    const keyTarget = terminalGroupId || sectionName || 'default';
+    if (!db.section_security_keys[keyTarget]) {
+      db.section_security_keys[keyTarget] = `SEC-${Math.floor(10000 + Math.random() * 90000)}`;
+    }
+
     saveDB(db);
     notifyAuthChange();
     return true;
@@ -1055,6 +1228,7 @@ export const mockData = {
     return true;
   },
   adjustSanctionHours: (uid: string, hoursDelta: number, reason: string = "Manual Adjustment") => {
+    requireSessionPermission('ossa.manage_cases', false);
     const db = getDB();
     if (db.users[uid]) {
       const current = db.users[uid].stats.sanction_hours || 0;
@@ -1075,6 +1249,7 @@ export const mockData = {
     return false;
   },
   resolveStudentSanctions: (uid: string, notes: string = "Cleared and Resolved by OSSA") => {
+    requireSessionPermission('ossa.manage_cases', false);
     const db = getDB();
     if (db.users[uid]) {
       const previousHours = db.users[uid].stats.sanction_hours || 0;
@@ -1094,6 +1269,7 @@ export const mockData = {
     return false;
   },
   reviewExcuseApplication: (id: string, status: 'approved' | 'rejected', notes: string, waivedHours: number = 0) => {
+    requireSessionPermission('ossa.manage_cases', false);
     const db = getDB();
     if (db.excuse_applications[id]) {
       db.excuse_applications[id].status = status;
@@ -1140,11 +1316,22 @@ export const mockData = {
     notifyAuthChange();
     return newApp;
   },
-  submitApplication: (data: UserProfile, password = 'password123') => {
+  submitApplication: (data: UserProfile, password = 'password123', securityKey?: string) => {
     const db = getDB();
     const studentId = data.student_id.trim().toLowerCase();
     const email = data.email.trim().toLowerCase();
     const username = data.username.trim().toLowerCase();
+
+    const terminalGroupId = data.school_data?.academic_assignment?.terminalGroupId;
+    const sectionName = data.school_data?.section;
+
+    if (mockData.isUserScopeFrozen(data)) throw new Error('Enrollment is frozen for this school or class.');
+    if (mockData.isMayorRegisteredForSection(terminalGroupId, sectionName)) {
+      if (!securityKey || !mockData.validateSectionSecurityKey(terminalGroupId, securityKey, sectionName)) {
+        throw new Error('Valid Section Enrollment Security Key is required for enrollment into this section.');
+      }
+    }
+
     const profiles = [
       ...Object.values(db.users).map(user => user.profile),
       ...Object.values(db.applications).map(application => application.form_data),
@@ -1171,6 +1358,7 @@ export const mockData = {
     saveDB(db);
   },
   updateSchoolNode: (id: string, changes: Partial<Pick<SchoolNode, 'name' | 'type' | 'metadata'>>) => {
+    requireSessionPermission('directory.manage_structure', false);
     const db = getDB();
     const update = (nodes: SchoolNode[]): boolean => {
       for (const item of nodes) {
@@ -1189,6 +1377,7 @@ export const mockData = {
     return changed;
   },
   archiveSchoolNode: (id: string) => {
+    requireSessionPermission('directory.manage_structure', false);
     const db = getDB();
     const archive = (nodes: SchoolNode[]): boolean => {
       for (const item of nodes) {
@@ -1204,14 +1393,18 @@ export const mockData = {
     if (changed) saveDB(db);
     return changed;
   },
-  deleteSchoolNode: (id: string) => {
+  deleteSchoolNode: (id: string, actorUid?: string) => {
     const db = getDB();
+    const actor = db.users[actorUid || localStorage.getItem('rmc_mock_session') || '']?.profile;
+    if (!actor || !hasPermission(actor.role, 'directory.delete_structure') || !mockData.isNodeVisibleTo(actor.uid, id)) return false;
+    if (actor.role !== 'admin' && mockData.isUserScopeFrozen(actor)) return false;
     const referencedByUser = Object.values(db.users).some(({ profile }) =>
       profile.school_data.academic_assignment?.nodePathIds.includes(id)
       || profile.official_data?.assignment_node_path_ids?.includes(id),
     );
-    const referencedByEvent = Object.values(db.events).some((event) => event.audienceTarget?.nodeId === id);
-    if (referencedByUser || referencedByEvent) return false;
+    const referencedByEvent = Object.values(db.events).some((event) => event.audienceTarget?.nodeId === id || event.scopeNodeId === id || event.audienceTarget?.groups?.includes(`node:${id}`));
+    const referencedByApplication = Object.values(db.applications).some(application => application.form_data.school_data.academic_assignment?.nodePathIds.includes(id));
+    if (referencedByUser || referencedByEvent || referencedByApplication) return false;
     const remove = (nodes: SchoolNode[]): boolean => {
       const index = nodes.findIndex((item) => item.id === id);
       if (index >= 0) {
@@ -1225,7 +1418,17 @@ export const mockData = {
     if (changed) saveDB(db);
     return changed;
   },
+  verifyUserPassword: (uid: string, passwordInput: string) => {
+    const db = getDB();
+    const userEntry = db.users[uid];
+    if (userEntry) {
+      const expected = userEntry.password || 'password123';
+      return expected === passwordInput;
+    }
+    return false;
+  },
   approveApplication: (id: string, role: any = 'student') => {
+    requireSessionPermission('directory.manage_members', false);
     const db = getDB();
     const app = db.applications[id];
     if (app) {
@@ -1241,37 +1444,86 @@ export const mockData = {
     }
   },
   createEvent: (ev: Omit<AppEvent, 'id'>) => {
+    const actor = requireEventManagement();
+    ev = { ...ev, created_by: actor.uid, scopeNodeId: actor.role === 'admin' ? ev.scopeNodeId : getAssignmentNodeId(actor) };
+    if (actor.role !== 'admin' && !ev.scopeNodeId) throw new Error('An assigned scope is required to create events.');
     const db = getDB();
-    const id = `ev_${Date.now()}`;
-    db.events[id] = { ...ev, id } as AppEvent;
+    const count = ev.recurrence?.occurrences || 1;
+    if (!Number.isInteger(count) || count < 1 || count > 52) throw new Error('Choose between 1 and 52 weekly occurrences.');
+    if (!Number.isFinite(ev.startTime) || ev.endTime <= ev.startTime) throw new Error('Event end must follow its start.');
+    if (ev.kind === 'merit' && (!Number.isFinite(ev.meritHours) || ev.meritHours! <= 0)) throw new Error('Merit hours must be greater than zero.');
+    const id = `ev_${crypto.randomUUID()}`;
+    for (let index = 0; index < count; index++) {
+      const start = new Date(ev.startTime), end = new Date(ev.endTime);
+      start.setDate(start.getDate() + index * 7); end.setDate(end.getDate() + index * 7);
+      const localDate = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      const occurrenceId = index ? `${id}_${index}` : id;
+      db.events[occurrenceId] = { ...ev, id: occurrenceId, seriesId: count > 1 ? id : undefined, startTime: start.getTime(), endTime: end.getTime(), startDate: localDate(start), endDate: localDate(end) };
+    }
     saveDB(db);
+    return id;
   },
   updateEvent: (id: string, changes: Partial<Omit<AppEvent, 'id'>>) => {
     const db = getDB();
     if (!db.events[id]) return false;
-    db.events[id] = { ...db.events[id], ...changes, id };
+    requireEventManagement(db.events[id]);
+    const updated = { ...db.events[id], ...changes, id, created_by: db.events[id].created_by, scopeNodeId: db.events[id].scopeNodeId };
+    if (!Number.isFinite(updated.endTime) || updated.endTime <= updated.startTime) throw new Error('Event end must follow its start.');
+    if (updated.kind === 'merit' && (!Number.isFinite(updated.meritHours) || updated.meritHours! <= 0)) throw new Error('Merit hours must be positive.');
+    db.events[id] = updated;
     saveDB(db);
     return true;
   },
   archiveEvent: (id: string) => {
     const db = getDB();
     if (!db.events[id]) return false;
+    requireEventManagement(db.events[id]);
     db.events[id].status = 'done'; saveDB(db); return true;
   },
   cancelEvent: (id: string) => {
     const db = getDB();
     if (!db.events[id]) return false;
+    requireEventManagement(db.events[id]);
     db.events[id].status = 'done'; db.events[id].cancellationStatus = 'cancelled'; saveDB(db); return true;
   },
   deleteEvent: (id: string) => {
     const db = getDB();
     if (!db.events[id]) return false;
+    requireEventManagement(db.events[id]);
+    if (Object.keys(db.attendance_logs[id] || {}).length) throw new Error('Archive events that have attendance records.');
     delete db.events[id]; delete db.attendance_logs[id]; saveDB(db); return true;
   },
-  logAttendance: (eventId: string, studentUid: string, loggerUid: string, loggerName: string, recordTime?: number) => {
+  logAttendance: (eventId: string, studentUid: string, loggerUid: string, loggerName: string, recordTime?: number, direction: 'in' | 'out' = 'in') => {
     const db = getDB();
+    const actor = db.users[loggerUid]?.profile;
+    const student = db.users[studentUid]?.profile;
+    const selectedEvent = db.events[eventId];
+    if (!actor || !hasPermission(actor.role, 'attendance.scan')) throw new Error('Attendance scanning permission is required.');
+    if (mockData.isUserScopeFrozen(actor) || mockData.isUserScopeFrozen(student)) throw new Error('Attendance is frozen for this school or class.');
+    if (!student || !selectedEvent || !isEventRecipient(selectedEvent, student, db.school_structure)) throw new Error('This student is not a recipient of this event.');
+    if (!mockData.getVisibleStudents(loggerUid).some(profile => profile.uid === studentUid)) throw new Error('Student is outside your assigned scope.');
+    const scanTime = recordTime ?? Date.now();
+    if (selectedEvent.cancellationStatus || selectedEvent.status === 'done' || scanTime < selectedEvent.startTime || scanTime > selectedEvent.endTime) throw new Error('Scanning is only available during the scheduled event.');
     if (!db.attendance_logs[eventId]) db.attendance_logs[eventId] = {};
     const existingRecord = db.attendance_logs[eventId][studentUid];
+    if (direction === 'out') {
+      if (!existingRecord) throw new Error('Scan in before scanning out.');
+      if (existingRecord.time_out) return { ...existingRecord, already_recorded: true };
+      if (scanTime <= existingRecord.time_in) throw new Error('Scan-out must follow scan-in.');
+      existingRecord.time_out = scanTime;
+      existingRecord.rendered_hours = (scanTime - existingRecord.time_in) / 3600000;
+      const earned = selectedEvent.kind === 'service' ? existingRecord.rendered_hours : selectedEvent.kind === 'merit' ? selectedEvent.meritHours || 0 : 0;
+      const current = db.users[studentUid].stats.sanction_hours;
+      const deducted = Math.min(current, earned);
+      db.users[studentUid].stats.sanction_hours = current - deducted;
+      existingRecord.deducted_hours = deducted;
+      if (earned > 0) {
+        db.sanction_logs[studentUid] ||= [];
+        db.sanction_logs[studentUid].unshift({ timestamp: scanTime, change: -deducted, new_total: current - deducted, reason: `${selectedEvent.title}: ${earned.toFixed(2)} ${selectedEvent.kind === 'service' ? 'rendered' : 'merit'} hours`, performed_by: loggerName, event_id: eventId });
+      }
+      saveDB(db); notifyAuthChange();
+      return { ...existingRecord, already_recorded: false };
+    }
     if (existingRecord) return { ...existingRecord, already_recorded: true };
 
     const recordedAt = recordTime || Date.now();
@@ -1313,5 +1565,276 @@ export const mockData = {
     }
     saveDB(db);
     return record;
-  }
+  },
+  // --- SYSTEM FREEZE & SCOPE FREEZE APIs ---
+  getSystemFreezeStatus: () => {
+    return getDB().system_freeze || { isFrozen: false, reason: '' };
+  },
+  setSystemFreezeStatus: (isFrozen: boolean, reason?: string, actorName?: string) => {
+    requireSessionPermission('system.freeze', true);
+    const db = getDB();
+    db.system_freeze = {
+      isFrozen,
+      reason: reason || (isFrozen ? 'School account unpaid / Administrative System Freeze' : ''),
+      frozenAt: isFrozen ? Date.now() : undefined,
+      frozenBy: actorName || 'System Admin'
+    };
+    saveDB(db);
+    notifyAuthChange();
+    return db.system_freeze;
+  },
+  getFrozenNodes: () => {
+    return getDB().frozen_nodes || {};
+  },
+  getNodeFreezeStatus: (nodeId: string) => {
+    const frozenNodes = getDB().frozen_nodes || {};
+    return frozenNodes[nodeId] || null;
+  },
+  setNodeFreezeStatus: (nodeId: string, isFrozen: boolean, reason?: string, actorName?: string) => {
+    requireSessionPermission('system.freeze', true);
+    const db = getDB();
+    if (!db.frozen_nodes) db.frozen_nodes = {};
+    if (isFrozen) {
+      db.frozen_nodes[nodeId] = {
+        isFrozen: true,
+        reason: reason || 'Department / Section frozen by administration',
+        frozenAt: Date.now(),
+        frozenBy: actorName || 'System Admin'
+      };
+    } else {
+      delete db.frozen_nodes[nodeId];
+    }
+    saveDB(db);
+    notifyAuthChange();
+    return db.frozen_nodes;
+  },
+  isNodeOrParentFrozen: (nodeId: string) => {
+    const db = getDB();
+    if (db.system_freeze?.isFrozen) return true;
+    const frozenNodes = db.frozen_nodes || {};
+    const path = findNodePath(db.school_structure, nodeId) || [];
+    return path.some(node => frozenNodes[node.id]?.isFrozen);
+  },
+  isUserScopeFrozen: (profile?: UserProfile | null) => {
+    if (!profile) return false;
+    const db = getDB();
+    if (profile.role === 'admin') return false;
+    if (db.system_freeze?.isFrozen) return true;
+    const studentNode = profile.school_data?.academic_assignment?.terminalGroupId;
+    if (studentNode && mockData.isNodeOrParentFrozen(studentNode)) return true;
+    const assignmentNodeId = profile.official_data?.assignment_node_id || studentNode;
+    if (assignmentNodeId) {
+      const path = findNodePath(db.school_structure, assignmentNodeId) || [];
+      const frozenNodes = db.frozen_nodes || {};
+      if (path.some(node => frozenNodes[node.id]?.isFrozen)) return true;
+    }
+    return false;
+  },
+
+  // --- SYSTEM HEALTH API ---
+  getSystemHealthMetrics: () => {
+    const started = performance.now();
+    const db = getDB();
+    const latencyMs = Math.round((performance.now() - started) * 100) / 100;
+    const dataStr = JSON.stringify(db);
+    const storageUsedBytes = dataStr.length * 2;
+    const storageMaxBytes = 5 * 1024 * 1024;
+    const storageUsagePercent = Math.min(100, Math.round((storageUsedBytes / storageMaxBytes) * 100));
+
+    const totalUsers = Object.keys(db.users).length;
+    const studentsCount = Object.values(db.users).filter(u => ['student', 'mayor', 'ssg'].includes(u.profile.role)).length;
+    const eventsCount = Object.keys(db.events).length;
+    const attendanceLogsCount = Object.values(db.attendance_logs).reduce((acc, log) => acc + Object.keys(log).length, 0);
+    const excuseAppsCount = Object.keys(db.excuse_applications || {}).length;
+    const auditLogsCount = (db.audit_logs || []).length;
+
+    return {
+      dbStatus: 'operational' as const,
+      authStatus: 'operational' as const,
+      geofenceStatus: 'operational' as const,
+      storageUsedBytes,
+      storageMaxBytes,
+      storageUsagePercent,
+      latencyMs,
+      activeSessions: localStorage.getItem('rmc_mock_session') ? 1 : 0,
+      totalUsersCount: totalUsers,
+      studentsCount,
+      eventsCount,
+      attendanceLogsCount,
+      excuseAppsCount,
+      auditLogsCount,
+      lastBackupTime: 0,
+      healthScore: db.system_freeze?.isFrozen ? 78 : 99
+    };
+  },
+  // --- PAYMENT & OSAS REMINDER APIs ---
+  getPaymentInfo: () => {
+    const db = getDB();
+    return db.payment_info || {
+      status: 'due_soon',
+      amountDue: 45000,
+      currency: 'PHP',
+      dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      billingCycle: 'Annual Institution License',
+      accountName: 'Rizal Memorial Colleges Inc.',
+      schoolId: 'school_rmc',
+      reminders: []
+    };
+  },
+  updatePaymentInfo: (updates: Partial<import('../types').PaymentInfo>) => {
+    requireSessionPermission('system.payment_reminders', true);
+    const db = getDB();
+    db.payment_info = {
+      ...(db.payment_info || {
+        status: 'due_soon',
+        amountDue: 45000,
+        currency: 'PHP',
+        dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        billingCycle: 'Annual Institution License',
+        accountName: 'Rizal Memorial Colleges Inc.',
+        schoolId: 'school_rmc',
+        reminders: []
+      }),
+      ...updates
+    };
+    saveDB(db);
+    notifyAuthChange();
+    return db.payment_info;
+  },
+  sendPaymentReminderToOSAS: (data: {
+    subject?: string;
+    message: string;
+    urgency?: 'normal' | 'urgent' | 'critical';
+    recipientEmail?: string;
+    actorName?: string;
+  }) => {
+    requireSessionPermission('system.payment_reminders', true);
+    const db = getDB();
+    if (!db.payment_info) {
+      db.payment_info = {
+        status: 'due_soon',
+        amountDue: 45000,
+        currency: 'PHP',
+        dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        billingCycle: 'Annual Institution License',
+        accountName: 'Rizal Memorial Colleges Inc.',
+        schoolId: 'school_rmc',
+        reminders: []
+      };
+    }
+    const reminderLog: import('../types').PaymentReminderLog = {
+      id: `rem_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      sentAt: Date.now(),
+      sentBy: data.actorName || 'System Administrator',
+      recipientRole: 'OSSA Administrator',
+      recipientEmail: data.recipientEmail || 'ossa.director@rmc.edu.ph',
+      subject: data.subject || 'URGENT: Annual System Payment Collection Notice',
+      message: data.message,
+      urgency: data.urgency || 'urgent',
+      status: 'delivered'
+    };
+    db.payment_info.reminders.unshift(reminderLog);
+
+    if (!db.audit_logs) db.audit_logs = [];
+    db.audit_logs.push({
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      action: 'account.created' as any,
+      actor_uid: 'admin_uid',
+      actor_name: data.actorName || 'Admin',
+      target_uid: 'ossa_uid',
+      target_name: 'OSSA Director',
+      target_role: 'ossa',
+      timestamp: Date.now()
+    });
+
+    saveDB(db);
+    notifyAuthChange();
+    return reminderLog;
+  },
+
+  // --- CORE RBAC & ROLE APIs ---
+  getCoreRoles: () => {
+    const db = getDB();
+    if (!db.core_roles) {
+      db.core_roles = JSON.parse(JSON.stringify(DEFAULT_CORE_ROLES));
+      saveDB(db);
+    }
+    return db.core_roles;
+  },
+  updateCoreRole: (roleId: string, updates: Partial<import('../types').CoreRole>) => {
+    requireSessionPermission('system.manage_rbac', true);
+    const db = getDB();
+    if (!db.core_roles) db.core_roles = JSON.parse(JSON.stringify(DEFAULT_CORE_ROLES));
+    if (!db.core_roles[roleId]) {
+      if (DEFAULT_CORE_ROLES[roleId]) {
+        db.core_roles[roleId] = { ...DEFAULT_CORE_ROLES[roleId] };
+      } else {
+        throw new Error(`Core role ${roleId} not found.`);
+      }
+    }
+    if (roleId === 'admin') { updates = { ...updates, permissions: DEFAULT_CORE_ROLES.admin.permissions, isPositionOnly: false }; }
+    db.core_roles[roleId] = {
+      ...db.core_roles[roleId],
+      ...updates,
+      updatedAt: Date.now()
+    };
+    saveDB(db);
+    notifyAuthChange();
+    return db.core_roles[roleId];
+  },
+
+  // --- CUSTOM RBAC & ROLE APIs ---
+  getCustomRoles: () => {
+    return getDB().custom_roles || {};
+  },
+  createCustomRole: (roleData: {
+    name: string;
+    description: string;
+    isPositionOnly: boolean;
+    permissions: import('../types').AppPermission[];
+    createdBy?: string;
+  }) => {
+    requireSessionPermission('system.manage_rbac', true);
+    const db = getDB();
+    if (!db.custom_roles) db.custom_roles = {};
+    const id = `role_${roleData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now().toString(36)}`;
+    const newRole: import('../types').CustomRole = {
+      id,
+      name: roleData.name.trim(),
+      description: roleData.description.trim(),
+      isPositionOnly: roleData.isPositionOnly,
+      permissions: roleData.permissions,
+      createdBy: roleData.createdBy || 'System Admin',
+      createdAt: Date.now()
+    };
+    db.custom_roles[id] = newRole;
+    saveDB(db);
+    notifyAuthChange();
+    return newRole;
+  },
+  updateCustomRole: (roleId: string, updates: Partial<import('../types').CustomRole>) => {
+    requireSessionPermission('system.manage_rbac', true);
+    const db = getDB();
+    if (!db.custom_roles || !db.custom_roles[roleId]) throw new Error('Role not found.');
+    db.custom_roles[roleId] = {
+      ...db.custom_roles[roleId],
+      ...updates,
+      updatedAt: Date.now()
+    };
+    saveDB(db);
+    notifyAuthChange();
+    return db.custom_roles[roleId];
+  },
+  deleteCustomRole: (roleId: string) => {
+    requireSessionPermission('system.manage_rbac', true);
+    const db = getDB();
+    if (!db.custom_roles || !db.custom_roles[roleId]) return false;
+    if (Object.values(db.users).some(({ profile }) => profile.role === roleId || profile.positionRoleIds?.includes(roleId))) throw new Error('Reassign accounts before deleting a role in use.');
+    delete db.custom_roles[roleId];
+    saveDB(db);
+    notifyAuthChange();
+    return true;
+  },
 };
+
+setMockDataRef(mockData);

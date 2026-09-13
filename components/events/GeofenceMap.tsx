@@ -23,7 +23,7 @@ const MapInteraction: React.FC<GeofenceMapProps> = ({ value, onChange }) => {
   useMapEvents({
     click: selectLocation,
     touchend: selectLocation,
-  });
+  } as any);
 
   useEffect(() => {
     map.setView([value.lat, value.lng], map.getZoom(), { animate: false });

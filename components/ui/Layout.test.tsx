@@ -66,6 +66,10 @@ vi.mock('../../firebase', () => ({
 
 vi.mock('../../lib/mockBackend', () => ({
   mockAuth: { signOut: authMocks.mockSignOut },
+  mockData: {
+    getSystemFreezeStatus: () => ({ isFrozen: false, reason: '' }),
+    isUserScopeFrozen: () => false,
+  },
 }));
 
 afterEach(() => {

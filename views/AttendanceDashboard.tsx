@@ -64,29 +64,6 @@ const statusClasses: Record<AttendanceRecord['status'], string> = {
 const formatStatus = (status: AttendanceRecord['status']) =>
   status === 'not_recorded' ? 'No Record' : `${status.charAt(0).toUpperCase()}${status.slice(1)}`;
 
-// --- Mock Data Generator (since backend is limited) ---
-const generateMockAttendance = (events: AppEvent[], filter: FilterState): AttendanceRecord[] => {
-  // In a real app, this would query the backend based on filters
-  // For now, we generate plausible data for visualization
-  const statuses = ['present', 'late', 'excused', 'absent', 'not_recorded'] as const;
-  const records: AttendanceRecord[] = [];
-  
-  // Generate 100 random records
-  for (let i = 0; i < 100; i++) {
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
-    records.push({
-      studentId: `ID-${1000 + i}`,
-      studentName: `Student ${i + 1}`,
-      status,
-      timeIn: status === 'present' || status === 'late' ? Date.now() - Math.random() * 3600000 : undefined,
-      section: ['Newton', 'Einstein', 'Pascal', 'Darwin'][Math.floor(Math.random() * 4)],
-      program: ['STEM', 'ABM', 'HUMSS', 'BSCS'][Math.floor(Math.random() * 4)],
-      level: ['Grade 11', 'Grade 12', '1st Year', '2nd Year'][Math.floor(Math.random() * 4)]
-    });
-  }
-  return records;
-};
-
 const AttendanceDashboard: React.FC = () => {
   const { isMock, profile } = useAuth();
   const [events, setEvents] = useState<AppEvent[]>([]);
@@ -123,7 +100,32 @@ const AttendanceDashboard: React.FC = () => {
   }, [isMock, profile]);
 
   // Derived Data
-  const attendanceData = useMemo(() => generateMockAttendance(events, filters), [events, filters, selectedEvents]);
+  const attendanceData = useMemo<AttendanceRecord[]>(() => {
+    if (!profile) return [];
+    const students = mockData.getVisibleStudents(profile.uid);
+    const now = new Date();
+    const cutoff = timeFilter === 'this_month' ? new Date(now.getFullYear(), now.getMonth(), 1).getTime() : timeFilter === 'this_week' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() + 6) % 7).getTime() : 0;
+    return events.filter(event => !event.cancellationStatus && (!selectedEvents.length || selectedEvents.includes(event.id)) && event.startTime >= cutoff
+      && (timeFilter !== 'custom' || ((!dateRange.start || event.startTime >= new Date(`${dateRange.start}T00:00`).getTime()) && (!dateRange.end || event.startTime <= new Date(`${dateRange.end}T23:59:59`).getTime()))))
+      .flatMap(event => {
+        const logs = mockData.getAttendanceLogs(event.id);
+        return students.filter(student => mockData.isEventRecipient(event, student)).filter(student => {
+          const data = student.school_data;
+          if (filters.level === 'tertiary' && data.type !== 'College') return false;
+          if (filters.level === 'secondary' && data.type !== 'High School') return false;
+          if (filters.level === 'elementary' && !/grade [1-6]$/i.test(data.level)) return false;
+          const matches = (value: string, actual?: string) => !value || (actual || '').toLowerCase().includes(value.toLowerCase());
+          return matches(filters.section, data.section) && matches(filters.program, data.program) && matches(filters.strand, data.strand)
+            && matches(filters.gradeLevel || filters.yearLevel || filters.elemGradeLevel, data.level)
+            && matches(filters.major, data.major) && matches(filters.college, data.department)
+            && (!filters.secondaryType || (filters.secondaryType === 'shs' ? /senior/i : /junior/i).test(data.department || ''));
+        }).map(student => ({ studentId: student.student_id, studentName: student.name,
+          status: logs[student.uid]?.status || (event.status === 'done' ? 'absent' : 'not_recorded'),
+          timeIn: logs[student.uid]?.time_in, section: student.school_data.section,
+          program: student.school_data.program || student.school_data.strand, level: student.school_data.level,
+        }));
+      });
+  }, [events, filters, selectedEvents, profile, timeFilter, dateRange]);
   
   const stats = useMemo(() => {
     const s = { present: 0, late: 0, excused: 0, absent: 0, not_recorded: 0, total: 0 };

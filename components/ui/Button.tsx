@@ -23,7 +23,7 @@ export default function Button({
   ...buttonProps
 }: ButtonProps) {
   useEffect(() => {
-    if (import.meta.env.DEV && iconOnly && !ariaLabel) {
+    if ((import.meta as any).env?.DEV && iconOnly && !ariaLabel) {
       console.warn('Button with iconOnly requires an aria-label.');
     }
   }, [ariaLabel, iconOnly]);
