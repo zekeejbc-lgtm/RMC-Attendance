@@ -11,13 +11,14 @@ export interface GeofencePoint {
 
 interface GeofenceMapProps {
   value: GeofencePoint;
-  onChange: (point: GeofencePoint) => void;
+  onChange?: (point: GeofencePoint) => void;
+  position?: { latitude: number; longitude: number; accuracy: number } | null;
 }
 
-const MapInteraction: React.FC<GeofenceMapProps> = ({ value, onChange }) => {
+const MapInteraction: React.FC<GeofenceMapProps> = ({ value, onChange, position }) => {
   const map = useMap();
   const selectLocation = (event: L.LeafletMouseEvent) => {
-    onChange({ ...value, lat: event.latlng.lat, lng: event.latlng.lng });
+    onChange?.({ ...value, lat: event.latlng.lat, lng: event.latlng.lng });
   };
 
   useMapEvents({
@@ -32,7 +33,7 @@ const MapInteraction: React.FC<GeofenceMapProps> = ({ value, onChange }) => {
   return null;
 };
 
-export const GeofenceMap: React.FC<GeofenceMapProps> = ({ value, onChange }) => {
+export const GeofenceMap: React.FC<GeofenceMapProps> = ({ value, onChange, position }) => {
   const markerIcon = useMemo(() => L.divIcon({
     className: '',
     html: '<span class="block h-5 w-5 rounded-full border-4 border-white bg-emerald-500 shadow-lg"></span>',
@@ -49,20 +50,21 @@ export const GeofenceMap: React.FC<GeofenceMapProps> = ({ value, onChange }) => 
         />
         <Circle center={[value.lat, value.lng]} interactive={false} pathOptions={{ color: '#0081c8', fillColor: '#0081c8', fillOpacity: 0.18, weight: 2 }} radius={value.radius} />
         <Marker
-          draggable
+          draggable={Boolean(onChange)}
           eventHandlers={{
             dragend(event) {
               const point = event.target.getLatLng();
-              onChange({ ...value, lat: point.lat, lng: point.lng });
+              onChange?.({ ...value, lat: point.lat, lng: point.lng });
             },
           }}
           icon={markerIcon}
           position={[value.lat, value.lng]}
         />
-        <MapInteraction onChange={onChange} value={value} />
+        {onChange && <MapInteraction onChange={onChange} value={value} />}
+        {position && <Circle center={[position.latitude, position.longitude]} radius={Math.max(position.accuracy, 3)} pathOptions={{ color: '#16a34a', fillOpacity: 0.4 }} />}
       </MapContainer>
       <div aria-label="Selected geofence location" className="pointer-events-none absolute bottom-3 left-3 z-[500] rounded-lg bg-white/95 px-3 py-2 text-[11px] font-bold text-brand-900 shadow-md backdrop-blur dark:bg-slate-900/95 dark:text-white" role="status">
-        <span className="block">Tap the map or drag the marker to set the center.</span>
+        <span className="block">{onChange ? 'Tap the map or drag the marker to set the center.' : 'Event attendance boundary; green shows your GPS position.'}</span>
         <span className="mt-0.5 block font-semibold text-slate-600 dark:text-slate-300">{value.lat.toFixed(6)}, {value.lng.toFixed(6)}</span>
       </div>
     </div>

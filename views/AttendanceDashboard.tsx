@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../components/AuthContext';
-import { mockData } from '../lib/mockBackend';
+import { appData } from '../lib/backend';
 import { AppEvent } from '../types';
 import CustomSelect from '../components/ui/CustomSelect';
 import { 
@@ -65,7 +65,7 @@ const formatStatus = (status: AttendanceRecord['status']) =>
   status === 'not_recorded' ? 'No Record' : `${status.charAt(0).toUpperCase()}${status.slice(1)}`;
 
 const AttendanceDashboard: React.FC = () => {
-  const { isMock, profile } = useAuth();
+  const { isMock, profile, revision } = useAuth();
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
@@ -94,22 +94,22 @@ const AttendanceDashboard: React.FC = () => {
 
   // Load initial data
   useEffect(() => {
-    if (isMock) {
-      setEvents(profile && typeof mockData.getVisibleEvents === 'function' ? mockData.getVisibleEvents(profile.uid) : mockData.getEvents());
+    {
+      setEvents(profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents());
     }
-  }, [isMock, profile]);
+  }, [revision, profile]);
 
   // Derived Data
   const attendanceData = useMemo<AttendanceRecord[]>(() => {
     if (!profile) return [];
-    const students = mockData.getVisibleStudents(profile.uid);
+    const students = appData.getVisibleStudents(profile.uid);
     const now = new Date();
     const cutoff = timeFilter === 'this_month' ? new Date(now.getFullYear(), now.getMonth(), 1).getTime() : timeFilter === 'this_week' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() + 6) % 7).getTime() : 0;
     return events.filter(event => !event.cancellationStatus && (!selectedEvents.length || selectedEvents.includes(event.id)) && event.startTime >= cutoff
       && (timeFilter !== 'custom' || ((!dateRange.start || event.startTime >= new Date(`${dateRange.start}T00:00`).getTime()) && (!dateRange.end || event.startTime <= new Date(`${dateRange.end}T23:59:59`).getTime()))))
       .flatMap(event => {
-        const logs = mockData.getAttendanceLogs(event.id);
-        return students.filter(student => mockData.isEventRecipient(event, student)).filter(student => {
+        const logs = appData.getAttendanceLogs(event.id);
+        return students.filter(student => appData.isEventRecipient(event, student)).filter(student => {
           const data = student.school_data;
           if (filters.level === 'tertiary' && data.type !== 'College') return false;
           if (filters.level === 'secondary' && data.type !== 'High School') return false;

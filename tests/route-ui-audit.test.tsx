@@ -28,6 +28,7 @@ const studentProfile = {
   name: 'Juan Dela Cruz',
   username: 'juan.delacruz',
   role: 'student',
+  account_status: 'active',
   student_id: 'RMC-2026-0001',
   photo_url: '',
   email: 'juan.delacruz@example.edu',
@@ -110,13 +111,12 @@ vi.mock('../components/AuthContext', () => ({
   useAuth: () => routeState.auth,
 }));
 
-vi.mock('../firebase', () => ({ auth: { signOut: vi.fn() }, db: {} }));
 
-vi.mock('../lib/mockBackend', () => ({
+vi.mock('../lib/backend', () => ({
   ensureMockReferenceData: backendState.ensureMockReferenceData,
   getDB: () => backendState.db,
-  mockAuth: { signIn: vi.fn(), signOut: vi.fn() },
-  mockData: {
+  appAuth: { signIn: vi.fn(), signOut: vi.fn() },
+  appData: {
     addSchoolNode: staffState.addSchoolNode,
     adjustSanctionHours: staffState.adjustSanctionHours,
     approveApplication: staffState.approveApplication,
@@ -132,7 +132,17 @@ vi.mock('../lib/mockBackend', () => ({
     getApplications: () => staffState.applications.length ? staffState.applications : routeState.applications,
     getAllStudents: () => staffState.students,
     getAllAccountIdentities: () => staffState.students,
-    getEvents: () => staffState.events,
+    getEvents: () => testEvents(),
+    getVisibleEvents: () => testEvents(), getRecipientEvents: () => testEvents(),
+    getVisibleStudents: () => staffState.students, getVisibleApplications: () => staffState.applications,
+    getVisibleExcuseApplications: () => staffState.excuses,
+    getVisibleSchoolStructure: () => staffState.schoolStructure,
+    getSchoolNodePath: (id: string) => { const walk = (nodes: any[], path: any[] = []): any[] => { for (const n of nodes) { if (n.id === id) return [...path, n]; const match = walk(n.children || [], [...path, n]); if (match.length) return match; } return []; }; return walk(staffState.schoolStructure); },
+    getAttendanceRecords: () => testEvents().slice(0, 2).map((event, index) => ({ id: event.id, event, slot: 'default', time_in: Date.now(), status: 'present', scanned_by_name: 'Section Mayor' })),
+    getAttendanceLogs: () => ({}), isEventRecipient: () => true,
+    issueQr: vi.fn(async () => ({ token: 'RMC1.test-token', expiresAt: Date.now()+90000 })),
+    resolveQr: vi.fn(async (token: string) => { if (!token.startsWith('RMC1.')) throw new Error('Invalid or expired QR code.'); return staffState.students[0]; }),
+    submitExcuseApplication: vi.fn(async () => undefined),
     getExcuseApplications: () => staffState.excuses,
     getSchoolStructure: () => staffState.schoolStructure,
     getStudentsBySection: () => staffState.students,
@@ -154,16 +164,27 @@ vi.mock('../lib/mockBackend', () => ({
     setSystemFreezeStatus: vi.fn(),
     setNodeFreezeStatus: vi.fn(),
     isUserScopeFrozen: () => false,
-    getPaymentInfo: () => ({ status: 'paid', dueDate: '2026-12-31', amountDue: 0, logs: [] }),
+    getPaymentInfo: () => ({ reminders: [], status: 'paid', dueDate: '2026-12-31', amountDue: 0, logs: [] }),
     sendPaymentReminderToOSAS: vi.fn(),
     updatePaymentInfo: vi.fn(),
-    getCustomRoles: () => ({}),
+    getCoreRoles: () => ({}), getCustomRoles: () => ({}),
     saveCustomRole: vi.fn(),
     deleteCustomRole: vi.fn(),
     getSystemHealthMetrics: () => ({ status: 'healthy', activeSessions: 1, totalAccounts: 10, totalEvents: 2, totalAttendanceLogs: 50, databaseSize: 1024, cacheHitRate: 98, cpuUsage: 12, memoryUsage: 45 }),
     getAccountAuditLogs: () => [],
   },
   mockSeed: backendState.mockSeed,
+  refreshData: vi.fn(async () => undefined), subscribeData: () => () => {},
+  uploadDocument: vi.fn(async () => 'student-1/excuses/proof.pdf'), documentUrl: vi.fn(async (path: string) => path),
+}));
+
+vi.mock('../lib/supabase', () => ({
+  configurationError: null,
+  supabase: { auth: { mfa: {
+    listFactors: vi.fn(async () => ({ data: { all: [], totp: [] }, error: null })),
+    enroll: vi.fn(async () => ({ data: { id: 'factor-test', totp: { qr_code: 'data:image/svg+xml,<svg/>', secret: 'TEST-ONLY-SECRET', uri: 'otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP' } }, error: null })),
+    unenroll: vi.fn(async () => ({ error: null })), challengeAndVerify: vi.fn(async () => ({ error: null })),
+  } } },
 }));
 
 vi.mock('html5-qrcode', () => ({
@@ -222,6 +243,9 @@ afterEach(() => {
   document.documentElement.classList.remove('dark');
 });
 
+function testEvents(): any[] {
+  return staffState.events.map(event => ({ description: 'Test event', startTime: Date.now()-60000, endTime: Date.now()+3600000, timestamp: Date.now(), geofenceEnabled: false, location: { lat: 7, lng: 125, radius_meters: 100 }, penaltyValue: 1, penaltyUnit: 'hours', target: { all: true }, recipientGroups: ['All Students'], ...event }));
+}
 const useStaff = () => {
   routeState.auth = {
     isMock: true,
@@ -262,6 +286,13 @@ const seedCollegeDirectory = () => {
 };
 
 const useStudentRoute = () => {
+  staffState.events = [
+    { id: 'ceremony', title: 'Weekly Institutional Flag Raising Ceremony', kind: 'flag_ceremony', status: 'active' },
+    { id: 'drill', title: 'Disaster Risk & Safety Drill', kind: 'attendance', status: 'active' },
+    { id: 'assembly', title: 'University Midyear Leadership Convocation', kind: 'attendance', status: 'active' },
+    { id: 'past', title: 'First Semester General Assembly 2025', kind: 'attendance', status: 'done' },
+    { id: 'past-ceremony', title: 'Annual Founders Day Thanksgiving Mass', kind: 'flag_ceremony', status: 'done' },
+  ];
   routeState.auth = {
     isMock: false,
     profile: studentProfile,
@@ -271,13 +302,13 @@ const useStudentRoute = () => {
 };
 
 describe('public route UI behavior', () => {
-  it('requests a non-destructive reference-data merge on first-run mock databases', async () => {
+  it('does not seed demo data on an empty database', async () => {
     backendState.db = { school_structure: [], users: { mock_uid_student: {} } };
     routeState.auth = { isMock: true, loading: false, profile: null, stats: null, user: null };
 
     renderRoute(<LandingPage />);
 
-    await waitFor(() => expect(backendState.ensureMockReferenceData).toHaveBeenCalledOnce());
+    expect(backendState.ensureMockReferenceData).not.toHaveBeenCalled();
     expect(backendState.mockSeed).not.toHaveBeenCalled();
   });
 
@@ -323,7 +354,7 @@ describe('public route UI behavior', () => {
 
     await user.type(screen.getByRole('textbox', { name: /legal full name/i }), 'Juan Dela Cruz');
     expect(screen.getByRole('textbox', { name: /legal full name/i })).toHaveValue('Juan Dela Cruz');
-    expect(screen.getByRole('button', { name: /upload profile photo/i })).toBeInTheDocument();
+    expect(screen.getByText(/after verifying your email/i)).toBeInTheDocument();
   });
 
   it('requires identity details before showing academic enrollment fields', async () => {
@@ -334,28 +365,32 @@ describe('public route UI behavior', () => {
     expect(next).toBeDisabled();
     await user.type(screen.getByRole('textbox', { name: /legal full name/i }), 'Juan Dela Cruz');
     await user.type(screen.getByRole('textbox', { name: /email address/i }), 'juan@rmc.edu.ph');
-    await user.type(screen.getByLabelText(/security key/i), 'secure123');
+    await user.type(screen.getByLabelText(/^password$/i), 'secure-password-123');
+    await user.type(screen.getByLabelText(/^confirm password$/i), 'secure-password-123');
     expect(next).toBeEnabled();
     await user.click(screen.getByRole('button', { name: /^next$/i }));
     expect(screen.getByRole('textbox', { name: /official student id/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /capture student id/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/id image uploads are not needed/i)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /official student id/i })).toBeRequired();
   });
 
   it.each([
-    ['login', <Login />, /institution attendance & records system/i, /asset identifier/i],
+    ['login', <Login />, /portal login/i, /asset identifier/i],
     ['registration', <Register />, /system enrollment/i, /legal full name/i],
   ])('keeps the standalone %s card readable when dark mode is selected', async (_name, element, headingName, inputName) => {
     const user = userEvent.setup();
     localStorage.setItem('iars-theme', 'light');
     renderRoute(element);
 
+    await user.keyboard('{Escape}');
     await user.click(screen.getByRole('button', { name: /current theme: light mode/i }));
+    await user.click(screen.getAllByRole('button', { name: _name === 'login' ? /^log in$/i : /^register$/i })[0]);
     expect(document.documentElement).toHaveClass('dark');
 
-    const card = screen.getByRole('heading', { name: headingName }).closest('.bg-white');
-    expect(card).toHaveClass('dark:bg-slate-900', 'dark:border-slate-800');
-    expect(screen.getByRole('textbox', { name: inputName })).toHaveClass('dark:bg-slate-800', 'dark:text-white');
+    const card = screen.getByRole('dialog', { name: headingName });
+    expect(card).toBeVisible();
+    expect(screen.getByRole('textbox', { name: inputName })).toHaveClass('dark:text-white');
+    expect(screen.getByRole('textbox', { name: inputName }).className).toMatch(/dark:bg-slate-800/);
   });
 
   it('renders a long rejected registration status with wrapping and accessible actions', async () => {
@@ -364,6 +399,7 @@ describe('public route UI behavior', () => {
     routeState.auth = { isMock: true, profile: null, stats: null, user: { uid: 'applicant-1' } };
     routeState.applications = [{
       id: 'applicant-1',
+      form_data: studentProfile,
       rejection_count: 1,
       rejection_reason: rejectionReason,
       status: 'rejected',
@@ -371,12 +407,12 @@ describe('public route UI behavior', () => {
 
     renderRoute(<RegisterStatus />);
 
-    expect(await screen.findByRole('heading', { name: /application rejected/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /application needs revision/i })).toBeInTheDocument();
     expect(screen.getByText(rejectionReason)).toHaveClass('[overflow-wrap:anywhere]');
-    expect(screen.getByRole('button', { name: /re-apply \(trial 2\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /revise and resubmit/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /current theme: dark mode/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /application rejected/i }).closest('.bg-white')).toHaveClass('dark:bg-slate-900');
+    expect(screen.getByRole('main')).toHaveClass('app-surface');
   });
 
   it('does not redirect registration status while authentication is still initializing', async () => {
@@ -413,15 +449,15 @@ describe('student route UI behavior', () => {
     expect(screen.getByRole('button', { name: /my qr passport/i })).toBeInTheDocument();
   });
 
-  it('exposes a bounded, named student QR and its download action', () => {
+  it('exposes a bounded, named student QR and its download action', async () => {
     useStudent();
     renderRoute(<StudentQR />);
 
     expect(screen.getByRole('main')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /student qr passport/i })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /student qr code/i })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /student qr code/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download card as png/i })).toBeInTheDocument();
-    expect(screen.getByText(/linked to student record/i)).toHaveClass('[overflow-wrap:anywhere]');
+    expect(screen.getByText(/expires/i)).toBeInTheDocument();
   });
 
   it('renders accessible record filters and equivalent mobile and desktop ledgers', async () => {
@@ -478,7 +514,7 @@ describe('student route UI behavior', () => {
     const enrollmentTrigger = screen.getByRole('button', { name: /enable two-factor authentication/i });
     await user.click(enrollmentTrigger);
 
-    const dialog = screen.getByRole('dialog', { name: /enroll google authenticator/i });
+    const dialog = await screen.findByRole('dialog', { name: /enroll google authenticator/i });
     expect(within(dialog).getByRole('button', { name: /cancel/i })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: /enroll/i })).toBeDisabled();
 
@@ -536,7 +572,7 @@ describe('student route UI behavior', () => {
     );
     expect(screen.getByText('medical-certificate.pdf')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /submit formal excuse/i }));
-    expect(screen.getByText(/excuse letter submitted/i)).toBeInTheDocument();
+    expect(await screen.findByText(/excuse letter submitted/i)).toBeInTheDocument();
     await user.click(screen.getAllByTestId('modal-backdrop').at(-1)!);
     expect(screen.getByRole('dialog', { name: /file excuse application.*university midyear leadership convocation/i })).toBeInTheDocument();
 
@@ -571,7 +607,7 @@ describe('student route UI behavior', () => {
     );
     expect(screen.getByText('competition-letter.pdf')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /transmit exemption letter/i }));
-    expect(screen.getByText(/exemption form transmitted/i)).toBeInTheDocument();
+    expect(await screen.findByText(/exemption form transmitted/i)).toBeInTheDocument();
     await user.click(screen.getAllByTestId('modal-backdrop').at(-1)!);
     expect(screen.getByRole('dialog', { name: /excuse letter submission.*weekly institutional flag raising ceremony/i })).toBeInTheDocument();
 
@@ -580,7 +616,7 @@ describe('student route UI behavior', () => {
     expect(screen.getByRole('dialog', { name: /weekly institutional flag raising ceremony/i })).toBeInTheDocument();
   });
 
-  it('does not offer excuse filing for ended events or archived ceremonies', async () => {
+  it('allows retrospective excuses for ended events and archived ceremonies', async () => {
     const user = userEvent.setup();
     useStudent();
     const { unmount } = renderRoute(<StudentEvents />);
@@ -588,16 +624,16 @@ describe('student route UI behavior', () => {
     await user.click(screen.getByRole('button', { name: /archived events/i }));
     await user.click(screen.getByRole('button', { name: /first semester general assembly 2025/i }));
     expect(screen.getByRole('dialog', { name: /first semester general assembly 2025/i })).toBeInTheDocument();
-    expect(screen.queryByText(/unable to attend this assembly/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /file for excuse/i })).not.toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: /file for excuse/i })).toBeInTheDocument();
 
     unmount();
     renderRoute(<StudentCeremonies />);
     await user.click(screen.getByRole('button', { name: /archived ceremonies/i }));
     await user.click(screen.getByRole('button', { name: /annual founders day thanksgiving mass/i }));
     expect(screen.getByRole('dialog', { name: /annual founders day thanksgiving mass/i })).toBeInTheDocument();
-    expect(screen.queryByText(/cannot participate in this official ceremony/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /file for excuse/i })).not.toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: /file for excuse/i })).toBeInTheDocument();
   });
 });
 
@@ -605,7 +641,7 @@ describe('complete routed view render matrix', () => {
   const publicRoute = () => undefined;
   const applicantRoute = () => {
     routeState.auth = { isMock: true, profile: null, stats: null, user: { uid: 'applicant-1' } };
-    routeState.applications = [{ id: 'applicant-1', status: 'pending' }];
+    routeState.applications = [{ id: 'applicant-1', status: 'pending', form_data: studentProfile }];
   };
   const staffRoute = () => {
     useStaff();
@@ -704,7 +740,7 @@ describe('staff route UI behavior', () => {
 
     expect(screen.getByRole('main')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
-    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    expect(screen.queryByRole('button', { name: /use demo location/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /start scanning/i }));
 
     expect(screen.getByRole('heading', { name: /attendance recording/i })).toBeInTheDocument();
@@ -722,11 +758,11 @@ describe('staff route UI behavior', () => {
     expect(screen.getByRole('button', { name: /stop scanner/i })).toBeInTheDocument();
     await waitFor(() => expect(scannerState.start).toHaveBeenCalledTimes(1));
 
-    scannerState.decoded?.('student-1');
+    scannerState.decoded?.('RMC1.test-token');
     expect(await screen.findByRole('dialog', { name: /verify student identity/i })).toBeInTheDocument();
     expect(staffState.logAttendance).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: /^record$/i }));
-    expect(staffState.logAttendance).toHaveBeenCalledWith('event-1', 'student-1', 'staff-1', 'SSG President', expect.any(Number));
+    expect(staffState.logAttendance).toHaveBeenCalledWith('event-1', 'student-1', 'staff-1', 'SSG President', undefined, 'in', expect.objectContaining({ qrToken: 'RMC1.test-token' }));
     expect(await screen.findByRole('dialog', { name: /attendance recorded/i })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /scan next student/i }));
     await user.click(screen.getByRole('button', { name: /stop scanner/i }));
@@ -742,7 +778,7 @@ describe('staff route UI behavior', () => {
     renderRoute(<MayorScanner />);
 
     await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
-    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    expect(screen.queryByRole('button', { name: /use demo location/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /start scanning/i }));
     await user.click(screen.getByRole('button', { name: /start scanner/i }));
 
@@ -768,9 +804,10 @@ describe('staff route UI behavior', () => {
     renderRoute(<MayorScanner />);
 
     await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
-    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    expect(screen.queryByRole('button', { name: /use demo location/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /start scanning/i }));
-    await user.click(screen.getByRole('button', { name: /pedro/i }));
+    await user.type(screen.getByRole('textbox', { name: /student id/i }), studentProfile.student_id);
+    await user.click(screen.getByRole('button', { name: /check student/i }));
     expect(await screen.findByRole('dialog', { name: /verify student identity/i })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /waive/i }));
     expect(staffState.logAttendance).not.toHaveBeenCalled();
@@ -790,7 +827,7 @@ describe('staff route UI behavior', () => {
     renderRoute(<MayorScanner />);
 
     await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
-    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    expect(screen.queryByRole('button', { name: /use demo location/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /start scanning/i }));
     const studentIdInput = screen.getByRole('textbox', { name: /student id/i });
     expect(studentIdInput).toHaveAttribute('autocomplete', 'off');
@@ -800,8 +837,9 @@ describe('staff route UI behavior', () => {
     expect(await screen.findByRole('dialog', { name: /verify student identity/i })).toBeInTheDocument();
     expect(screen.getByText(studentProfile.student_id)).toBeInTheDocument();
     expect(staffState.logAttendance).not.toHaveBeenCalled();
+    await user.type(screen.getByRole('textbox', { name: /reason for manual entry/i }), 'Student presented a valid school ID');
     await user.click(screen.getByRole('button', { name: /^record$/i }));
-    expect(staffState.logAttendance).toHaveBeenCalledWith('event-1', 'student-1', 'mayor-1', 'Section Mayor', expect.any(Number));
+    expect(staffState.logAttendance).toHaveBeenCalledWith('event-1', 'student-1', 'mayor-1', 'Section Mayor', undefined, 'in', expect.objectContaining({ manualReason: 'Student presented a valid school ID' }));
   });
 
   it('reports invalid QR passports without recording attendance', async () => {
@@ -811,13 +849,13 @@ describe('staff route UI behavior', () => {
     renderRoute(<MayorScanner />);
 
     await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
-    await user.click(screen.getByRole('button', { name: /use demo location/i }));
+    expect(screen.queryByRole('button', { name: /use demo location/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /start scanning/i }));
     await user.click(screen.getByRole('button', { name: /start scanner/i }));
     await waitFor(() => expect(scannerState.decoded).toBeTypeOf('function'));
     scannerState.decoded?.('not-a-student');
 
-    expect(await screen.findByText(/does not belong to an active student account/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/invalid or expired qr code/i)).length).toBeGreaterThan(0);
     expect(staffState.logAttendance).not.toHaveBeenCalled();
   });
 
@@ -1134,11 +1172,11 @@ describe('staff route UI behavior', () => {
       title: 'College General Assembly',
       description: 'Required institutional assembly.',
       status: 'upcoming',
-      created_by: 'SSG President',
+      created_by: 'staff-1',
       startDate: '2026-08-10',
       endDate: '2026-08-11',
-      startTime: new Date('2026-08-10T08:00').getTime(),
-      endTime: new Date('2026-08-11T16:00').getTime(),
+      startTime: new Date('2026-08-10T08:00:00+08:00').getTime(),
+      endTime: new Date('2026-08-11T16:00:00+08:00').getTime(),
       penaltyValue: 1,
       penaltyUnit: 'hours',
       participantsType: 'specific',
@@ -1153,6 +1191,32 @@ describe('staff route UI behavior', () => {
         { id: expect.any(String), label: 'Window 2', timeIn: '13:00', timeOut: '16:00', lateAfterMinutes: 15 },
       ],
       sanctionRules: { late: { value: 30, unit: 'minutes' }, absent: { value: 1, unit: 'hours' } },
+    }));
+  });
+
+  it('rejects overlapping windows and schedules out-of-order windows chronologically', async () => {
+    const user = userEvent.setup();
+    useStaff();
+    renderRoute(<SSGCreateEvent />);
+    fireEvent.change(screen.getByLabelText(/event title/i), { target: { value: 'Two sessions' } });
+    fireEvent.change(screen.getByLabelText(/event details/i), { target: { value: 'Morning and afternoon' } });
+    fireEvent.change(screen.getByLabelText(/^start date$/i), { target: { value: '2026-10-01' } });
+    fireEvent.change(screen.getByLabelText(/^end date$/i), { target: { value: '2026-10-01' } });
+    fireEvent.change(screen.getByLabelText(/time in 1/i), { target: { value: '13:00' } });
+    fireEvent.change(screen.getByLabelText(/time out 1/i), { target: { value: '16:00' } });
+    await user.click(screen.getByRole('button', { name: /add attendance window/i }));
+    fireEvent.change(screen.getByLabelText(/time in 2/i), { target: { value: '08:00' } });
+    fireEvent.change(screen.getByLabelText(/time out 2/i), { target: { value: '14:00' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Attendance windows must not overlap.');
+    expect(screen.getByRole('button', { name: /schedule event/i })).toBeDisabled();
+    fireEvent.submit(screen.getByRole('form'));
+    expect(staffState.createEvent).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/time out 2/i), { target: { value: '10:00' } });
+    await user.click(screen.getByRole('button', { name: /schedule event/i }));
+    expect(staffState.createEvent).toHaveBeenCalledWith(expect.objectContaining({
+      startTime: new Date('2026-10-01T08:00:00+08:00').getTime(),
+      endTime: new Date('2026-10-01T16:00:00+08:00').getTime(),
+      attendanceWindows: [expect.objectContaining({ timeIn: '08:00', timeOut: '10:00' }), expect.objectContaining({ timeIn: '13:00', timeOut: '16:00' })],
     }));
   });
 
@@ -1222,6 +1286,7 @@ describe('staff route UI behavior', () => {
   it('renders equivalent attendance records and operable report and date-range dialogs', async () => {
     const user = userEvent.setup();
     useStaff();
+    staffState.students = [{ ...studentProfile, name: 'Student 1', student_id: 'ID-1000' }];
     staffState.events = [
       { id: 'event-1', title: 'Institutional Assembly' },
       { id: 'event-2', title: 'Campus Safety Drill' },
@@ -1250,9 +1315,9 @@ describe('staff route UI behavior', () => {
     const chart = screen.getByRole('region', { name: /attendance visualization/i });
     expect(chart).toHaveClass('h-64', 'sm:h-72');
     const ledger = screen.getByRole('table', { name: /attendance records/i });
-    const mobileRecord = screen.getByRole('article', { name: /student 1 attendance record/i });
+    const mobileRecord = screen.getAllByRole('article', { name: /student 1 attendance record/i })[0];
     expect(mobileRecord).toHaveClass('mobile-data-card');
-    expect(within(ledger).getByText('ID-1000')).toBeInTheDocument();
+    expect(within(ledger).getAllByText('ID-1000')[0]).toBeInTheDocument();
     expect(within(mobileRecord).getByText('ID-1000')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /export report/i }));

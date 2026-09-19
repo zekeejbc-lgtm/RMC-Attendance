@@ -1,26 +1,26 @@
 
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { ThemeProvider } from './components/ThemeContext';
 import Layout from './components/ui/Layout';
-import Register from './views/Register';
-import RegisterStatus from './views/RegisterStatus';
-import Dashboard from './views/Dashboard';
-import StudentQR from './views/StudentQR';
-import StudentEvents from './views/StudentEvents';
-import StudentCeremonies from './views/StudentCeremonies';
-import StudentRecords from './views/StudentRecords';
-import StudentProfile from './views/StudentProfile';
-import MayorScanner from './views/MayorScanner';
-import SSGPanel from './views/SSGPanel';
-import SSGEventCreation from './views/SSGEventCreation';
-import SSGCreateEvent from './views/SSGCreateEvent';
-import LandingPage from './views/LandingPage';
+const Register = lazy(() => import('./views/Register'));
+const RegisterStatus = lazy(() => import('./views/RegisterStatus'));
+const Dashboard = lazy(() => import('./views/Dashboard'));
+const StudentQR = lazy(() => import('./views/StudentQR'));
+const StudentEvents = lazy(() => import('./views/StudentEvents'));
+const StudentCeremonies = lazy(() => import('./views/StudentCeremonies'));
+const StudentRecords = lazy(() => import('./views/StudentRecords'));
+const StudentProfile = lazy(() => import('./views/StudentProfile'));
+const MayorScanner = lazy(() => import('./views/MayorScanner'));
+const SSGPanel = lazy(() => import('./views/SSGPanel'));
+const SSGEventCreation = lazy(() => import('./views/SSGEventCreation'));
+const SSGCreateEvent = lazy(() => import('./views/SSGCreateEvent'));
+const LandingPage = lazy(() => import('./views/LandingPage'));
 
-import AttendanceDashboard from './views/AttendanceDashboard';
-import OSSADashboard from './views/OSSADashboard';
-import AdminControls from './views/AdminControls';
+const AttendanceDashboard = lazy(() => import('./views/AttendanceDashboard'));
+const OSSADashboard = lazy(() => import('./views/OSSADashboard'));
+const AdminControls = lazy(() => import('./views/AdminControls'));
 import { UserRole } from './types';
 import { hasPermission, AppPermission } from './lib/accessControl';
 
@@ -68,7 +68,7 @@ const App: React.FC = () => {
     <ThemeProvider>
       <AuthProvider>
         <HashRouter>
-          <Routes>
+          <Suspense fallback={<div role="status" className="p-8">Loading page...</div>}><Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LandingPage defaultOpenLogin={true} />} />
           <Route path="/register" element={<LandingPage defaultOpenRegister={true} />} />
@@ -163,7 +163,8 @@ const App: React.FC = () => {
           <Route path="/admin/accounts" element={
             <Navigate to="/ssg/panel" replace />
           } />
-        </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes></Suspense>
       </HashRouter>
     </AuthProvider>
   </ThemeProvider>

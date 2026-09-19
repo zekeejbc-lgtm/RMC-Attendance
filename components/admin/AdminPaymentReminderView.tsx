@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, BellRing, Calendar, Send, CheckCircle2, Clock, AlertTriangle, ShieldCheck, Mail, DollarSign, History } from 'lucide-react';
-import { mockData } from '../../lib/mockBackend';
+import { appData } from '../../lib/backend';
 import { PaymentInfo, PaymentReminderLog } from '../../types';
 import { MetricCard } from '../ui/Page';
 import { Modal } from '../ui/Modal';
 
 export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ actorName }) => {
-  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>(mockData.getPaymentInfo());
+  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>(appData.getPaymentInfo());
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
 
   const [reminderData, setReminderData] = useState({
-    recipientEmail: 'ossa.director@rmc.edu.ph',
+    recipientEmail: '',
     subject: 'URGENT: Annual System Subscription Payment Collection Notice',
     urgency: 'urgent' as 'normal' | 'urgent' | 'critical',
     message: 'Greetings OSSA Director,\n\nThis is a payment collection reminder from System Administration regarding the annual software subscription license for Rizal Memorial Colleges Inc.\n\nPlease process or verify the pending payment collection balance before the due date to prevent system freeze.\n\nThank you,\nSystem Administration'
@@ -21,18 +21,18 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
   const [newAmount, setNewAmount] = useState(paymentInfo.amountDue);
 
   const refreshData = () => {
-    setPaymentInfo(mockData.getPaymentInfo());
+    setPaymentInfo(appData.getPaymentInfo());
   };
 
   useEffect(() => {
     refreshData();
-    window.addEventListener('rmc_auth_update', refreshData);
-    return () => window.removeEventListener('rmc_auth_update', refreshData);
+    window.addEventListener('rmc_data_update', refreshData);
+    return () => window.removeEventListener('rmc_data_update', refreshData);
   }, []);
 
-  const handleSendReminder = (e: React.FormEvent) => {
+  const handleSendReminder = async (e: React.FormEvent) => {
     e.preventDefault();
-    mockData.sendPaymentReminderToOSAS({
+    await appData.sendPaymentReminderToOSAS({
       subject: reminderData.subject,
       message: reminderData.message,
       urgency: reminderData.urgency,
@@ -43,9 +43,9 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
     refreshData();
   };
 
-  const handleUpdateStatus = (e: React.FormEvent) => {
+  const handleUpdateStatus = async (e: React.FormEvent) => {
     e.preventDefault();
-    mockData.updatePaymentInfo({
+    await appData.updatePaymentInfo({
       status: newStatus,
       amountDue: newAmount,
       lastPaymentDate: newStatus === 'paid' ? Date.now() : paymentInfo.lastPaymentDate
@@ -54,13 +54,13 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
     refreshData();
   };
 
-  const daysUntilDue = Math.ceil((paymentInfo.dueDate - Date.now()) / (1000 * 60 * 60 * 24));
+  const daysUntilDue = paymentInfo.dueDate ? Math.ceil((paymentInfo.dueDate - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
 
   const statusBadge = {
     paid: { bg: 'bg-emerald-500', label: 'PAID & ACTIVE', icon: CheckCircle2 },
     due_soon: { bg: 'bg-amber-500', label: 'PAYMENT DUE SOON', icon: Clock },
     overdue: { bg: 'bg-red-600', label: 'PAYMENT OVERDUE', icon: AlertTriangle },
-    unpaid: { bg: 'bg-red-700', label: 'UNPAID / FROZEN', icon: AlertTriangle },
+    unpaid: { bg: 'bg-red-700', label: 'UNPAID', icon: AlertTriangle },
   }[paymentInfo.status];
 
   const StatusIcon = statusBadge.icon;
@@ -83,7 +83,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
                 </span>
               </div>
               <p className="text-slate-300 text-xs mt-1 max-w-2xl">
-                Manage annual school subscription billing, monitor license expiration, and dispatch email reminders directly to OSSA leadership.
+                Manage annual school subscription billing, monitor license expiration, and post in-app payment notices for OSSA leadership.
               </p>
             </div>
           </div>
@@ -99,7 +99,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
               onClick={() => setShowReminderModal(true)}
               className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-brand-950 text-xs font-black uppercase tracking-wider flex items-center gap-2 transition shadow-lg"
             >
-              <BellRing size={14} /> Send OSAS Reminder
+              <BellRing size={14} /> Post OSSA Notice
             </button>
           </div>
         </div>
@@ -115,7 +115,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
         <MetricCard
           icon={<Calendar size={20} className="text-amber-500" />}
           label="Due Date"
-          value={new Date(paymentInfo.dueDate).toLocaleDateString()}
+          value={paymentInfo.dueDate ? new Date(paymentInfo.dueDate).toLocaleDateString() : 'Not configured'}
           detail={daysUntilDue > 0 ? `${daysUntilDue} days remaining` : 'Overdue!'}
         />
         <MetricCard
@@ -169,7 +169,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
                     <span className="font-bold text-slate-900 dark:text-white">{rem.subject}</span>
                   </div>
                   <span className="text-[10px] text-slate-400 font-mono">
-                    Sent: {new Date(rem.sentAt).toLocaleString()}
+                    Posted: {new Date(rem.sentAt).toLocaleString()}
                   </span>
                 </div>
 
@@ -187,7 +187,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
             ))
           ) : (
             <div className="p-8 text-center text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
-              No payment reminders sent yet. Click &quot;Send OSAS Reminder&quot; to notify the Office of Student Services and Affairs.
+              No payment notices posted yet. Click &quot;Post OSSA Notice&quot; to notify the Office of Student Services and Affairs.
             </div>
           )}
         </div>

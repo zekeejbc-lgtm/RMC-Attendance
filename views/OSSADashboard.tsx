@@ -1,3 +1,5 @@
+import ProfileAvatar from '../components/ui/ProfileAvatar';
+import { downloadCsv } from '../lib/export';
 import React, { useEffect, useState } from 'react';
 import {
   CheckCircle2,
@@ -28,7 +30,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { mockData } from '../lib/mockBackend';
+import { appData, documentUrl } from '../lib/backend';
 import { ExcuseApplication, UserProfile, UserStats } from '../types';
 
 const excuseCategoryClasses: Record<ExcuseApplication['category'], string> = {
@@ -75,11 +77,11 @@ const OSSADashboard: React.FC = () => {
   const [excuseActionSuccess, setExcuseActionSuccess] = useState<string | null>(null);
 
   const loadData = () => {
-    setStudents((profile && typeof mockData.getVisibleStudents === 'function' ? mockData.getVisibleStudents(profile.uid) : mockData.getAllStudents()) as StudentWithStats[]);
-    setExcuseApps(profile && typeof mockData.getVisibleExcuseApplications === 'function' ? mockData.getVisibleExcuseApplications(profile.uid) : mockData.getExcuseApplications());
+    setStudents((profile && typeof appData.getVisibleStudents === 'function' ? appData.getVisibleStudents(profile.uid) : appData.getAllStudents()) as StudentWithStats[]);
+    setExcuseApps(profile && typeof appData.getVisibleExcuseApplications === 'function' ? appData.getVisibleExcuseApplications(profile.uid) : appData.getExcuseApplications());
 
     if (selectedStudent) {
-      const updatedDetail = mockData.getUserDetail(selectedStudent.uid);
+      const updatedDetail = appData.getUserDetail(selectedStudent.uid);
       setStudentDetails(updatedDetail);
       if (updatedDetail) setSelectedStudent((current) => current ? { ...current, stats: updatedDetail.stats } : null);
     }
@@ -87,8 +89,8 @@ const OSSADashboard: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    window.addEventListener('rmc_auth_update', loadData);
-    return () => window.removeEventListener('rmc_auth_update', loadData);
+    window.addEventListener('rmc_data_update', loadData);
+    return () => window.removeEventListener('rmc_data_update', loadData);
   }, []);
 
   const totalStudents = students.length;
@@ -131,30 +133,30 @@ const OSSADashboard: React.FC = () => {
 
   const openStudentModal = (student: StudentWithStats) => {
     setSelectedStudent(student);
-    setStudentDetails(mockData.getUserDetail(student.uid));
+    setStudentDetails(appData.getUserDetail(student.uid));
     setAdjustMode(null);
     setAdjustReason('');
     setAdjustHours(1);
     setAdjustSuccess(null);
   };
 
-  const handleSanctionSubmit = (event: React.FormEvent) => {
+  const handleSanctionSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedStudent || !adjustMode) return;
 
     if (adjustMode === 'clear') {
       const note = adjustReason || 'Fully cleared and resolved by OSSA Director.';
-      mockData.resolveStudentSanctions(selectedStudent.uid, note);
+      await appData.resolveStudentSanctions(selectedStudent.uid, note);
       setAdjustSuccess('Sanctions successfully cleared!');
     } else if (adjustMode === 'deduct') {
       if (adjustHours <= 0) return;
       const reason = adjustReason || 'Sanction hours deducted for completed service.';
-      mockData.adjustSanctionHours(selectedStudent.uid, -adjustHours, reason);
+      await appData.adjustSanctionHours(selectedStudent.uid, -adjustHours, reason);
       setAdjustSuccess(`Deducted ${adjustHours} sanction hours.`);
     } else {
       if (adjustHours <= 0) return;
       const reason = adjustReason || 'Additional sanction hours issued by OSSA.';
-      mockData.adjustSanctionHours(selectedStudent.uid, adjustHours, reason);
+      await appData.adjustSanctionHours(selectedStudent.uid, adjustHours, reason);
       setAdjustSuccess(`Added ${adjustHours} sanction hours.`);
     }
 
@@ -164,11 +166,11 @@ const OSSADashboard: React.FC = () => {
     setTimeout(() => setAdjustSuccess(null), 3500);
   };
 
-  const handleReviewExcuse = (status: 'approved' | 'rejected') => {
+  const handleReviewExcuse = async (status: 'approved' | 'rejected') => {
     if (!selectedExcuse) return;
     const note = excuseNote || (status === 'approved' ? 'Approved by OSSA Director.' : 'Rejected due to insufficient documentation.');
     const waived = status === 'approved' ? Number(excuseWaiveHours) : 0;
-    mockData.reviewExcuseApplication(selectedExcuse.id, status, note, waived);
+    await appData.reviewExcuseApplication(selectedExcuse.id, status, note, waived);
     setExcuseActionSuccess(`Application ${status.toUpperCase()} successfully.`);
     loadData();
     setSelectedExcuse(null);
@@ -184,7 +186,7 @@ const OSSADashboard: React.FC = () => {
           actions={(
             <>
               <Button aria-label="Refresh records" className="border-white/20 bg-white/10 text-white hover:bg-white/20 sm:w-auto" onClick={loadData} size="sm" variant="secondary"><RotateCcw size={14} /> Refresh</Button>
-              <Button aria-label="Export roster CSV" className="sm:w-auto" onClick={() => alert('Sanction summary exported to CSV format for school record archives.')} size="sm" variant="gold"><Download size={14} /> Export</Button>
+              <Button aria-label="Export roster CSV" className="sm:w-auto" onClick={() => downloadCsv('sanction-roster.csv', [['Student ID', 'Name', 'Section', 'Sanction hours'], ...students.map(s => [s.student_id, s.name, s.school_data.section, s.stats?.sanction_hours || 0])])} size="sm" variant="gold"><Download size={14} /> Export</Button>
             </>
           )}
           className="relative z-10 flex-col sm:flex-row"
@@ -248,7 +250,7 @@ const OSSADashboard: React.FC = () => {
       ) : (
         <Surface aria-labelledby="ossa-excuses-tab" className="p-4 sm:p-6" id="ossa-excuses-panel" role="tabpanel">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-base font-black uppercase tracking-tight text-brand-900 dark:text-white">Student Absence & Medical Excuse Queue</h2><p className="mt-1 text-xs text-slate-500">Submitted medical certificates and absence excuse letters.</p></div><span className="text-xs font-bold text-slate-500">{excuseApps.length} Total Submissions</span></div>
-          {excuseApps.length === 0 ? <div className="py-10 text-center"><FileCheck2 className="mx-auto text-slate-300 dark:text-slate-600" size={36} /><h3 className="mt-3 text-sm font-black uppercase text-slate-700 dark:text-slate-200">No Excuse Applications Filed</h3></div> : <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">{excuseApps.map((application) => <article aria-label={`${application.student_name} ${application.event_title} excuse`} className="flex min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900" key={application.id}><div className="space-y-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${excuseCategoryClasses[application.category]}`}>{application.category} Excuse</span><span className={`rounded-full px-2.5 py-1 text-xs font-black uppercase ${excuseStatusClasses[application.status]}`}>{application.status}</span></div><div><h3 className="[overflow-wrap:anywhere] text-sm font-black text-brand-900 dark:text-white">{application.student_name}</h3><p className="[overflow-wrap:anywhere] text-xs text-slate-500">ID: {application.student_id} · {application.department} ({application.section})</p></div><div className="rounded-xl bg-white p-3 text-xs dark:bg-slate-800"><p className="font-bold text-brand-900 dark:text-gold-400">Event: {application.event_title}</p><p className="mt-1 [overflow-wrap:anywhere] italic text-slate-600 dark:text-slate-300">“{application.reason}”</p></div>{application.proof_url ? <a className="inline-flex items-center gap-2 text-xs font-bold text-brand-900 underline dark:text-gold-400" href={application.proof_url} rel="noreferrer" target="_blank"><ExternalLink size={14} /> Open Full Attachment</a> : null}</div><div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">{application.status === 'pending' ? <Button aria-label="Review and decide excuse" onClick={() => { setSelectedExcuse(application); setExcuseWaiveHours(2); setExcuseNote(''); }} size="sm"><FileCheck2 size={16} /> Review</Button> : <div className="space-y-1 text-xs text-slate-500"><p><strong>Reviewed by:</strong> {application.reviewed_by || 'OSSA'}</p>{application.review_notes ? <p className="[overflow-wrap:anywhere]"><strong>Note:</strong> {application.review_notes}</p> : null}{application.waived_hours ? <p className="font-bold text-emerald-600">Waived {application.waived_hours} sanction hours</p> : null}</div>}</div></article>)}</div>}
+          {excuseApps.length === 0 ? <div className="py-10 text-center"><FileCheck2 className="mx-auto text-slate-300 dark:text-slate-600" size={36} /><h3 className="mt-3 text-sm font-black uppercase text-slate-700 dark:text-slate-200">No Excuse Applications Filed</h3></div> : <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">{excuseApps.map((application) => <article aria-label={`${application.student_name} ${application.event_title} excuse`} className="flex min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900" key={application.id}><div className="space-y-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${excuseCategoryClasses[application.category]}`}>{application.category} Excuse</span><span className={`rounded-full px-2.5 py-1 text-xs font-black uppercase ${excuseStatusClasses[application.status]}`}>{application.status}</span></div><div><h3 className="[overflow-wrap:anywhere] text-sm font-black text-brand-900 dark:text-white">{application.student_name}</h3><p className="[overflow-wrap:anywhere] text-xs text-slate-500">ID: {application.student_id} · {application.department} ({application.section})</p></div><div className="rounded-xl bg-white p-3 text-xs dark:bg-slate-800"><p className="font-bold text-brand-900 dark:text-gold-400">Event: {application.event_title}</p><p className="mt-1 [overflow-wrap:anywhere] italic text-slate-600 dark:text-slate-300">“{application.reason}”</p></div>{application.proof_url ? <a className="inline-flex items-center gap-2 text-xs font-bold text-brand-900 underline dark:text-gold-400" href="#" onClick={async event => { event.preventDefault(); const url = await documentUrl(application.proof_url!); window.open(url, '_blank', 'noopener,noreferrer'); }} rel="noreferrer" target="_blank"><ExternalLink size={14} /> Open Full Attachment</a> : null}</div><div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">{application.status === 'pending' ? <Button aria-label="Review and decide excuse" onClick={() => { setSelectedExcuse(application); setExcuseWaiveHours(2); setExcuseNote(''); }} size="sm"><FileCheck2 size={16} /> Review</Button> : <div className="space-y-1 text-xs text-slate-500"><p><strong>Reviewed by:</strong> {application.reviewed_by || 'OSSA'}</p>{application.review_notes ? <p className="[overflow-wrap:anywhere]"><strong>Note:</strong> {application.review_notes}</p> : null}{application.waived_hours ? <p className="font-bold text-emerald-600">Waived {application.waived_hours} sanction hours</p> : null}</div>}</div></article>)}</div>}
         </Surface>
       )}
 
@@ -260,7 +262,7 @@ const OSSADashboard: React.FC = () => {
         title={`Student Full Record — ${selectedStudent?.name || ''}`}
       >
         {selectedStudent ? <div className="space-y-5">
-          <div className="flex min-w-0 items-center gap-3"><img alt={selectedStudent.name} className="h-12 w-12 shrink-0 rounded-2xl object-cover ring-2 ring-gold-400" src={selectedStudent.photo_url || `https://i.pravatar.cc/150?u=${selectedStudent.uid}`} /><div className="min-w-0"><p className="[overflow-wrap:anywhere] font-black text-brand-900 dark:text-white">{selectedStudent.name}</p><p className="[overflow-wrap:anywhere] text-xs text-slate-500">ID: {selectedStudent.student_id} · {selectedStudent.school_data?.department}</p></div></div>
+          <div className="flex min-w-0 items-center gap-3"><ProfileAvatar alt={selectedStudent.name} className="h-12 w-12 shrink-0 rounded-2xl object-cover ring-2 ring-gold-400" src={selectedStudent.photo_url || '/avatar-placeholder.svg'} /><div className="min-w-0"><p className="[overflow-wrap:anywhere] font-black text-brand-900 dark:text-white">{selectedStudent.name}</p><p className="[overflow-wrap:anywhere] text-xs text-slate-500">ID: {selectedStudent.student_id} · {selectedStudent.school_data?.department}</p></div></div>
           <div className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center"><div><span className="text-xs font-black uppercase tracking-wider text-slate-500">Current Sanction Balance</span><p className="mt-1 text-3xl font-black text-brand-900 dark:text-white">{selectedStudent.stats?.sanction_hours || 0} <span className="text-sm text-slate-500">Sanction Hours</span></p></div><div className="flex flex-wrap gap-2"><Button aria-label="Subtract sanction hours" className="w-auto" onClick={() => { setAdjustMode('deduct'); setAdjustHours(2); }} size="sm" variant="secondary"><MinusCircle size={14} /> Subtract</Button><Button aria-label="Add penalty hours" className="w-auto" onClick={() => { setAdjustMode('add'); setAdjustHours(2); }} size="sm" variant="gold"><PlusCircle size={14} /> Add</Button><Button aria-label="Resolve and clear all sanctions" className="w-auto" onClick={() => { setAdjustMode('clear'); setAdjustHours(0); }} size="sm"><ShieldCheck size={14} /> Clear</Button></div></div>
           {adjustMode ? <form className="space-y-3 rounded-2xl border border-brand-900/20 bg-brand-900/5 p-4 dark:bg-brand-900/30" onSubmit={handleSanctionSubmit}><div className="flex items-center justify-between gap-3"><h3 className="text-xs font-black uppercase tracking-wider text-brand-900 dark:text-gold-400">{adjustMode === 'deduct' ? 'Minus Sanction Hours' : adjustMode === 'add' ? 'Issue Additional Penalty Hours' : 'Fully Resolve & Clear Student Sanctions'}</h3><button aria-label="Cancel adjustment" onClick={() => setAdjustMode(null)} type="button"><X size={14} /></button></div>{adjustMode !== 'clear' ? <div className="space-y-1.5"><label className="text-xs font-bold text-slate-500" htmlFor="ossa-adjust-hours">Hours to {adjustMode}</label><input className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm font-bold dark:border-slate-700 dark:bg-slate-800 dark:text-white" id="ossa-adjust-hours" max="100" min="1" onChange={(event) => setAdjustHours(Number(event.target.value))} type="number" value={adjustHours} /></div> : null}<div className="space-y-1.5"><label className="text-xs font-bold text-slate-500" htmlFor="ossa-adjust-reason">Official Reason / OSSA Note</label><input className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm font-bold dark:border-slate-700 dark:bg-slate-800 dark:text-white" id="ossa-adjust-reason" onChange={(event) => setAdjustReason(event.target.value)} placeholder={adjustMode === 'deduct' ? 'e.g. Rendered 2 hours SSG Community Clean-Up' : adjustMode === 'add' ? 'e.g. Unexcused absence from University Convocation' : 'e.g. Completed all required community service tasks'} required type="text" value={adjustReason} /></div><div className="flex flex-col gap-2 sm:flex-row sm:justify-end"><Button className="sm:w-auto" onClick={() => setAdjustMode(null)} size="sm" variant="secondary">Cancel</Button><Button aria-label="Confirm adjustment" className="sm:w-auto" size="sm" type="submit">Confirm</Button></div></form> : null}
           <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2"><div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900"><h3 className="font-black uppercase tracking-wider text-slate-500">Academic Assignment</h3><p className="mt-2 [overflow-wrap:anywhere]"><strong>Level/Section:</strong> {selectedStudent.school_data?.level || 'Grade 12'} - {selectedStudent.school_data?.section || 'Newton'}</p><p className="mt-1 [overflow-wrap:anywhere]"><strong>Department:</strong> {selectedStudent.school_data?.department || 'Senior High School'}</p><p className="mt-1 [overflow-wrap:anywhere]"><strong>Track/Strand:</strong> {selectedStudent.school_data?.track || 'Academic'} ({selectedStudent.school_data?.strand || 'STEM'})</p></div><div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900"><h3 className="font-black uppercase tracking-wider text-slate-500">Contact Details</h3><p className="mt-2 [overflow-wrap:anywhere]"><strong>Email:</strong> {selectedStudent.email}</p><p className="mt-1 [overflow-wrap:anywhere]"><strong>Guardian:</strong> {selectedStudent.guardian?.name || 'On file'}</p><p className="mt-1"><strong>Contact:</strong> {selectedStudent.guardian?.contact || '0917-123-4567'}</p></div></div>

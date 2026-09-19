@@ -1,3 +1,5 @@
+import { GeofenceMap } from '../components/events/GeofenceMap';
+import ProfileAvatar from '../components/ui/ProfileAvatar';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
@@ -9,7 +11,7 @@ import { format } from 'date-fns';
 import { useAuth } from '../components/AuthContext';
 import { AppEvent, UserProfile } from '../types';
 import { getDistanceFromLatLonInMeters } from '../lib/geolocation';
-import { mockData } from '../lib/mockBackend';
+import { appData } from '../lib/backend';
 import Button from '../components/ui/Button';
 import CustomSelect from '../components/ui/CustomSelect';
 import { Modal } from '../components/ui/Modal';
@@ -34,7 +36,7 @@ const groupEvent = (event: AppEvent, now = Date.now()): EventGroup => {
 };
 
 const MayorScanner: React.FC = () => {
-  const { profile, isMock } = useAuth();
+  const { profile, isMock, revision } = useAuth();
   const [direction, setDirection] = useState<'in' | 'out'>('in');
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [tab, setTab] = useState<EventGroup>('current');
@@ -56,6 +58,9 @@ const MayorScanner: React.FC = () => {
   const [manualStudentId, setManualStudentId] = useState('');
   const [manualError, setManualError] = useState('');
   const [scannedCount, setScannedCount] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [qrToken, setQrToken] = useState<string | null>(null);
+  const [manualReason, setManualReason] = useState('');
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerStateRef = useRef<ScannerState>('ready');
   const handlingScan = useRef(false);
@@ -64,9 +69,9 @@ const MayorScanner: React.FC = () => {
   scannerStateRef.current = scannerState;
 
   useEffect(() => {
-    if (isMock) {
+    {
       const now = Date.now();
-      const visibleEvents = profile && typeof mockData.getVisibleEvents === 'function' ? mockData.getVisibleEvents(profile.uid) : mockData.getEvents();
+      const visibleEvents = profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents();
       setEvents(visibleEvents.map((event) => ({
         ...event,
         startTime: eventTime(event.startTime, now - 60000),
@@ -74,7 +79,7 @@ const MayorScanner: React.FC = () => {
         location: event.location || { lat: 7.0736, lng: 125.6126, radius_meters: 150 },
       })).sort((a, b) => a.startTime - b.startTime));
     }
-  }, [isMock, profile]);
+  }, [revision, profile]);
 
   useEffect(() => () => {
     const scanner = scannerRef.current;
@@ -152,23 +157,16 @@ const MayorScanner: React.FC = () => {
     setScanResult(student);
   };
 
-  const handleDecoded = (decodedText: string) => {
+  const handleDecoded = async (decodedText: string) => {
     if (handlingScan.current) return;
-    let targetId = decodedText;
-    if (decodedText.startsWith('RMC_SECURE_PASSPORT:')) {
-      const parts = decodedText.split(':');
-      targetId = parts[1] || decodedText;
-    }
-
-    const student = isMock
-      ? (profile && typeof mockData.getVisibleStudents === 'function'
-        ? mockData.getVisibleStudents(profile.uid).find((candidate) => candidate.uid === targetId || candidate.student_id === targetId || candidate.uid === decodedText || candidate.student_id === decodedText)
-        : mockData.getUserProfile(targetId) || mockData.getUserProfile(decodedText))
-      : null;
-    if (student && selectedEvent && profile) {
-      identifyStudent(student);
-    } else {
-      setScanError('This QR code does not belong to an active student account.');
+    handlingScan.current = true;
+    try {
+      const student = await appData.resolveQr(decodedText);
+      handlingScan.current = false;
+      setQrToken(decodedText);
+      if (student && selectedEvent && profile) identifyStudent(student);
+    } catch (error) {
+      handlingScan.current = false; setScanError(error instanceof Error ? error.message : 'Unable to verify QR.');
     }
   };
 
@@ -180,22 +178,29 @@ const MayorScanner: React.FC = () => {
       setManualError('Enter a student ID to continue.');
       return;
     }
-    const student = isMock
-      ? (profile && typeof mockData.getVisibleStudents === 'function' ? mockData.getVisibleStudents(profile.uid) : mockData.getAllStudents()).find((candidate) => candidate.student_id.trim().toLowerCase() === normalizedId)
-      : null;
+    const student = (profile ? appData.getVisibleStudents(profile.uid) : []).find((candidate) => candidate.account_status === 'active' && candidate.student_id.trim().toLowerCase() === normalizedId);
     if (!student) {
       setManualError('No active student was found with that exact student ID.');
       return;
     }
     setManualStudentId('');
+    setQrToken(null);
+    setManualReason('');
     identifyStudent(student);
   };
 
-  const recordAttendance = () => {
-    if (!scanResult || !selectedEvent || !profile || attendanceReceipt) return;
+  const recordAttendance = async () => {
+    if (!scanResult || !selectedEvent || !profile || attendanceReceipt || saving) return;
     let record: AttendanceReceipt;
-    try { record = mockData.logAttendance(selectedEvent.id, scanResult.uid, profile.uid, profile.name, proposedRecordTime || Date.now(), direction) as AttendanceReceipt; }
-    catch (error) { setScanError(error instanceof Error ? error.message : 'Unable to record attendance.'); return; }
+    setSaving(true);
+    try {
+      const position = selectedEvent.geofenceEnabled === false ? null : await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }));
+      record = await appData.logAttendance(selectedEvent.id, scanResult.uid, profile.uid, profile.name, undefined, direction, {
+        qrToken: qrToken || undefined, manualReason,
+        position: position ? { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, timestamp: position.timestamp } : null,
+      }) as AttendanceReceipt;
+    } catch (error) { setScanError(error instanceof Error ? error.message : 'Unable to record attendance.'); return; }
+    finally { setSaving(false); }
     setAttendanceReceipt(record);
     if (!record.already_recorded) setScannedCount((count) => count + 1);
   };
@@ -249,21 +254,6 @@ const MayorScanner: React.FC = () => {
     }
   };
 
-  const useDemoLocation = () => {
-    if (!selectedEvent) return;
-    setLocation({
-      latitude: selectedEvent.location.lat,
-      longitude: selectedEvent.location.lng,
-      accuracy: 5,
-      altitude: null,
-      altitudeAccuracy: null,
-      heading: null,
-      speed: null,
-      toJSON: () => ({}),
-    });
-    setLocationError('');
-  };
-
   const eventTabs: { key: EventGroup; label: string; icon: React.ElementType }[] = [
     { key: 'current', label: 'Ongoing', icon: CircleDot },
     { key: 'scheduled', label: 'Scheduled', icon: CalendarClock },
@@ -282,7 +272,7 @@ const MayorScanner: React.FC = () => {
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Surface className="p-4"><CustomSelect label="Scan action" value={direction} onChange={value => setDirection(value as 'in' | 'out')} options={[{value:'in',label:'Scan in'},{value:'out',label:'Scan out / compute rendered hours'}]} />{scanError && <p role="alert" className="mt-2 text-sm text-red-600">{scanError}</p>}{attendanceReceipt?.time_out && <p role="status" className="mt-2 text-sm">Rendered: {attendanceReceipt.rendered_hours?.toFixed(2)} hours. Deducted: {attendanceReceipt.deducted_hours?.toFixed(2)} hours.</p>}</Surface>
-      <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40"><ShieldCheck size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Location</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">Geofence verified</span></span></Surface>
+      <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40"><ShieldCheck size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Location</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{selectedEvent?.geofenceEnabled === false ? 'Not required for this event' : 'Verified before each save'}</span></span></Surface>
           <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-gold-50 text-gold-600 dark:bg-gold-950/40"><Users size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">This session</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{scannedCount} recorded</span></span></Surface>
           <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40"><Clock3 size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Event closes</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{selectedEvent ? format(selectedEvent.endTime, 'h:mm a') : '—'}</span></span></Surface>
         </div>
@@ -322,12 +312,14 @@ const MayorScanner: React.FC = () => {
               </form>
             </Surface>
 
-            {isMock && <Surface className="border-dashed border-gold-300 bg-gold-50/50 p-5 dark:border-gold-800 dark:bg-gold-950/20"><p className="text-xs font-black text-brand-900 dark:text-white">Demo student IDs</p><p className="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Test the same verification flow without a printed QR.</p><div className="mt-4 grid gap-2"><Button size="sm" variant="secondary" disabled={Boolean(scanResult)} onClick={() => handleDecoded('mock_uid_student')}>Pedro · 2024-00123</Button><Button size="sm" variant="secondary" disabled={Boolean(scanResult)} onClick={() => handleDecoded('mock_uid_bea')}>Beatriz · 2024-00104</Button></div></Surface>}
+
           </div>
         </div>
 
-        <Modal open={Boolean(scanResult)} onClose={continueScanning} title={attendanceReceipt?.already_recorded ? 'Already recorded' : attendanceReceipt ? 'Attendance recorded' : 'Verify student identity'} description={attendanceReceipt?.already_recorded ? 'This student already has an attendance record for this event.' : attendanceReceipt ? 'The attendance record was saved successfully.' : 'Confirm that this profile matches the student presenting the QR code.'} size="sm" footer={attendanceReceipt ? <Button variant="gold" onClick={continueScanning}><ScanLine size={17} /> Scan next student</Button> : <><Button variant="secondary" className="border-red-200 text-red-700 hover:bg-red-50" onClick={continueScanning}><UserX size={17} /> Waive</Button><Button variant="gold" onClick={recordAttendance}><CheckCircle2 size={17} /> Record</Button></>}>
-          {scanResult && <div className="text-center"><div className="relative mx-auto w-fit"><img src={scanResult.photo_url || undefined} alt={`${scanResult.name} profile`} className="h-28 w-28 rounded-3xl border-4 border-gold-100 object-cover shadow-lg dark:border-gold-900" />{attendanceReceipt && <span className="absolute -bottom-2 -right-2 grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-emerald-500 text-white shadow dark:border-slate-800"><Check size={17} strokeWidth={3} /></span>}</div><h3 className="mt-5 text-xl font-black text-brand-900 dark:text-white">{scanResult.name}</h3><p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-300">{scanResult.student_id}</p><p className="mt-1 text-xs text-slate-400">{scanResult.school_data.level} · {scanResult.school_data.section}</p>{!attendanceReceipt && <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-950/40"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black text-blue-800 dark:text-blue-200">Identity check required</p><p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">Choose <strong>Record</strong> only when the photo and student ID match. Choose <strong>Waive</strong> to dismiss without saving.</p></div>{proposedRecordTime && <div className="shrink-0 rounded-xl bg-white/70 px-3 py-2 text-right dark:bg-slate-900/40"><p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Record time</p><p className="mt-1 whitespace-nowrap text-sm font-black text-blue-900 dark:text-blue-100"><Clock3 size={13} className="mr-1 inline" />{format(proposedRecordTime, 'h:mm:ss a')}</p><p className="mt-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-300">{format(proposedRecordTime, 'MMM d, yyyy')}</p></div>}</div></div>}{attendanceReceipt && <div className={`mt-5 rounded-2xl border p-4 ${attendanceReceipt.status === 'late' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'}`}><p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{attendanceReceipt.already_recorded ? 'Original record' : 'Status recorded'}</p><p className={`mt-1 text-2xl font-black capitalize ${attendanceReceipt.status === 'late' ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{attendanceReceipt.status}</p><p className="mt-2 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300"><Clock3 size={14} />{format(attendanceReceipt.time_in, 'MMM d, yyyy · h:mm:ss a')}</p></div>}</div>}
+        <Modal open={Boolean(scanResult)} onClose={continueScanning} title={attendanceReceipt?.already_recorded ? 'Already recorded' : attendanceReceipt ? 'Attendance recorded' : 'Verify student identity'} description={attendanceReceipt?.already_recorded ? 'This student already has an attendance record for this event.' : attendanceReceipt ? 'The attendance record was saved successfully.' : 'Confirm that this profile matches the student presenting the QR code.'} size="sm" footer={attendanceReceipt ? <Button variant="gold" onClick={continueScanning}><ScanLine size={17} /> Scan next student</Button> : <><Button variant="secondary" className="border-red-200 text-red-700 hover:bg-red-50" onClick={continueScanning}><UserX size={17} /> Waive</Button><Button variant="gold" disabled={saving || (!qrToken && manualReason.trim().length < 5)} onClick={recordAttendance}><CheckCircle2 size={17} /> Record</Button></>}>
+          {!attendanceReceipt && !qrToken && <label className="block text-sm">Reason for manual entry<input className="input-field mt-2" value={manualReason} onChange={event => setManualReason(event.target.value)} minLength={5} required /></label>}
+          {scanError && <p role="alert" className="mt-2 text-sm text-red-600">{scanError}</p>}
+          {scanResult && <div className="text-center"><div className="relative mx-auto w-fit"><ProfileAvatar src={scanResult.photo_url || undefined} alt={`${scanResult.name} profile`} className="h-28 w-28 rounded-3xl border-4 border-gold-100 object-cover shadow-lg dark:border-gold-900" />{attendanceReceipt && <span className="absolute -bottom-2 -right-2 grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-emerald-500 text-white shadow dark:border-slate-800"><Check size={17} strokeWidth={3} /></span>}</div><h3 className="mt-5 text-xl font-black text-brand-900 dark:text-white">{scanResult.name}</h3><p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-300">{scanResult.student_id}</p><p className="mt-1 text-xs text-slate-400">{scanResult.school_data.level} · {scanResult.school_data.section}</p>{!attendanceReceipt && <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-950/40"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black text-blue-800 dark:text-blue-200">Identity check required</p><p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">Choose <strong>Record</strong> only when the photo and student ID match. Choose <strong>Waive</strong> to dismiss without saving.</p></div>{proposedRecordTime && <div className="shrink-0 rounded-xl bg-white/70 px-3 py-2 text-right dark:bg-slate-900/40"><p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Record time</p><p className="mt-1 whitespace-nowrap text-sm font-black text-blue-900 dark:text-blue-100"><Clock3 size={13} className="mr-1 inline" />{format(proposedRecordTime, 'h:mm:ss a')}</p><p className="mt-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-300">{format(proposedRecordTime, 'MMM d, yyyy')}</p></div>}</div></div>}{attendanceReceipt && <div className={`mt-5 rounded-2xl border p-4 ${attendanceReceipt.status === 'late' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'}`}><p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{attendanceReceipt.already_recorded ? 'Original record' : 'Status recorded'}</p><p className={`mt-1 text-2xl font-black capitalize ${attendanceReceipt.status === 'late' ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{attendanceReceipt.status}</p><p className="mt-2 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300"><Clock3 size={14} />{format(attendanceReceipt.time_in, 'MMM d, yyyy · h:mm:ss a')}</p></div>}</div>}
         </Modal>
       </Page>
     );
@@ -371,17 +363,12 @@ const MayorScanner: React.FC = () => {
 
       <Modal open={Boolean(selectedEvent)} onClose={() => setSelectedEvent(null)} title={selectedEvent?.title || 'Event'} description="Confirm that you are within the authorized attendance area." size="xl" footer={<><Button variant="secondary" onClick={() => setSelectedEvent(null)}>Close</Button><Button variant="gold" onClick={enterScanner} disabled={!insideGeofence || groupEvent(selectedEvent!) !== 'current'}><ScanLine size={17} /> Start scanning</Button></>}>
         {selectedEvent && <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
-          <div className="relative min-h-72 overflow-hidden rounded-2xl border border-slate-200 bg-[#e7edf0] dark:border-slate-700 dark:bg-slate-900" aria-label="Event geofence map">
-            <div className="absolute inset-0 opacity-60" style={{ backgroundImage: 'linear-gradient(32deg, transparent 47%, #fff 48%, #fff 52%, transparent 53%), linear-gradient(128deg, transparent 46%, #fff 47%, #fff 51%, transparent 52%), linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)', backgroundSize: '160px 90px, 180px 120px, 32px 32px, 32px 32px' }} />
-            <div className="absolute left-1/2 top-1/2 h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-emerald-500 bg-emerald-400/15 shadow-[0_0_0_8px_rgba(16,185,129,.08)]"><span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"><MapPin size={34} className="fill-brand-900 text-brand-900 dark:fill-gold-400 dark:text-gold-400" /></span></div>
-            {location && <div className={`absolute ${insideGeofence ? 'left-[58%] top-[58%]' : 'left-[84%] top-[78%]'} -translate-x-1/2 -translate-y-1/2`}><span className="absolute -inset-3 animate-ping rounded-full bg-blue-500/30" /><span className="relative block h-5 w-5 rounded-full border-4 border-white bg-blue-600 shadow-lg" /><span className="absolute left-1/2 top-7 w-max -translate-x-1/2 rounded-md bg-brand-900 px-2 py-1 text-[9px] font-black text-white">YOU ARE HERE</span></div>}
-            <div className="absolute bottom-3 left-3 rounded-lg bg-white/90 px-3 py-2 text-[10px] font-bold text-slate-600 shadow dark:bg-slate-800/90 dark:text-slate-200">Geofence radius: {selectedEvent.location.radius_meters} m</div>
-          </div>
+          {selectedEvent.geofenceEnabled !== false ? <GeofenceMap value={{ lat: selectedEvent.location.lat, lng: selectedEvent.location.lng, radius: selectedEvent.location.radius_meters }} position={location} /> : <Surface className="grid min-h-48 place-items-center p-6 text-sm text-slate-500">This event does not require a location check.</Surface>}
           <div className="space-y-4">
             <div><p className="text-[10px] font-black uppercase tracking-widest text-gold-600">Event details</p><p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{selectedEvent.description || 'Attendance scanning is available to assigned mayors during this event.'}</p></div>
             <div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900"><p className="text-[10px] font-bold text-slate-400">START</p><p className="mt-1 text-xs font-black">{formatEventTime(selectedEvent.startTime)}</p></div><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900"><p className="text-[10px] font-bold text-slate-400">ENDS</p><p className="mt-1 text-xs font-black">{formatEventTime(selectedEvent.endTime)}</p></div></div>
-            <div className={`rounded-2xl border p-4 ${insideGeofence ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40'}`}><div className="flex gap-3">{insideGeofence ? <ShieldCheck className="shrink-0 text-emerald-600" /> : <LocateFixed className="shrink-0 text-amber-600" />}<div><p className="text-sm font-black">{insideGeofence ? 'Inside attendance area' : locating ? 'Finding your location…' : 'Outside or location unavailable'}</p><p className="mt-1 text-xs leading-5 opacity-75">{distance !== null ? `You are approximately ${distance.toLocaleString()} m from the event center.` : locationError || 'Allow precise location to verify your position.'}</p></div></div></div>
-            <div className="flex flex-col gap-2 sm:flex-row"><Button variant="secondary" className="flex-1" onClick={requestLocation} loading={locating}><LocateFixed size={17} /> Refresh my location</Button>{isMock && <Button variant="secondary" className="flex-1 border-dashed" onClick={useDemoLocation}><MapPin size={17} /> Use demo location</Button>}</div>
+            <div className={`rounded-2xl border p-4 ${insideGeofence ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40'}`}><div className="flex gap-3">{insideGeofence ? <ShieldCheck className="shrink-0 text-emerald-600" /> : <LocateFixed className="shrink-0 text-amber-600" />}<div><p className="text-sm font-black">{selectedEvent.geofenceEnabled === false ? 'Location check not required' : insideGeofence ? 'Inside attendance area' : locating ? 'Finding your location…' : 'Outside or location unavailable'}</p><p className="mt-1 text-xs leading-5 opacity-75">{distance !== null ? `You are approximately ${distance.toLocaleString()} m from the event center.` : locationError || (selectedEvent.geofenceEnabled === false ? 'Continue to the attendance scanner.' : 'Allow precise location to verify your position.')}</p></div></div></div>
+            <div className="flex flex-col gap-2 sm:flex-row"><Button disabled={selectedEvent.geofenceEnabled === false} variant="secondary" className="flex-1" onClick={requestLocation} loading={locating}><LocateFixed size={17} /> Refresh my location</Button></div>
           </div>
         </div>}
       </Modal>

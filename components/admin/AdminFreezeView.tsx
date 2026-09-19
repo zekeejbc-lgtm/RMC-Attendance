@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Snowflake, Lock, Unlock, AlertTriangle, CheckCircle2, ShieldAlert, Building2, Search, RefreshCw } from 'lucide-react';
-import { mockData } from '../../lib/mockBackend';
+import { appData } from '../../lib/backend';
 import { SchoolNode, SystemFreezeState, NodeFreezeState } from '../../types';
 import SearchInput from '../ui/SearchInput';
 import { flattenDirectory } from '../../lib/academicDirectory';
 import { Modal } from '../ui/Modal';
 
 export const AdminFreezeView: React.FC<{ actorName?: string }> = ({ actorName }) => {
-  const [systemFreeze, setSystemFreeze] = useState<SystemFreezeState>(mockData.getSystemFreezeStatus());
-  const [frozenNodes, setFrozenNodes] = useState<Record<string, NodeFreezeState>>(mockData.getFrozenNodes());
-  const [structure, setStructure] = useState<SchoolNode[]>(mockData.getSchoolStructure());
+  const [systemFreeze, setSystemFreeze] = useState<SystemFreezeState>(appData.getSystemFreezeStatus());
+  const [frozenNodes, setFrozenNodes] = useState<Record<string, NodeFreezeState>>(appData.getFrozenNodes());
+  const [structure, setStructure] = useState<SchoolNode[]>(appData.getSchoolStructure());
   
   const [globalReason, setGlobalReason] = useState('School Account Unpaid - Annual License Renewal Required');
   const [showGlobalModal, setShowGlobalModal] = useState(false);
@@ -19,27 +19,27 @@ export const AdminFreezeView: React.FC<{ actorName?: string }> = ({ actorName })
   const [nodeReason, setNodeReason] = useState('Department temporarily suspended by administration');
 
   const refreshData = () => {
-    setSystemFreeze(mockData.getSystemFreezeStatus());
-    setFrozenNodes(mockData.getFrozenNodes());
-    setStructure(mockData.getSchoolStructure());
+    setSystemFreeze(appData.getSystemFreezeStatus());
+    setFrozenNodes(appData.getFrozenNodes());
+    setStructure(appData.getSchoolStructure());
   };
 
   useEffect(() => {
     refreshData();
-    window.addEventListener('rmc_auth_update', refreshData);
-    return () => window.removeEventListener('rmc_auth_update', refreshData);
+    window.addEventListener('rmc_data_update', refreshData);
+    return () => window.removeEventListener('rmc_data_update', refreshData);
   }, []);
 
-  const handleToggleSystemFreeze = () => {
+  const handleToggleSystemFreeze = async () => {
     const nextState = !systemFreeze.isFrozen;
-    mockData.setSystemFreezeStatus(nextState, nextState ? globalReason : '', actorName || 'System Admin');
+    await appData.setSystemFreezeStatus(nextState, nextState ? globalReason : '', actorName || 'System Admin');
     refreshData();
     setShowGlobalModal(false);
   };
 
-  const handleToggleNodeFreeze = (node: SchoolNode) => {
+  const handleToggleNodeFreeze = async (node: SchoolNode) => {
     const currentlyFrozen = Boolean(frozenNodes[node.id]?.isFrozen);
-    mockData.setNodeFreezeStatus(node.id, !currentlyFrozen, !currentlyFrozen ? nodeReason : '', actorName || 'System Admin');
+    await appData.setNodeFreezeStatus(node.id, !currentlyFrozen, !currentlyFrozen ? nodeReason : '', actorName || 'System Admin');
     setSelectedNode(null);
     refreshData();
   };
@@ -133,7 +133,7 @@ export const AdminFreezeView: React.FC<{ actorName?: string }> = ({ actorName })
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1">
           {filteredNodes.map(node => {
             const isDirectlyFrozen = Boolean(frozenNodes[node.id]?.isFrozen);
-            const isInheritedFrozen = !isDirectlyFrozen && mockData.isNodeOrParentFrozen(node.id);
+            const isInheritedFrozen = !isDirectlyFrozen && appData.isNodeOrParentFrozen(node.id);
             const freezeDetail = frozenNodes[node.id];
 
             return (
@@ -170,9 +170,9 @@ export const AdminFreezeView: React.FC<{ actorName?: string }> = ({ actorName })
 
                 <div className="shrink-0 flex items-center gap-2">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (isDirectlyFrozen) {
-                        mockData.setNodeFreezeStatus(node.id, false, '', actorName || 'System Admin');
+                        await appData.setNodeFreezeStatus(node.id, false, '', actorName || 'System Admin');
                         refreshData();
                       } else {
                         setSelectedNode(node);

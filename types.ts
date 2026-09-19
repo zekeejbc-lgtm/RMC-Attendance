@@ -40,7 +40,7 @@ export interface PaymentReminderLog {
   subject: string;
   message: string;
   urgency: 'normal' | 'urgent' | 'critical';
-  status: 'sent' | 'delivered';
+  status: 'sent' | 'delivered' | 'in_app';
 }
 
 export interface PaymentInfo {
@@ -118,6 +118,7 @@ export interface AcademicAssignment {
 }
 
 export interface ExcuseApplication {
+  event_id?: string;
   id: string;
   student_uid: string;
   student_name: string;
@@ -246,6 +247,7 @@ export interface AppEvent {
 }
 
 export interface SchoolNode {
+  enrollmentKeyRequired?: boolean;
   id: string;
   name: string;
   code?: string;
@@ -274,6 +276,7 @@ export interface SchoolNode {
 }
 
 export interface Application {
+  documents?: Record<string, string>;
   id: string;
   status: 'pending' | 'approved' | 'rejected';
   submission_date: number;

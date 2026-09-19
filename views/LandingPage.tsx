@@ -1,19 +1,17 @@
+import { supabase } from '../lib/supabase';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { ref, get } from 'firebase/database';
-import { auth, db } from '../firebase';
 import { useAuth } from '../components/AuthContext';
 import { useTheme } from '../components/ThemeContext';
 import ThemeToggle from '../components/ui/ThemeToggle';
-import { ensureMockReferenceData, mockAuth, mockData } from '../lib/mockBackend';
+import { appAuth, appData } from '../lib/backend';
 import { TEST_ACCOUNTS } from '../lib/seed';
 import { SchoolNode } from '../types';
 import Button from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Collapsible } from '../components/ui/Collapsible';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
-import { serializeAcademicAssignment } from '../lib/academicDirectory';
+import { serializeAcademicAssignment, findNodePath } from '../lib/academicDirectory';
 import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 import { 
   ArrowRight, Shield, Target, Users, 
@@ -31,7 +29,7 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, defaultOpenRegister = false }) => {
   const navigate = useNavigate();
-  const { isMock, user, profile } = useAuth();
+  const { isMock, user, profile, revision } = useAuth();
   
   // --- UI STATE ---
   const [scrolled, setScrolled] = useState(false);
@@ -62,6 +60,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const [academicPath, setAcademicPath] = useState<SchoolNode[]>([]);
   const [securityKey, setSecurityKey] = useState('');
   const [regSuccess, setRegSuccess] = useState(false);
+  const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false);
   const [regData, setRegData] = useState({
     name: '', username: '', email: '', password: '', confirmPassword: '', student_id: '',
     guardianName: '', guardianPhone: '', profilePic: '', idFront: '', idBack: ''
@@ -85,22 +84,31 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   }, [isDarkMode]);
 
   useEffect(() => {
-    if (user) {
+    if (user && !defaultOpenRegister && !showRegisterModal) {
       if (profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
         navigate('/ossa/dashboard');
       } else {
         navigate('/dashboard');
       }
     }
-  }, [user, profile, navigate]);
+  }, [user, profile, navigate, defaultOpenRegister, showRegisterModal]);
 
   useEffect(() => {
-    if (isMock) {
-      ensureMockReferenceData();
-      setShowTestPanel(true);
-      setStructure(mockData.getSchoolStructure());
-    }
-  }, [isMock]);
+    setStructure(appData.getSchoolStructure());
+    setShowTestPanel(import.meta.env.DEV && import.meta.env.VITE_SHOW_TEST_ACCOUNTS === 'true');
+  }, [revision]);
+
+  const hydratedApplication = useRef<string | null>(null);
+  useEffect(() => {
+    if (!defaultOpenRegister || !user || hydratedApplication.current === user.uid) return;
+    const application = appData.getApplications().find(a => a.id === user.uid && a.status === 'rejected');
+    if (!application) return;
+    const saved = application.form_data;
+    setRegData(current => ({ ...current, name: saved.name, username: saved.username, email: saved.email, student_id: saved.student_id, guardianName: saved.guardian?.name || '', guardianPhone: saved.guardian?.contact || '' }));
+    const terminalId = saved.school_data.academic_assignment?.terminalGroupId;
+    if (terminalId) setAcademicPath(findNodePath(appData.getSchoolStructure(), terminalId) || []);
+    hydratedApplication.current = user.uid;
+  }, [user, revision, defaultOpenRegister]);
 
   // --- HANDLERS ---
   const scrollTo = (id: string) => {
@@ -114,19 +122,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     setIsLoggingIn(true);
     setLoginError('');
     try {
-      if (isMock) {
-        await mockAuth.signIn(identifier, password);
-        navigate('/dashboard');
-      } else {
-        let email = identifier;
-        if (!identifier.includes('@')) {
-          const snapshot = await get(ref(db, `usernames/${identifier.toLowerCase()}`));
-          if (snapshot.exists()) email = snapshot.val();
-          else throw new Error("Username not found.");
-        }
-        await signInWithEmailAndPassword(auth, email, password);
-        navigate('/dashboard');
-      }
+      await appAuth.signIn(identifier, password);
+      navigate('/dashboard');
     } catch (err: any) {
       setLoginError(err.message || 'Failed to sign in.');
       setIsLoggingIn(false);
@@ -135,7 +132,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
 
   const quickLogin = (usr: string) => {
     setIdentifier(usr);
-    setPassword('password123');
+    setPassword('');
     setLoginError('');
   };
 
@@ -146,50 +143,46 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   };
 
   // Register Handlers
-  const handleRegUpload = (field: string) => {
-    setRegData((prev: any) => ({ ...prev, [field]: `https://picsum.photos/400/400?sig=${field}_${Math.random()}` }));
-  };
 
   const terminal = academicPath[academicPath.length - 1];
   const isMayorRegistered = terminal && ['section', 'block'].includes(terminal.type)
-    ? mockData.isMayorRegisteredForSection(terminal.id, terminal.name)
+    ? appData.isMayorRegisteredForSection(terminal.id, terminal.name)
     : false;
 
   const handleRegisterSubmit = async () => {
+    if (isRegistering) return;
+    setRegError('');
     const terminalNode = academicPath[academicPath.length - 1];
     if (!terminalNode || !['section', 'block'].includes(terminalNode.type)) return;
-    if (regData.password !== regData.confirmPassword) {
+    if (!user && regData.password !== regData.confirmPassword) {
       setRegError('Passwords do not match.');
       return;
     }
-    if (terminalNode && mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name)) {
-      if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !securityKey.trim()) {
+    if (terminalNode && appData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name)) {
+      if (appData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !securityKey.trim()) {
         setRegError('Section Enrollment Security Key is required for enrollment into this section.');
         return;
       }
-      if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !mockData.validateSectionSecurityKey(terminalNode.id, securityKey.trim(), terminalNode.name)) {
-        setRegError('Invalid Section Security Key. Please verify the security key with your Class Mayor or SSG officer.');
-        return;
-      }
+
     }
     setIsRegistering(true);
-    const uid = `user_${Date.now()}`;
+    const uid = '';
     const serialized = serializeAcademicAssignment(academicPath);
     const profile: any = {
       uid,
-      name: regData.name,
-      username: regData.username,
-      email: regData.email,
-      student_id: regData.student_id,
+      name: regData.name.trim(),
+      username: regData.username.trim().toLowerCase() || `student_${regData.student_id.trim().replace(/[^a-zA-Z0-9_.-]/g, '_')}`.toLowerCase().slice(0, 100),
+      email: regData.email.trim().toLowerCase(),
+      student_id: regData.student_id.trim(),
       role: 'student',
-      photo_url: regData.profilePic || `https://i.pravatar.cc/150?u=${uid}`,
+      guardian: { name: regData.guardianName, contact: regData.guardianPhone },
+      photo_url: '',
       school_data: { ...serialized.schoolData, school_id: serialized.assignment.campusId, academic_assignment: serialized.assignment }
     };
 
     try {
-      mockData.submitApplication(profile, regData.password, securityKey.trim());
-      localStorage.setItem('rmc_mock_session', uid);
-      window.dispatchEvent(new Event('rmc_auth_update'));
+      const result = await appData.submitApplication(profile, regData.password, securityKey.trim());
+      setNeedsEmailConfirmation(result.needsEmailConfirmation);
       setIsRegistering(false);
       setRegSuccess(true);
     } catch (submissionError) {
@@ -204,15 +197,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     {
       icon: QrCode,
       title: "Dynamic Student QR Badges",
-      desc: "Instant encrypted QR pass generation for every student with dynamic timestamps preventing screenshot abuse.",
-      tag: "Scanning Speed: < 0.5s",
+      desc: "Short-lived QR passes are validated by the server and expire automatically.",
+      tag: "Server-verified QR passes",
       color: "text-blue-600 dark:text-blue-400",
       bg: "bg-blue-50 dark:bg-blue-900/20"
     },
     {
       icon: MapPin,
       title: "Geofenced Check-In Perimeter",
-      desc: "GPS-validated perimeter zones ensure students are physically present at official campus ceremonies before scanning.",
+      desc: "The scanner location is checked against the event boundary before each attendance record is saved.",
       tag: "Precision Location Guard",
       color: "text-emerald-600 dark:text-emerald-400",
       bg: "bg-emerald-50 dark:bg-emerald-900/20"
@@ -261,8 +254,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     {
       role: "Section Mayor Scanner",
       icon: Smartphone,
-      desc: "Mobile-optimized scanning interface for class mayors to record section attendance during assemblies with audio feedback.",
-      highlights: ["Camera QR Reader", "Offline Storage Sync", "Real-Time Headcount", "Manual ID Fallback Search"]
+      desc: "Mobile-optimized scanning interface for class mayors to record section attendance during assemblies with confirmation receipts.",
+      highlights: ["Camera QR Reader", "Server-Confirmed Attendance", "Real-Time Headcount", "Manual ID Fallback Search"]
     },
     {
       role: "SSG & Discipline Panel",
@@ -282,7 +275,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     {
       step: "01",
       title: "Student Presents Digital QR Pass",
-      desc: "Student opens the IARS portal on mobile to generate their secure, encrypted student QR pass."
+      desc: "Student opens the IARS portal on mobile to generate their short-lived, server-verified student QR pass."
     },
     {
       step: "02",
@@ -296,10 +289,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     }
   ];
 
+  const supportEmail = import.meta.env.VITE_SUPPORT_EMAIL || '';
+  const supportPhone = import.meta.env.VITE_SUPPORT_PHONE || '';
+  const campusName = import.meta.env.VITE_CAMPUS_NAME || '';
+  const campusMap = import.meta.env.VITE_CAMPUS_MAP_URL || '';
   const contactLinks = [
-    { icon: Mail, label: "System Support", value: "iars.support@institution.edu", action: () => window.open('mailto:iars.support@institution.edu'), color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-900/20" },
-    { icon: Phone, label: "Registrar / SSG Office", value: "+63 (084) 216-8800", action: () => window.open('tel:+630842168800'), color: "text-green-500", bg: "bg-green-50 dark:bg-green-900/20" },
-    { icon: MapPin, label: "Main Campus", value: "Tagum City, Davao del Norte", action: () => window.open('https://maps.google.com/?q=Tagum+City'), color: "text-red-500", bg: "bg-red-50 dark:bg-red-900/20" }
+    ...(supportEmail ? [{ icon: Mail, label: 'System Support', value: supportEmail, action: () => window.open(`mailto:${supportEmail}`), color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' }] : []),
+    ...(supportPhone ? [{ icon: Phone, label: 'Registrar / SSG Office', value: supportPhone, action: () => window.open(`tel:${supportPhone}`), color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20' }] : []),
+    ...(campusName && campusMap.startsWith('https://') ? [{ icon: MapPin, label: 'Main Campus', value: campusName, action: () => window.open(campusMap, '_blank', 'noopener,noreferrer'), color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20' }] : []),
   ];
 
   return (
@@ -413,6 +410,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                      <Button type="submit" disabled={isLoggingIn} className="!rounded-2xl text-xs font-black uppercase tracking-widest py-4 mt-2 shadow-lg hover:shadow-xl transition-all">
                        {isLoggingIn ? <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={18}/> Logging in...</span> : 'Log In'}
                      </Button>
+                     <button type="button" className="text-sm underline" onClick={async () => {
+                       if (!identifier.includes('@')) { setLoginError('Enter your email address above, then choose Forgot password.'); return; }
+                       const { error } = await supabase.auth.resetPasswordForEmail(identifier.trim(), { redirectTo: window.location.origin });
+                       setLoginError(error ? error.message : 'Check your email for a password reset link.');
+                     }}>Forgot password?</button>
                    </form>
                 </div>
 
@@ -425,7 +427,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                     <ArrowRight size={14} />
                   </button>
 
-                  {isMock && (
+                  {import.meta.env.DEV && import.meta.env.VITE_SHOW_TEST_ACCOUNTS === 'true' && (
                      <div className="space-y-2 pt-1">
                        <button 
                          aria-controls="landing-test-accounts"
@@ -482,7 +484,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
             </div>
             <div>
               <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Registration Submitted!</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">Your application is pending section officer review.</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1">{needsEmailConfirmation ? `Check ${regData.email.trim()} (including spam) to confirm your address, then sign in to upload documents and track admission review.` : 'Your application has been saved. Open your application status to upload documents and track admission review.'}</p>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-left space-y-2 text-xs">
               <div className="flex justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-2">
@@ -506,8 +508,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Button variant="gold" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); navigate('/register/status'); }}>
-                View Application Status
+              <Button variant="gold" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); navigate(needsEmailConfirmation ? '/login' : '/register/status'); }}>
+                {needsEmailConfirmation ? 'Sign In After Confirmation' : 'View Application Status'}
               </Button>
               <Button variant="secondary" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); }}>
                 Close
@@ -518,13 +520,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
            <div className="space-y-5">
               {regStep === 1 && (
                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                    <div className="flex flex-col items-center mb-4">
-                       <button aria-label="Upload profile photo" type="button" onClick={() => handleRegUpload('profilePic')} className="w-20 h-20 rounded-2xl bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center text-slate-400 hover:border-gold-400 hover:bg-gold-50/10 transition-all overflow-hidden relative group">
-                          {regData.profilePic ? <img src={regData.profilePic} alt="Uploaded profile" className="w-full h-full object-cover" /> : <><UserCircle size={28} /><span className="text-[8px] font-black uppercase mt-1">Photo</span></>}
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Camera size={18} className="text-white" /></div>
-                       </button>
-                       <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">Digital Identity Picture (Optional)</p>
-                    </div>
+                    <p className="text-sm text-slate-500">You can upload your photo and admission documents after verifying your email.</p>
 
                     <div className="space-y-1">
                        <label htmlFor="landing-register-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Legal Full Name</label>
@@ -534,7 +530,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                        <div className="space-y-1">
                           <label htmlFor="landing-register-username" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Username <span className="normal-case text-slate-400">(optional)</span></label>
-                          <input id="landing-register-username" placeholder="Defaults to email" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.username} onChange={e => setRegData({...regData, username: e.target.value})} />
+                          <input id="landing-register-username" placeholder="3+ letters, numbers, dots or underscores" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.username} onChange={e => setRegData({...regData, username: e.target.value})} />
                        </div>
                        <div className="space-y-1">
                           <label htmlFor="landing-register-email" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Email Address</label>
@@ -601,12 +597,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                     <div className="space-y-1">
                        <label htmlFor="landing-register-student-id" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Official Student ID #</label>
-                       <input id="landing-register-student-id" placeholder="2024-XXXXX" className="w-full min-w-0 p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
+                       <input id="landing-register-student-id" required placeholder="2024-XXXXX" className="w-full min-w-0 p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
                     </div>
 
                     <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
+                    {structure.length === 0 && <p role="status" className="text-sm text-amber-700 dark:text-amber-300">Enrollment sections are not available yet. Ask your school administrator to set up the Academic Directory, then return to complete registration.</p>}
 
-                    {terminal && mockData.isMayorRegisteredForSection(terminal.id, terminal.name) && (
+                    {terminal && appData.isMayorRegisteredForSection(terminal.id, terminal.name) && (
                       <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
                         <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
                           <KeyRound size={18} />
@@ -667,7 +664,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                  )}
                  {regStep < 3 ? (
                    <Button className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { 
-                     if (regStep === 1 && regData.password !== regData.confirmPassword) {
+                     if (regStep === 1 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regData.email.trim())) {
+                       setRegError('Enter a valid email address.');
+                       return;
+                     }
+                     if (regStep === 1 && regData.username.trim() && !/^[a-zA-Z0-9_.-]{3,100}$/.test(regData.username.trim())) {
+                       setRegError('Username must be 3–100 letters, numbers, dots, underscores, or hyphens.');
+                       return;
+                     }
+                     if (!user && regStep === 1 && regData.password !== regData.confirmPassword) {
                        setRegError('Passwords do not match.');
                        return;
                      }
@@ -681,18 +686,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                          setRegError('Please select a valid section to proceed.');
                          return;
                        }
-                       if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !securityKey.trim()) {
+                       if (appData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !securityKey.trim()) {
                          setRegError('Section Enrollment Security Key is required for enrollment into this section.');
-                         return;
-                       }
-                       if (mockData.isMayorRegisteredForSection(terminalNode.id, terminalNode.name) && !mockData.validateSectionSecurityKey(terminalNode.id, securityKey.trim(), terminalNode.name)) {
-                         setRegError('Invalid Section Security Key. Please verify the security key with your Class Mayor or SSG officer.');
                          return;
                        }
                      }
                      setRegError(''); 
                      setRegStep(regStep + 1); 
-                   }} disabled={regStep === 1 && (!regData.name.trim() || !regData.email.trim() || regData.password.length < 6 || !regData.confirmPassword || regData.password !== regData.confirmPassword)}>
+                   }} disabled={regStep === 1 && (!regData.name.trim() || !regData.email.trim() || (!user && (regData.password.length < 12 || !regData.confirmPassword || regData.password !== regData.confirmPassword)))}>
                      Next
                    </Button>
                  ) : (
@@ -752,7 +753,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                  <MapPin size={24} />
               </div>
               <h3 className="font-bold text-brand-900 dark:text-white text-lg mb-2">Geofenced Check-In</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">GPS-backed location perimeter validation ensuring physical presence before check-in confirmation.</p>
+              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Scanner GPS is validated against the event boundary before attendance is saved.</p>
            </div>
 
            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-300">
@@ -877,12 +878,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                <div className="bg-white/5 dark:bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 space-y-2">
                   <ShieldCheck className="text-emerald-400 mb-2" size={24} />
                   <h4 className="font-bold text-white text-sm uppercase">Anti-Forgery Passes</h4>
-                  <p className="text-slate-300 text-xs">Dynamic encrypted QR tokens prevent pass sharing and static screenshot fraud.</p>
+                  <p className="text-slate-300 text-xs">Short-lived QR tokens limit screenshot reuse. Officers verify the displayed student identity before recording attendance.</p>
                </div>
                <div className="bg-white/5 dark:bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 space-y-2">
                   <Clock className="text-amber-400 mb-2" size={24} />
                   <h4 className="font-bold text-white text-sm uppercase">Timestamp Records</h4>
-                  <p className="text-slate-300 text-xs">Immutable attendance timestamps with location telemetry for discipline audits.</p>
+                  <p className="text-slate-300 text-xs">Server-recorded attendance timestamps and officer attribution support discipline audits.</p>
                </div>
                <div className="bg-white/5 dark:bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 space-y-2">
                   <Zap className="text-purple-400 mb-2" size={24} />
@@ -900,6 +901,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                <h2 className="text-3xl font-black text-brand-900 dark:text-white">Connect with IARS Support</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+               {!contactLinks.length && <p className="text-sm text-slate-500">Contact your school officer for enrollment and account assistance.</p>}
                {contactLinks.map((link, idx) => (
                  <div key={idx} onClick={link.action} className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 flex items-center gap-4 hover:shadow-lg transition-all group cursor-pointer">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${link.bg} ${link.color} group-hover:scale-110 transition-transform`}>

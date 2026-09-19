@@ -8,7 +8,7 @@ import Button from '../components/ui/Button';
 import CustomSelect from '../components/ui/CustomSelect';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { flattenDirectory } from '../lib/academicDirectory';
-import { mockData } from '../lib/mockBackend';
+import { appData } from '../lib/backend';
 import { AppEvent, EventAttendanceWindow, EventSanctionRule } from '../types';
 
 const quickRecipientGroups = ['All Students', 'All SSG Officers', 'All Mayors', 'JHS', 'SHS', 'College'];
@@ -25,11 +25,11 @@ const SSGCreateEvent: React.FC = () => {
   const navigate = useNavigate();
   const { eventId } = useParams();
   const { profile } = useAuth();
-  const editingEvent = useMemo(() => eventId ? mockData.getEvents().find((event) => event.id === eventId) : undefined, [eventId]);
+  const editingEvent = useMemo(() => eventId ? appData.getEvents().find((event) => event.id === eventId) : undefined, [eventId]);
   const isEditing = Boolean(editingEvent);
   const editingActiveEvent = editingEvent?.status === 'active';
-  const datePart = (value: number) => new Date(value - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  const timePart = (value: number) => new Date(value).toTimeString().slice(0, 5);
+  const datePart = (value: number) => new Date(value + 8 * 3600000).toISOString().slice(0, 10);
+  const timePart = (value: number) => new Date(value + 8 * 3600000).toISOString().slice(11, 16);
   const [kind, setKind] = useState<AppEvent['kind']>(editingEvent?.kind || 'attendance');
   const [meritHours, setMeritHours] = useState(editingEvent?.meritHours || 1);
   const [occurrences, setOccurrences] = useState(1);
@@ -47,7 +47,7 @@ const SSGCreateEvent: React.FC = () => {
 
   const recipientOptions = useMemo(() => Array.from(new Set([
     ...quickRecipientGroups,
-    ...flattenDirectory(mockData.getSchoolStructure()).map((node) => node.name),
+    ...flattenDirectory(appData.getSchoolStructure()).map((node) => node.name),
   ])).filter(Boolean), []);
 
   const recipientGroups = selectedGroups;
@@ -69,19 +69,23 @@ const SSGCreateEvent: React.FC = () => {
   };
 
   const datesValid = Boolean(startDate && endDate && endDate >= startDate);
+  const sortedWindows = [...attendanceWindows].sort((a, b) => a.timeIn.localeCompare(b.timeIn));
+  const windowsOverlap = sortedWindows.some((window, index) => index > 0 && window.timeIn < sortedWindows[index - 1].timeOut);
   const windowsValid = attendanceWindows.length > 0 && attendanceWindows.every((window) => (
     Boolean(window.timeIn && window.timeOut)
     && window.timeOut > window.timeIn
     && window.lateAfterMinutes >= 0
   ));
-  const formValid = Boolean(title.trim() && description.trim() && datesValid && windowsValid && recipientGroups.length > 0);
+  const formValid = Boolean(title.trim() && description.trim() && datesValid && windowsValid && !windowsOverlap && recipientGroups.length > 0);
 
-  const scheduleEvent = (event: React.FormEvent<HTMLFormElement>) => {
+  const [saving, setSaving] = useState(false);
+  const scheduleEvent = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!formValid) return;
+    if (!formValid || saving) return;
+    setSaving(true); setSaveError('');
 
-    const firstWindow = attendanceWindows[0];
-    const lastWindow = attendanceWindows[attendanceWindows.length - 1];
+    const firstWindow = sortedWindows[0];
+    const lastWindow = sortedWindows[sortedWindows.length - 1];
     const allStudents = recipientGroups.length === 1 && recipientGroups[0] === 'All Students';
     const targetValue = recipientGroups.join(', ');
 
@@ -95,9 +99,9 @@ const SSGCreateEvent: React.FC = () => {
       created_by: profile?.uid || 'System',
       startDate,
       endDate,
-      startTime: new Date(`${startDate}T${firstWindow.timeIn}`).getTime(),
-      endTime: new Date(`${endDate}T${lastWindow.timeOut}`).getTime(),
-      attendanceWindows: attendanceWindows.map((window, index) => ({ ...window, label: `Window ${index + 1}` })),
+      startTime: new Date(`${startDate}T${firstWindow.timeIn}:00+08:00`).getTime(),
+      endTime: new Date(`${endDate}T${lastWindow.timeOut}:00+08:00`).getTime(),
+      attendanceWindows: sortedWindows.map((window, index) => ({ ...window, label: `Window ${index + 1}` })),
       sanctionRules: { late: lateSanction, absent: absentSanction },
       penaltyValue: absentSanction.value,
       penaltyUnit: absentSanction.unit,
@@ -115,10 +119,11 @@ const SSGCreateEvent: React.FC = () => {
       timestamp: Date.now(),
     };
     try {
-      if (profile && mockData.isUserScopeFrozen(profile) && profile.role !== 'admin') throw new Error('Events are frozen for your scope.');
-      if (editingEvent) mockData.updateEvent(editingEvent.id, payload);
-      else mockData.createEvent(payload);
+      if (profile && appData.isUserScopeFrozen(profile) && profile.role !== 'admin') throw new Error('Events are frozen for your scope.');
+      if (editingEvent) await appData.updateEvent(editingEvent.id, payload);
+      else await appData.createEvent(payload);
     } catch (error) { setSaveError(error instanceof Error ? error.message : 'Unable to save event.'); return; }
+    finally { setSaving(false); }
 
     navigate('/ssg/events');
   };
@@ -178,6 +183,8 @@ const SSGCreateEvent: React.FC = () => {
 
         <Surface className="space-y-5 p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><Clock3 size={20} className="text-gold-500" /> Attendance windows</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Add each time-in/time-out session and its late threshold.</p></div><Button type="button" variant="secondary" onClick={() => setAttendanceWindows((windows) => [...windows, newWindow(windows.length + 1)])}><Plus size={17} /> Add Attendance Window</Button></div>
+          {windowsOverlap && <p role="alert" className="text-sm font-semibold text-red-600 dark:text-red-300">Attendance windows must not overlap.</p>}
+          {attendanceWindows.some((window) => window.timeIn && window.timeOut && window.timeOut <= window.timeIn) && <p role="alert" className="text-sm font-semibold text-red-600 dark:text-red-300">Each time out must be later than its time in.</p>}
           <div className="space-y-4">
             {attendanceWindows.map((window, index) => <fieldset key={window.id} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700"><legend className="px-2 text-sm font-bold text-brand-900 dark:text-white">Window {index + 1}</legend><div className="grid gap-4 sm:grid-cols-3"><div className="space-y-2"><label htmlFor={`time-in-${window.id}`} className="app-field-label">Time In {index + 1}</label><input id={`time-in-${window.id}`} required type="time" className="input-field min-h-12 text-sm" value={window.timeIn} onChange={(event) => updateWindow(window.id, { timeIn: event.target.value })} /></div><div className="space-y-2"><label htmlFor={`time-out-${window.id}`} className="app-field-label">Time Out {index + 1}</label><input id={`time-out-${window.id}`} required type="time" className="input-field min-h-12 text-sm" value={window.timeOut} onChange={(event) => updateWindow(window.id, { timeOut: event.target.value })} /></div><div className="space-y-2"><label htmlFor={`late-after-${window.id}`} className="app-field-label">Late After Minutes {index + 1}</label><input id={`late-after-${window.id}`} type="number" min="0" className="input-field min-h-12 text-sm" value={window.lateAfterMinutes} onChange={(event) => updateWindow(window.id, { lateAfterMinutes: Number(event.target.value) })} /></div></div>{attendanceWindows.length > 1 && <button type="button" aria-label={`Remove attendance window ${index + 1}`} onClick={() => setAttendanceWindows((windows) => windows.filter((item) => item.id !== window.id))} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-bold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"><Trash2 size={15} /> Remove window</button>}</fieldset>)}
           </div>
@@ -195,9 +202,9 @@ const SSGCreateEvent: React.FC = () => {
           <div><p className="text-sm font-bold text-brand-900 dark:text-white">{isEditing ? 'Event actions' : 'Ready to schedule?'}</p><p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{isEditing ? 'Save your changes or update this event’s status.' : 'Review the configuration before scheduling this event.'}</p></div>
           <div aria-label="Event form actions" className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group">
             {!isEditing && <Button className="sm:w-auto" type="button" variant="secondary" onClick={() => navigate('/ssg/events')}>Cancel</Button>}
-            {editingEvent?.status === 'active' && <><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={() => { mockData.updateEvent(editingEvent.id, { endTime: editingEvent.endTime + 3600000 }); navigate('/ssg/events'); }}><Clock3 size={15}/>Extend by 1 Hour</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={() => { mockData.archiveEvent(editingEvent.id); navigate('/ssg/events'); }}><Archive size={15}/>Finish and Archive</Button></>}
-            {editingEvent?.status === 'upcoming' && <><Button className="sm:w-auto" size="sm" type="submit" variant="secondary"><Clock3 size={15}/>Reschedule</Button><Button className="sm:w-auto" size="sm" type="button" variant="warning" onClick={() => { mockData.updateEvent(editingEvent.id, { status: 'done', cancellationStatus: 'dropped' }); navigate('/ssg/events'); }}><CircleOff size={15}/>Drop</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={() => { mockData.cancelEvent(editingEvent.id); navigate('/ssg/events'); }}><XCircle size={15}/>Cancel</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={() => { mockData.archiveEvent(editingEvent.id); navigate('/ssg/events'); }}><Archive size={15}/>Archive</Button><Button className="text-red-700 sm:w-auto" size="sm" type="button" variant="danger" onClick={() => { mockData.deleteEvent(editingEvent.id); navigate('/ssg/events'); }}><Trash2 size={15}/>Delete</Button></>}
-            <Button className="col-span-2 sm:ml-2 sm:w-auto sm:min-w-32" type="submit" variant="gold" disabled={!formValid}><SaveIcon size={16}/>{isEditing ? 'Save' : 'Schedule Event'}</Button>
+            {editingEvent?.status === 'active' && <><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.updateEvent(editingEvent.id, { endTime: editingEvent.endTime + 3600000 }); navigate('/ssg/events'); }}><Clock3 size={15}/>Extend by 1 Hour</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate('/ssg/events'); }}><Archive size={15}/>Finish and Archive</Button></>}
+            {editingEvent?.status === 'upcoming' && <><Button className="sm:w-auto" size="sm" type="submit" variant="secondary"><Clock3 size={15}/>Reschedule</Button><Button className="sm:w-auto" size="sm" type="button" variant="warning" onClick={async () => { await appData.updateEvent(editingEvent.id, { status: 'done', cancellationStatus: 'dropped' }); navigate('/ssg/events'); }}><CircleOff size={15}/>Drop</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.cancelEvent(editingEvent.id); navigate('/ssg/events'); }}><XCircle size={15}/>Cancel</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate('/ssg/events'); }}><Archive size={15}/>Archive</Button><Button className="text-red-700 sm:w-auto" size="sm" type="button" variant="danger" onClick={async () => { await appData.deleteEvent(editingEvent.id); navigate('/ssg/events'); }}><Trash2 size={15}/>Delete</Button></>}
+            <Button className="col-span-2 sm:ml-2 sm:w-auto sm:min-w-32" type="submit" variant="gold" disabled={!formValid || saving}><SaveIcon size={16}/>{isEditing ? 'Save' : 'Schedule Event'}</Button>
           </div>
         </div>
       </form>

@@ -1,7 +1,8 @@
+import ProfileAvatar from '../components/ui/ProfileAvatar';
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../components/AuthContext';
-import { mockData } from '../lib/mockBackend';
+import { appData, documentUrl } from '../lib/backend';
 import { Application, AppEvent, UserProfile, SchoolNode, UserStats } from '../types';
 import Button from '../components/ui/Button';
 import CustomSelect from '../components/ui/CustomSelect';
@@ -51,7 +52,7 @@ const SSGPanel: React.FC = () => {
   const [pendingAdjustment, setPendingAdjustment] = useState<{ delta: number; action: string } | null>(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [memberError, setMemberError] = useState('');
-  const [memberData, setMemberData] = useState({ name: '', email: '', username: '', studentId: '', password: 'password123' });
+  const [memberData, setMemberData] = useState({ name: '', email: '', username: '', studentId: '', password: '' });
   
   // Specific Asset Input State
   const [assetInput, setAssetInput] = useState('');
@@ -83,15 +84,16 @@ const SSGPanel: React.FC = () => {
 
   // Fix: Enhanced refresh to update selected student details if a modal is active
   const refresh = () => {
-    setApps(profile && typeof mockData.getVisibleApplications === 'function' ? mockData.getVisibleApplications(profile.uid) : mockData.getApplications());
-    setStructure(profile && typeof mockData.getVisibleSchoolStructure === 'function'
-      ? mockData.getVisibleSchoolStructure(profile.uid)
-      : mockData.getSchoolStructure());
-    setEvents(profile && typeof mockData.getVisibleEvents === 'function' ? mockData.getVisibleEvents(profile.uid) : mockData.getEvents());
+    setPath(previous => previous.map(node => appData.getSchoolNodePath(node.id).at(-1)).filter(Boolean) as SchoolNode[]);
+    setApps(profile && typeof appData.getVisibleApplications === 'function' ? appData.getVisibleApplications(profile.uid) : appData.getApplications());
+    setStructure(profile && typeof appData.getVisibleSchoolStructure === 'function'
+      ? appData.getVisibleSchoolStructure(profile.uid)
+      : appData.getSchoolStructure());
+    setEvents(profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents());
     
     // Check if the current user has selected student open to refresh their data
     if (selectedStudent) {
-      const freshUser = mockData.getUserDetail(selectedStudent.uid);
+      const freshUser = appData.getUserDetail(selectedStudent.uid);
       if (freshUser) {
         setSelectedStudent({ ...freshUser.profile, stats: freshUser.stats });
       }
@@ -99,30 +101,29 @@ const SSGPanel: React.FC = () => {
   };
 
   // Fix: Implemented missing handleApprove function for the applicants tab
-  const handleApprove = (id: string, asMayor: boolean = false) => {
+  const handleApprove = async (id: string, asMayor: boolean = false) => {
     if (!canReviewApplicants || !currentNode || !nodeApplicants.some(app => app.id === id)) return;
-    mockData.approveApplication(id, asMayor ? 'mayor' : 'student');
-    if (asMayor) mockData.assignSectionMayor(id, currentNode.id, currentNode.name);
+    await appData.approveApplication(id, asMayor ? 'mayor' : 'student');
     refresh();
   };
 
   // Fix: Implemented missing handleAdjustSanctionHours function for student detail modal
-  const handleAdjustSanctionHours = (uid: string, delta: number) => {
-    mockData.adjustSanctionHours(uid, delta, `Administrative Adjustment: ${profile?.name}`);
+  const handleAdjustSanctionHours = async (uid: string, delta: number) => {
+    await appData.adjustSanctionHours(uid, delta, `Administrative Adjustment: ${profile?.name}`);
     refresh();
   };
 
-  const handleAssignRole = (uid: string, role: 'student' | 'mayor') => {
-    if (role === 'mayor' && currentNode) mockData.assignSectionMayor(uid, currentNode.id, currentNode.name);
-    else mockData.assignRole(uid, role);
-    const freshUser = mockData.getUserDetail(uid);
+  const handleAssignRole = async (uid: string, role: 'student' | 'mayor') => {
+    if (role === 'mayor' && currentNode) await appData.assignSectionMayor(uid, currentNode.id, currentNode.name);
+    else await appData.assignRole(uid, role);
+    const freshUser = appData.getUserDetail(uid);
     if (freshUser) setSelectedStudent({ ...freshUser.profile, stats: freshUser.stats });
     refresh();
   };
 
-  const confirmAdjustment = () => {
+  const confirmAdjustment = async () => {
     if (!selectedStudent || !pendingAdjustment) return;
-    handleAdjustSanctionHours(selectedStudent.uid, pendingAdjustment.delta);
+    await handleAdjustSanctionHours(selectedStudent.uid, pendingAdjustment.delta);
     setPendingAdjustment(null);
   };
 
@@ -153,7 +154,7 @@ const SSGPanel: React.FC = () => {
     }, { enableHighAccuracy: true });
   };
 
-  const handleCreateEvent = () => {
+  const handleCreateEvent = async () => {
     const directoryAudience = audienceMode === 'directory_node' ? createEventAudienceTarget(eventAudiencePath) : null;
     const participantsType: AppEvent['participantsType'] = audienceMode === 'specific' ? 'specific' : directoryAudience?.participantsType || 'all';
     const finalTargetValue = audienceMode === 'specific' ? 'Specific people' : directoryAudience?.targetValue || 'All Students';
@@ -161,7 +162,7 @@ const SSGPanel: React.FC = () => {
       ? { mode: 'specific_people', specificUserIds: eventData.specificPeople }
       : directoryAudience?.audienceTarget || { mode: 'all' };
 
-    mockData.createEvent({
+    await appData.createEvent({
       title: eventData.title,
       description: eventData.description,
       status: 'active',
@@ -192,17 +193,17 @@ const SSGPanel: React.FC = () => {
   const navigateTo = (node: SchoolNode) => setPath([...path, node]);
   const goBackTo = (index: number) => setPath(index === -1 ? [] : path.slice(0, index + 1));
 
-  const handleSaveNode = (savedNode: SchoolNode) => {
+  const handleSaveNode = async (savedNode: SchoolNode) => {
     if (!nodeEditor) return;
-    if (nodeEditor.node) mockData.updateSchoolNode(nodeEditor.node.id, savedNode);
-    else mockData.addSchoolNode(nodeEditor.parentId, savedNode);
+    if (nodeEditor.node) await appData.updateSchoolNode(nodeEditor.node.id, savedNode);
+    else await appData.addSchoolNode(nodeEditor.parentId, savedNode);
     setNodeEditor(null);
     refresh();
   };
 
-  const handleApplyPreset = (preset: SchoolNode) => {
+  const handleApplyPreset = async (preset: SchoolNode) => {
     const parentId = currentNode && ['campus', 'school'].includes(currentNode.type) ? currentNode.id : null;
-    mockData.addSchoolNode(parentId, preset);
+    await appData.addSchoolNode(parentId, preset);
     setShowPresetModal(false);
     refresh();
   };
@@ -217,8 +218,8 @@ const SSGPanel: React.FC = () => {
   const [showDeletePass, setShowDeletePass] = useState(false);
   const [showDeleteConfirmPass, setShowDeleteConfirmPass] = useState(false);
 
-  const handleArchiveNode = (node: SchoolNode) => {
-    mockData.archiveSchoolNode(node.id);
+  const handleArchiveNode = async (node: SchoolNode) => {
+    await appData.archiveSchoolNode(node.id);
     refresh();
   };
 
@@ -233,20 +234,18 @@ const SSGPanel: React.FC = () => {
     setShowDeleteConfirmPass(false);
   };
 
-  const handleConfirmDeleteNode = () => {
+  const handleConfirmDeleteNode = async () => {
     if (!deleteTargetNode) return;
     setDeleteError('');
 
-    const isPassValid = isMock
-      ? mockData.verifyUserPassword(profile?.uid || '', deletePassword)
-      : true;
+    const isPassValid = await appData.verifyUserPassword(profile?.uid || '', deletePassword);
 
     if (!isPassValid) {
       setDeleteError('Incorrect password. Please enter your valid account password.');
       return;
     }
 
-    const success = mockData.deleteSchoolNode(deleteTargetNode.id, profile?.uid);
+    const success = await appData.deleteSchoolNode(deleteTargetNode.id, profile?.uid);
     if (!success) {
       setDeleteError(
         `Cannot delete "${deleteTargetNode.name}". Units with sub-units or active references (students, officers, or events) cannot be deleted. Please archive the unit instead.`
@@ -269,19 +268,19 @@ const SSGPanel: React.FC = () => {
   const currentNode = path.length > 0 ? path[path.length - 1] : null;
   const subUnits = currentNode ? (currentNode.children || []) : structure;
   const isAtSection = currentNode?.type === 'section' || currentNode?.type === 'block';
-  const students = isAtSection ? mockData.getStudentsBySection(currentNode.name, currentNode.id) : [];
+  const students = isAtSection ? appData.getStudentsBySection(currentNode.name, currentNode.id) : [];
   const nodeApplicants = isAtSection && currentNode
-    ? apps.filter(app => profileMatchesDirectorySection(app.form_data, currentNode.id, structure))
+    ? apps.filter(app => app.status === 'pending' && profileMatchesDirectorySection(app.form_data, currentNode.id, structure))
     : [];
 
-  const createMember = () => {
+  const createMember = async () => {
     if (!currentNode) return;
     setMemberError('');
     try {
-      if (memberData.password.length < 8) throw new Error('Temporary password must contain at least 8 characters.');
-      const fullPath = mockData.getSchoolNodePath(currentNode.id);
+      if (memberData.password.length < 12) throw new Error('Temporary password must contain at least 12 characters.');
+      const fullPath = appData.getSchoolNodePath(currentNode.id);
       const serialized = serializeAcademicAssignment(fullPath);
-      mockData.createSectionMembers([{
+      await appData.createSectionMembers([{
         makeMayor: false,
         profile: {
           name: memberData.name, email: memberData.email, username: memberData.username,
@@ -289,7 +288,7 @@ const SSGPanel: React.FC = () => {
           school_data: { ...serialized.schoolData, school_id: serialized.assignment.campusId || 'school_rmc', academic_assignment: serialized.assignment },
         },
       }], currentNode.id, currentNode.name, memberData.password);
-      setMemberData({ name: '', email: '', username: '', studentId: '', password: 'password123' });
+      setMemberData({ name: '', email: '', username: '', studentId: '', password: '' });
       setShowMemberModal(false);
       refresh();
     } catch (caught) {
@@ -430,7 +429,7 @@ const SSGPanel: React.FC = () => {
                    {students.map((student) => (
                      <article aria-label={student.name} className="mobile-data-card space-y-3" key={student.uid}>
                        <div className="flex min-w-0 items-center gap-3">
-                         <img alt="" src={student.photo_url || undefined} className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                         <ProfileAvatar alt="" src={student.photo_url || undefined} className="h-12 w-12 shrink-0 rounded-xl object-cover" />
                          <div className="min-w-0"><h4 className="font-bold text-brand-900 [overflow-wrap:anywhere] dark:text-white">{student.name}</h4><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-300">{student.student_id}</p><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-300">{student.email}</p></div>
                        </div>
                        <dl className="grid grid-cols-2 gap-3 text-sm"><div><dt className="font-semibold text-slate-500 dark:text-slate-400">Role</dt><dd className="text-slate-700 dark:text-slate-200">{roleLabels[student.role]}</dd></div><div><dt className="font-semibold text-slate-500 dark:text-slate-400">Sanctions</dt><dd className="text-red-600 dark:text-red-300">{student.stats.sanction_hours}h</dd></div></dl>
@@ -453,11 +452,13 @@ const SSGPanel: React.FC = () => {
                      {nodeApplicants.map((app) => (
                        <div key={app.id} onClick={() => setSelectedApplicant(app)} className="cursor-pointer bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-gold-400 transition-all flex flex-col justify-between space-y-3">
                          <div className="flex items-center gap-3">
-                           <img alt={app.form_data.name} src={app.form_data.photo_url || `https://i.pravatar.cc/150?u=${app.id}`} className="w-12 h-12 rounded-xl object-cover shadow-sm border border-slate-200 dark:border-slate-700 shrink-0" />
+                           <ProfileAvatar alt={app.form_data.name} src={app.form_data.photo_url || '/avatar-placeholder.svg'} className="w-12 h-12 rounded-xl object-cover shadow-sm border border-slate-200 dark:border-slate-700 shrink-0" />
                            <div className="min-w-0 flex-1">
                              <h4 className="text-xs font-black uppercase tracking-tight text-brand-900 dark:text-slate-100 truncate">{app.form_data.name}</h4>
                              <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">{app.form_data.student_id}</p>
                              <p className="text-[10px] text-slate-400 truncate">{app.form_data.email}</p>
+                             {Object.entries(app.documents || {}).map(([kind, path]) => <button key={kind} className="mr-3 text-xs underline" onClick={async () => { const url = await documentUrl(path); window.open(url, '_blank', 'noopener,noreferrer'); }}>{kind.replace('_', ' ')}</button>)}
+                             <button className="text-xs text-red-600 underline" onClick={async () => { const reason = window.prompt('Reason for returning this admission application:'); if (reason?.trim()) { await appData.rejectApplication(app.id, reason); refresh(); } }}>Return for revision</button>
                            </div>
                          </div>
                          <div className="flex gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800">
@@ -695,7 +696,7 @@ const SSGPanel: React.FC = () => {
           <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 sm:flex-row">
             <div className="sm:w-[42%] bg-brand-900 p-6 flex flex-col items-center text-center border-b-2 sm:border-b-0 sm:border-r-2 border-gold-400/20">
                <div className="relative mb-5 mt-4">
-                  <img alt={`${selectedStudent.name} profile`} src={selectedStudent.photo_url || undefined} className="w-28 h-28 rounded-2xl object-cover border-4 border-gold-400/30 shadow-lg" />
+                  <ProfileAvatar alt={`${selectedStudent.name} profile`} src={selectedStudent.photo_url || undefined} className="w-28 h-28 rounded-2xl object-cover border-4 border-gold-400/30 shadow-lg" />
                   <div className="absolute -bottom-2 -right-2 bg-gold-400 p-2 rounded-lg border-2 border-brand-900 shadow-lg text-brand-900">
                      <Shield size={16} />
                   </div>
@@ -776,8 +777,8 @@ const SSGPanel: React.FC = () => {
         {selectedApplicant && (
           <div className="space-y-5 animate-in fade-in">
             <div className="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <img
-                src={selectedApplicant.form_data.photo_url || `https://i.pravatar.cc/150?u=${selectedApplicant.id}`}
+              <ProfileAvatar
+                src={selectedApplicant.form_data.photo_url || '/avatar-placeholder.svg'}
                 alt={selectedApplicant.form_data.name}
                 className="w-16 h-16 rounded-2xl object-cover ring-2 ring-gold-400/50 shadow-md shrink-0"
               />

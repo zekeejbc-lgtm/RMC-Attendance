@@ -1,124 +1,45 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ref, onValue } from 'firebase/database';
-import { auth, db } from '../firebase';
 import { useAuth } from '../components/AuthContext';
-import { Application } from '../types';
 import Button from '../components/ui/Button';
 import ThemeToggle from '../components/ui/ThemeToggle';
-import { Clock, CheckCircle2, XCircle, AlertCircle, LogOut } from 'lucide-react';
-import { mockData, mockAuth } from '../lib/mockBackend';
+import { appData, appAuth, uploadDocument, documentUrl, refreshData } from '../lib/backend';
+import { supabase } from '../lib/supabase';
 
-const RegisterStatus: React.FC = () => {
-  const { user, isMock, loading: authLoading } = useAuth();
-  const [application, setApplication] = useState<Application | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function RegisterStatus() {
+  const { user, profile, loading, revision } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (authLoading) return;
-
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
-    if (isMock) {
-      const refresh = () => {
-        const apps = mockData.getApplications();
-        const myApp = apps.find(a => a.id === user.uid);
-        setApplication(myApp || null);
-        setLoading(false);
-      };
-      refresh();
-      const interval = setInterval(refresh, 2000);
-      return () => clearInterval(interval);
-    } else {
-      try {
-        const appRef = ref(db, `applications/${user.uid}`);
-        const unsubscribe = onValue(appRef, (snapshot) => {
-          setApplication(snapshot.val());
-          setLoading(false);
-        });
-        return () => unsubscribe();
-      } catch (e) { console.error(e); }
-    }
-  }, [authLoading, user, isMock]);
-
-  const handleLogout = async () => {
-    if (isMock) {
-      mockAuth.signOut();
-      window.location.reload();
-    } else {
-      await auth.signOut();
-      navigate('/login');
-    }
+  const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const application = appData.getApplications().find(a => a.id === user?.uid);
+  useEffect(() => { if (!loading && !user) navigate('/login'); }, [loading, user, navigate]);
+  if (loading) return <p role="status" aria-label="Loading application status" className="p-8">Loading admission status…</p>;
+  const upload = async (file: File | undefined, kind: string) => {
+    if (!file) return;
+    setUploading(true); setError('');
+    try {
+      const path = await uploadDocument(file, kind);
+      const { error } = await supabase.rpc('rmc_admission_update', { documents: { [kind]: path } });
+      if (error) throw error; await refreshData();
+    } catch (error) { setError(error instanceof Error ? error.message : 'Unable to upload document.'); }
+    finally { setUploading(false); }
   };
-
-  if (authLoading || loading) return (
-    <div className="flex min-h-dvh items-center justify-center bg-slate-50 dark:bg-slate-950" role="status" aria-label="Loading application status">
-      <div aria-hidden="true" className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-brand-900 dark:border-gold-400"></div>
-    </div>
-  );
-
-  return (
-    <div className="relative flex min-h-dvh items-start justify-center overflow-y-auto bg-brand-900 px-4 py-6 pt-20 dark:bg-slate-950 sm:px-6 lg:items-center lg:py-10">
-      <div className="absolute top-4 right-4 z-20">
-        <ThemeToggle />
-      </div>
-
-      <div className="w-full max-w-md min-w-0 rounded-3xl border border-slate-100 bg-white p-5 text-center shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:p-8">
-        {!application ? (
-          <div className="space-y-6">
-            <AlertCircle size={64} className="mx-auto text-gold-500" />
-            <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">No Application Found</h2>
-            <p className="break-words text-slate-500 dark:text-slate-400">You haven't submitted a registration application yet.</p>
-            <Button onClick={() => navigate('/register')}>Apply</Button>
-            <Button variant="secondary" onClick={handleLogout}>Sign Out</Button>
-          </div>
-        ) : application.status === 'pending' ? (
-          <div className="space-y-6 animate-pulse">
-            <div className="w-20 h-20 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-full mx-auto flex items-center justify-center shadow-inner">
-               <Clock size={40} />
-            </div>
-            <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Review Pending</h2>
-            <div className="break-words p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-700/60 text-sm text-slate-500 dark:text-slate-400 leading-relaxed text-center">
-              Your application is being verified. Log in as an <span className="font-bold text-brand-900 dark:text-gold-400 underline cursor-pointer" onClick={() => handleLogout()}>Admin</span> to approve it.
-            </div>
-            <Button variant="secondary" onClick={handleLogout}>
-              <LogOut size={20}/> Sign Out
-            </Button>
-          </div>
-        ) : application.status === 'rejected' ? (
-          <div className="space-y-6">
-            <XCircle size={64} className="mx-auto text-red-500" />
-            <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Application Rejected</h2>
-            <div className="break-words p-4 bg-red-50 dark:bg-red-950/50 rounded-2xl border border-red-100 dark:border-red-900/50 text-sm text-red-600 dark:text-red-300">
-              <p className="font-bold mb-1">Reason:</p>
-              <p className="break-words [overflow-wrap:anywhere]">{application.rejection_reason || 'Information provided does not match records.'}</p>
-            </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500">Trial Count: {application.rejection_count}/3 (Monthly)</p>
-            {application.rejection_count >= 3 ? (
-              <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-500 dark:text-slate-400 text-xs italic">
-                Form locked. Max rejection limit reached.
-              </div>
-            ) : (
-              <Button aria-label={`Re-apply (trial ${application.rejection_count + 1})`} onClick={() => navigate('/register')}>Re-apply</Button>
-            )}
-            <Button variant="secondary" onClick={handleLogout}>Sign Out</Button>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <CheckCircle2 size={64} className="mx-auto text-green-500" />
-            <h2 className="text-2xl font-bold text-brand-900 dark:text-slate-100">Account Approved!</h2>
-            <p className="text-slate-500 dark:text-slate-400">Welcome to the Regal system. Your profile is now active.</p>
-            <Button variant="gold" onClick={() => window.location.reload()}>Dashboard</Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default RegisterStatus;
+  return <div className="min-h-dvh bg-brand-900 p-5 pt-20">
+    <div className="absolute top-4 right-4"><ThemeToggle /></div>
+    <main className="app-surface mx-auto max-w-lg space-y-5 p-6">
+      <h1 className="text-2xl font-bold">{profile ? 'Account approved' : application?.status === 'rejected' ? 'Application needs revision' : application ? 'Admission review pending' : 'No application found'}</h1>
+      <p className="text-sm text-slate-500 [overflow-wrap:anywhere]">{profile ? 'Your account is active.' : application?.status === 'rejected' ? application.rejection_reason : 'Your school officer will review your admission details and supporting documents.'}</p>
+      {application && <dl className="space-y-2 text-sm"><dt>Name</dt><dd>{application.form_data.name}</dd><dt>Student ID</dt><dd>{application.form_data.student_id}</dd><dt>Section</dt><dd>{application.form_data.school_data.section}</dd></dl>}
+      {application && application.status !== 'approved' && <section className="space-y-4">
+        <h2 className="font-bold">Admission documents</h2>
+        <p className="text-sm text-slate-500">Private uploads. JPG, PNG, WebP, or PDF, up to 5 MB each.</p>
+        {([['photo', 'Profile photo'], ['id_front', 'Student ID front'], ['id_back', 'Student ID back']] as const).map(([kind, label]) => <label key={kind} className="block text-sm">{label}<input className="mt-2 block w-full" type="file" accept={kind === 'photo' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,application/pdf'} disabled={uploading} onChange={event => void upload(event.target.files?.[0], kind)} />{application.documents?.[kind] && <button type="button" className="mt-1 underline" onClick={async () => { const url = await documentUrl(application.documents![kind]); window.open(url, '_blank', 'noopener,noreferrer'); }}>View uploaded document</button>}</label>)}
+      </section>}
+      {error && <p role="alert" className="text-red-600">{error}</p>}
+      {uploading && <p role="status">Uploading…</p>}
+      {profile && <Button onClick={() => navigate('/dashboard')}>Open dashboard</Button>}
+      {application?.status === 'rejected' && application.rejection_count < 3 && <Button onClick={() => navigate('/register')}>Revise and resubmit</Button>}
+      <Button variant="secondary" onClick={async () => { await appAuth.signOut(); navigate('/login'); }}>Sign out</Button>
+    </main>
+  </div>;
+}

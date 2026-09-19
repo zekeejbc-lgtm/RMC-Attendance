@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { AppEvent } from '../types';
-import { mockData } from '../lib/mockBackend';
+import { appData, uploadDocument } from '../lib/backend';
 import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { Collapsible } from '../components/ui/Collapsible';
@@ -13,87 +13,9 @@ import {
   Send, FileText
 } from 'lucide-react';
 
-// Mock initial extra events so student has rich data
-const MOCK_EVENTS: AppEvent[] = [
-  {
-    id: 'e_active_1',
-    title: 'University Midyear Leadership Convocation',
-    description: 'Mandatory assembly for all student council members, section mayors, and departmental officers. Discussions cover campus initiatives and budget allocations.',
-    status: 'active',
-    created_by: 'SSG President',
-    startTime: Date.now() - 1800000, // started 30 mins ago
-    endTime: Date.now() + 5400000, // ends in 1.5 hrs
-    penaltyValue: 8,
-    penaltyUnit: 'hours',
-    participantsType: 'all',
-    target: { all: true },
-    location: { lat: 7.0736, lng: 125.6126, radius_meters: 300 },
-    timestamp: Date.now()
-  },
-  {
-    id: 'e_sched_1',
-    title: 'RMC Campus Sports & Cultural Festival 2026',
-    description: 'Annual inter-departmental athletic games and cultural competitions. All students are required to log attendance during opening and closing ceremonies.',
-    status: 'upcoming',
-    created_by: 'Sports Development Committee',
-    startTime: Date.now() + 86400000 * 2, // 2 days later
-    endTime: Date.now() + 86400000 * 2 + 14400000,
-    penaltyValue: 12,
-    penaltyUnit: 'hours',
-    participantsType: 'department',
-    target: { all: false, department: ['Senior High School'] },
-    location: { lat: 7.0740, lng: 125.6130, radius_meters: 500 },
-    timestamp: Date.now()
-  },
-  {
-    id: 'e_sched_2',
-    title: 'Career & College Program Orientation',
-    description: 'Orientation session for Grade 12 Senior High School students regarding tertiary education offerings and scholarship tracks.',
-    status: 'upcoming',
-    created_by: 'Guidance Office',
-    startTime: Date.now() + 86400000 * 5, // 5 days later
-    endTime: Date.now() + 86400000 * 5 + 7200000,
-    penaltyValue: 5,
-    penaltyUnit: 'hours',
-    participantsType: 'department',
-    target: { all: false, department: ['Senior High School'] },
-    location: { lat: 7.0725, lng: 125.6120, radius_meters: 250 },
-    timestamp: Date.now()
-  },
-  {
-    id: 'e_archived_1',
-    title: 'First Semester General Assembly 2025',
-    description: 'Institutional opening assembly for all enrolled students at Rizal Memorial Colleges.',
-    status: 'done',
-    created_by: 'SSG Executive Board',
-    startTime: Date.now() - 86400000 * 30,
-    endTime: Date.now() - 86400000 * 30 + 10800000,
-    penaltyValue: 10,
-    penaltyUnit: 'hours',
-    participantsType: 'all',
-    target: { all: true },
-    location: { lat: 7.0736, lng: 125.6126, radius_meters: 400 },
-    timestamp: Date.now() - 86400000 * 30
-  },
-  {
-    id: 'e_archived_2',
-    title: 'Disaster Risk & Safety Drill',
-    description: 'Campus-wide emergency evacuation drill supervised by the Safety and Logistics Unit.',
-    status: 'done',
-    created_by: 'Campus Safety Office',
-    startTime: Date.now() - 86400000 * 14,
-    endTime: Date.now() - 86400000 * 14 + 3600000,
-    penaltyValue: 4,
-    penaltyUnit: 'hours',
-    participantsType: 'all',
-    target: { all: true },
-    location: { lat: 7.0736, lng: 125.6126, radius_meters: 300 },
-    timestamp: Date.now() - 86400000 * 14
-  }
-];
 
 const StudentEvents: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, revision } = useAuth();
   
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
@@ -114,9 +36,11 @@ const StudentEvents: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreviewName, setFilePreviewName] = useState<string>('');
   const [submittedExcuse, setSubmittedExcuse] = useState(false);
+  const [excuseError, setExcuseError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  // Combine backend mock events + additional student events
-  const allEvents = useMemo(() => profile ? mockData.getRecipientEvents(profile.uid) : [], [profile]);
+  // Load the current recipient events from the authorized snapshot.
+  const allEvents = useMemo(() => profile ? appData.getRecipientEvents(profile.uid) : [], [profile, revision]);
 
   // Filtered lists
   const filteredEvents = useMemo(() => {
@@ -133,10 +57,7 @@ const StudentEvents: React.FC = () => {
   const scheduledEvents = useMemo(() => filteredEvents.filter(e => e.status === 'upcoming'), [filteredEvents]);
   const archivedEvents = useMemo(() => filteredEvents.filter(e => e.status === 'done'), [filteredEvents]);
 
-  const canFileExcuse = (event: AppEvent) => (
-    event.endTime > Date.now()
-    && event.status !== 'done'
-  );
+  const canFileExcuse = (event: AppEvent) => !event.cancellationStatus;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -146,17 +67,16 @@ const StudentEvents: React.FC = () => {
     }
   };
 
-  const handleExcuseSubmit = (e: React.FormEvent) => {
+  const handleExcuseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedEvent || !canFileExcuse(selectedEvent) || !excuseDetails) return;
-    setSubmittedExcuse(true);
-    setTimeout(() => {
-      setSubmittedExcuse(false);
-      setShowExcuseModal(false);
-      setExcuseDetails('');
-      setSelectedFile(null);
-      setFilePreviewName('');
-    }, 2000);
+    if (!selectedEvent || !profile || submitting) return;
+    setSubmitting(true); setExcuseError('');
+    try {
+      const proof = selectedFile ? await uploadDocument(selectedFile, 'excuses') : undefined;
+      await appData.submitExcuseApplication({ event_id: selectedEvent.id, reason: excuseDetails, category: /medical|health/i.test(excuseReason) ? 'medical' : /emergency/i.test(excuseReason) ? 'emergency' : /academic|official/i.test(excuseReason) ? 'institutional' : 'personal', proof_url: proof });
+      setSubmittedExcuse(true);
+    } catch (error) { setExcuseError(error instanceof Error ? error.message : 'Unable to submit excuse.'); }
+    finally { setSubmitting(false); }
   };
 
   return (
@@ -370,7 +290,7 @@ const StudentEvents: React.FC = () => {
               </p>
               <button
                 aria-label="File for excuse"
-                onClick={() => setShowExcuseModal(true)}
+                onClick={() => { setSubmittedExcuse(false); setExcuseError(''); setExcuseDetails(''); setSelectedFile(null); setFilePreviewName(''); setShowExcuseModal(true); }}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gold-gradient px-6 py-3 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition-all hover:brightness-110 active:scale-95 sm:w-auto"
                 type="button"
               >
@@ -483,6 +403,7 @@ const StudentEvents: React.FC = () => {
               </div>
             ) : (
               <form id="event-excuse-form" onSubmit={handleExcuseSubmit} className="space-y-4">
+                {excuseError && <p role="alert" className="text-sm text-red-600">{excuseError}</p>}
                 {/* Event Summary */}
                 <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Target Event</p>

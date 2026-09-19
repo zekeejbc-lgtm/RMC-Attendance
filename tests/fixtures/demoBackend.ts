@@ -1,9 +1,9 @@
-import { isEventRecipient } from './eventAudience';
+import { isEventRecipient } from '../../lib/eventAudience';
 
-import { TEST_ACCOUNTS } from './seed';
-import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, UserRole } from '../types';
-import { schoolOfficialRoles, DEFAULT_CORE_ROLES, setMockDataRef, hasPermission } from './accessControl';
-import { serializeAcademicAssignment, profileMatchesDirectorySection, findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNodeInSubtree, migrateAcademicDirectory } from './academicDirectory';
+import { TEST_ACCOUNTS } from '../../lib/seed';
+import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, UserRole } from '../../types';
+import { schoolOfficialRoles, DEFAULT_CORE_ROLES, setMockDataRef, hasPermission } from '../../lib/accessControl';
+import { serializeAcademicAssignment, profileMatchesDirectorySection, findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNodeInSubtree, migrateAcademicDirectory } from '../../lib/academicDirectory';
 
 const STORAGE_KEY = 'rmc_regalia_db';
 
@@ -19,11 +19,11 @@ interface MockDB {
   schema_version?: number;
   application_credentials?: Record<string, string>;
   deleted_seed_accounts?: string[];
-  system_freeze?: import('../types').SystemFreezeState;
-  frozen_nodes?: Record<string, import('../types').NodeFreezeState>;
-  payment_info?: import('../types').PaymentInfo;
-  core_roles?: Record<string, import('../types').CoreRole>;
-  custom_roles?: Record<string, import('../types').CustomRole>;
+  system_freeze?: import('../../types').SystemFreezeState;
+  frozen_nodes?: Record<string, import('../../types').NodeFreezeState>;
+  payment_info?: import('../../types').PaymentInfo;
+  core_roles?: Record<string, import('../../types').CoreRole>;
+  custom_roles?: Record<string, import('../../types').CustomRole>;
   audit_logs?: Array<{
     id: string;
     action: 'account.created' | 'account.deleted';
@@ -821,7 +821,7 @@ export const mockSeed = () => {
   saveDB(db);
 };
 
-const requireSessionPermission = (permission: import('../types').AppPermission, allowFrozen = false) => {
+const requireSessionPermission = (permission: import('../../types').AppPermission, allowFrozen = false) => {
   const db = getDB();
   const actor = db.users[localStorage.getItem('rmc_mock_session') || '']?.profile;
   if (!actor || !hasPermission(actor.role, permission)) throw new Error(`Permission required: ${permission}`);
@@ -1681,7 +1681,7 @@ export const mockData = {
       reminders: []
     };
   },
-  updatePaymentInfo: (updates: Partial<import('../types').PaymentInfo>) => {
+  updatePaymentInfo: (updates: Partial<import('../../types').PaymentInfo>) => {
     requireSessionPermission('system.payment_reminders', true);
     const db = getDB();
     db.payment_info = {
@@ -1722,7 +1722,7 @@ export const mockData = {
         reminders: []
       };
     }
-    const reminderLog: import('../types').PaymentReminderLog = {
+    const reminderLog: import('../../types').PaymentReminderLog = {
       id: `rem_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       sentAt: Date.now(),
       sentBy: data.actorName || 'System Administrator',
@@ -1761,7 +1761,7 @@ export const mockData = {
     }
     return db.core_roles;
   },
-  updateCoreRole: (roleId: string, updates: Partial<import('../types').CoreRole>) => {
+  updateCoreRole: (roleId: string, updates: Partial<import('../../types').CoreRole>) => {
     requireSessionPermission('system.manage_rbac', true);
     const db = getDB();
     if (!db.core_roles) db.core_roles = JSON.parse(JSON.stringify(DEFAULT_CORE_ROLES));
@@ -1791,14 +1791,14 @@ export const mockData = {
     name: string;
     description: string;
     isPositionOnly: boolean;
-    permissions: import('../types').AppPermission[];
+    permissions: import('../../types').AppPermission[];
     createdBy?: string;
   }) => {
     requireSessionPermission('system.manage_rbac', true);
     const db = getDB();
     if (!db.custom_roles) db.custom_roles = {};
     const id = `role_${roleData.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${Date.now().toString(36)}`;
-    const newRole: import('../types').CustomRole = {
+    const newRole: import('../../types').CustomRole = {
       id,
       name: roleData.name.trim(),
       description: roleData.description.trim(),
@@ -1812,7 +1812,7 @@ export const mockData = {
     notifyAuthChange();
     return newRole;
   },
-  updateCustomRole: (roleId: string, updates: Partial<import('../types').CustomRole>) => {
+  updateCustomRole: (roleId: string, updates: Partial<import('../../types').CustomRole>) => {
     requireSessionPermission('system.manage_rbac', true);
     const db = getDB();
     if (!db.custom_roles || !db.custom_roles[roleId]) throw new Error('Role not found.');

@@ -60,13 +60,12 @@ vi.mock('../AuthContext', () => ({
   }),
 }));
 
-vi.mock('../../firebase', () => ({
-  auth: { signOut: authMocks.firebaseSignOut },
-}));
 
-vi.mock('../../lib/mockBackend', () => ({
-  mockAuth: { signOut: authMocks.mockSignOut },
-  mockData: {
+vi.mock('../../lib/backend', () => ({
+  appAuth: { signOut: authMocks.mockSignOut },
+  documentUrl: vi.fn(async (path: string) => path),
+  appData: {
+    getPaymentInfo: () => ({ reminders: [] }),
     getSystemFreezeStatus: () => ({ isFrozen: false, reason: '' }),
     isUserScopeFrozen: () => false,
   },
@@ -220,7 +219,7 @@ it('shows the merged SSG hierarchy without duplicate member or attendance admini
   expect(within(navigation).queryByRole('button', { name: /manage members/i })).not.toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: /collapse sidebar/i }));
-  expect(within(navigation).queryByRole('button', { name: /attendance dashboard/i })).not.toBeInTheDocument();
+  expect(within(navigation).getByRole('button', { name: /attendance dashboard/i })).toBeInTheDocument();
   expect(within(navigation).queryByRole('button', { name: /manage members/i })).not.toBeInTheDocument();
 });
 

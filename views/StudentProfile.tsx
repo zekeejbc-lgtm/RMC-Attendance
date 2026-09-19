@@ -1,10 +1,10 @@
+import ProfileAvatar from '../components/ui/ProfileAvatar';
+import { supabase } from '../lib/supabase';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
-import { ref, update } from 'firebase/database';
-import { auth as firebaseAuth, db } from '../firebase';
-import { mockAuth, mockData } from '../lib/mockBackend';
-import { 
+import { appAuth, appData, uploadDocument } from '../lib/backend';
+import {
   User, ShieldCheck, KeyRound, Lock, Smartphone, CheckCircle2,
   Building2, GraduationCap, School, Sparkles, Save, Eye, EyeOff, AlertCircle, LogOut, Pencil
 } from 'lucide-react';
@@ -20,11 +20,7 @@ const StudentProfile: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      if (isMock) {
-        mockAuth.signOut();
-      } else {
-        await firebaseAuth.signOut();
-      }
+      await appAuth.signOut();
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
@@ -47,6 +43,11 @@ const StudentProfile: React.FC = () => {
   const [is2FAEnabled, setIs2FAEnabled] = useState(false);
   const [show2FASetup, setShow2FASetup] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [factorId, setFactorId] = useState('');
+  const [factorUri, setFactorUri] = useState('');
+  const [factorSecret, setFactorSecret] = useState('');
+  const [factorError, setFactorError] = useState('');
+  useEffect(() => { void supabase.auth.mfa.listFactors().then(({ data }) => { const factor = data?.totp.find(f => f.status === 'verified'); setIs2FAEnabled(Boolean(factor)); if (factor) setFactorId(factor.id); }); }, []);
   const [twoFactorStatus, setTwoFactorStatus] = useState<'idle' | 'success'>('idle');
 
   // Editable Profile fields
@@ -66,7 +67,7 @@ const StudentProfile: React.FC = () => {
 
   if (!profile) return null;
 
-  const handlePasswordReset = (e: React.FormEvent) => {
+  const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentPassword || !newPassword) {
       setPasswordStatus('error');
@@ -78,12 +79,14 @@ const StudentProfile: React.FC = () => {
       setPasswordMessage('New password and confirmation do not match.');
       return;
     }
-    if (newPassword.length < 6) {
+    if (newPassword.length < 12) {
       setPasswordStatus('error');
-      setPasswordMessage('Password must be at least 6 characters long.');
+      setPasswordMessage('Password must be at least 12 characters long.');
       return;
     }
 
+    try { await appAuth.changePassword(currentPassword, newPassword); }
+    catch (error) { setPasswordStatus('error'); setPasswordMessage(error instanceof Error ? error.message : 'Unable to update password.'); return; }
     setPasswordStatus('success');
     setPasswordMessage('Password updated successfully!');
     setCurrentPassword('');
@@ -95,30 +98,26 @@ const StudentProfile: React.FC = () => {
     }, 2500);
   };
 
-  const handleToggle2FA = () => {
-    if (is2FAEnabled) {
-      setIs2FAEnabled(false);
-      close2FASetup();
-    } else {
-      setShow2FASetup(true);
-    }
+  const handleToggle2FA = async () => {
+    setFactorError('');
+    try {
+      if (is2FAEnabled) {
+        const { error } = await supabase.auth.mfa.unenroll({ factorId });
+        if (error) throw error; setIs2FAEnabled(false); return;
+      }
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      for (const f of factors?.all || []) if (f.status === 'unverified') await supabase.auth.mfa.unenroll({ factorId: f.id });
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', issuer: 'RMC Attendance' });
+      if (error) throw error;
+      setFactorId(data.id); setFactorUri(data.totp.uri); setFactorSecret(data.totp.secret); setShow2FASetup(true);
+    } catch (error) { setFactorError(error instanceof Error ? error.message : 'Unable to update two-factor authentication.'); }
   };
-
-  const close2FASetup = () => {
-    setShow2FASetup(false);
-    setTwoFactorCode('');
-    setTwoFactorStatus('idle');
-  };
-
-  const handleVerify2FA = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (twoFactorCode.length === 6) {
-      setTwoFactorStatus('success');
-      setTimeout(() => {
-        setIs2FAEnabled(true);
-        close2FASetup();
-      }, 1500);
-    }
+  const close2FASetup = () => { setShow2FASetup(false); setTwoFactorCode(''); setTwoFactorStatus('idle'); };
+  const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault(); setFactorError('');
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: twoFactorCode });
+    if (error) { setFactorError(error.message); return; }
+    setTwoFactorStatus('success'); setIs2FAEnabled(true); close2FASetup();
   };
 
   const resetContactDraft = () => {
@@ -143,15 +142,7 @@ const StudentProfile: React.FC = () => {
     if (Object.keys(changes).length > 0) {
       setIsSavingContacts(true);
       try {
-        if (isMock) {
-          mockData.updateContactDetails(profile.uid, changes);
-        } else {
-          const updates: Record<string, string | null> = {};
-          if ('phone' in changes) updates.phone = changes.phone || null;
-          if ('guardianName' in changes) updates['guardian/name'] = changes.guardianName || null;
-          if ('guardianContact' in changes) updates['guardian/contact'] = changes.guardianContact || null;
-          await update(ref(db, `users/${profile.uid}/profile`), updates);
-        }
+        await appData.updateContactDetails(profile.uid, changes);
         setIsSaved(true);
         setTimeout(() => setIsSaved(false), 2000);
       } finally {
@@ -176,7 +167,7 @@ const StudentProfile: React.FC = () => {
 
   return (
     <Page className="max-w-5xl animate-in fade-in duration-200">
-      
+
       {/* HEADER */}
       <PageHeader
         eyebrow={<span className="inline-flex items-center gap-1.5"><User size={14} /> Account Management</span>}
@@ -191,8 +182,8 @@ const StudentProfile: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 relative z-10">
           {/* Avatar Photo */}
           <div className="relative shrink-0">
-            <img 
-              src={profile.photo_url || 'https://i.pravatar.cc/150'} 
+            <ProfileAvatar
+              src={profile.photo_url || '/avatar-placeholder.svg'}
               alt={profile.name}
               className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 border-gold-400 shadow-md object-cover"
             />
@@ -232,7 +223,7 @@ const StudentProfile: React.FC = () => {
 
       {/* GRID: PERSONAL INFO EDIT & SECURITY TOGGLES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        
+
         {/* LEFT: PERSONAL & GUARDIAN DETAILS */}
         <Surface className="space-y-4 p-4 sm:p-5">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-2.5">
@@ -290,7 +281,7 @@ const StudentProfile: React.FC = () => {
 
         {/* RIGHT: SECURITY & TOGGLES */}
         <div className="space-y-6">
-          
+
           {/* PASSWORD RESET TOGGLE */}
           <Surface className="space-y-4 p-4 sm:p-6">
             <div className="flex flex-col items-stretch justify-between gap-3 lg:flex-row lg:items-center">
@@ -355,7 +346,7 @@ const StudentProfile: React.FC = () => {
                   <input
                     id="new-password"
                     type={showNewPass ? 'text' : 'password'}
-                    placeholder="New Password (min 6 chars)"
+                    placeholder="New Password (min 12 chars)"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="input-field p-3 pr-12 text-base sm:text-sm"
@@ -436,6 +427,7 @@ const StudentProfile: React.FC = () => {
 
       </div>
 
+      {factorError && <p role="alert" className="text-sm text-red-600">{factorError}</p>}
       <Modal
         open={show2FASetup}
         onClose={close2FASetup}
@@ -458,14 +450,14 @@ const StudentProfile: React.FC = () => {
           </>
         )}
       >
-        <form id="two-factor-enrollment-form" onSubmit={handleVerify2FA} className="space-y-5 text-center">
+        <form id="two-factor-enrollment-form" onSubmit={handleVerify2FA} className="space-y-5 text-center">{factorError && <p role="alert" className="text-sm text-red-600">{factorError}</p>}
           <p className="text-xs font-bold text-brand-900 dark:text-slate-100">Scan QR in Google Authenticator App</p>
 
           <div role="img" aria-label="Two-factor authentication QR code" className="mx-auto w-full max-w-48 rounded-2xl border border-slate-200 bg-white p-4 shadow-inner dark:border-slate-700">
-            <QRCode value={`otpauth://totp/RMC:${profile.email}?secret=JBSWY3DPEHPK3PXP&issuer=RMCRegalia`} size={140} className="h-auto w-full" />
+            <QRCode value={factorUri} size={140} className="h-auto w-full" />
           </div>
 
-          <p className="font-mono text-[10px] font-bold text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">Secret: JBSW Y3DP EHPK 3PXP</p>
+          <p className="font-mono text-[10px] font-bold text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">Secret: {factorSecret}</p>
 
           <div>
             <label htmlFor="two-factor-code" className="sr-only">Six-digit authentication code</label>
@@ -486,6 +478,12 @@ const StudentProfile: React.FC = () => {
         </form>
       </Modal>
 
+      <Surface className="mt-6 p-5">
+        <label className="block text-sm font-bold">Update profile photo<input type="file" className="mt-2 block" accept="image/jpeg,image/png,image/webp" onChange={async event => {
+          const file = event.target.files?.[0]; if (!file) return;
+          const path = await uploadDocument(file, 'photo'); await appData.updatePhoto(profile.uid, path);
+        }} /></label>
+      </Surface>
       {/* ACCOUNT SESSION & SIGN OUT CARD */}
       <Surface className="mt-6 flex flex-col items-center justify-between gap-4 p-5 sm:flex-row">
         <div className="flex items-center gap-3.5 text-center sm:text-left">

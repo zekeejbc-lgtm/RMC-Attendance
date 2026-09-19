@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import SSGPanel from '../views/SSGPanel';
-import { ensureMockReferenceData } from '../lib/mockBackend';
+import { ensureMockReferenceData } from './fixtures/demoBackend';
 
 let currentRole = 'admin';
 
@@ -25,6 +25,8 @@ vi.mock('../components/AuthContext', () => ({
 }));
 
 afterEach(cleanup);
+
+vi.mock('../lib/backend', async () => { const m = await import('./fixtures/demoBackend'); return { appData: m.mockData, appAuth: m.mockAuth, documentUrl: async (p: string) => p }; });
 
 describe('Unit Deletion & Security Confirmation', () => {
   it('hides delete unit buttons for roles without directory.delete_structure permission', () => {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { mockData } from '../../lib/mockBackend';
+import { appData } from '../../lib/backend';
 import { useAuth } from '../AuthContext';
 import Button from '../ui/Button';
 
@@ -8,11 +8,11 @@ export function RoleAssignment() {
   const [uid, setUid] = useState('');
   const [roleId, setRoleId] = useState('');
   const [message, setMessage] = useState('');
-  const accounts = [...mockData.getOfficialAccounts(), ...mockData.getAllStudents()].filter((account, index, all) => all.findIndex(item => item.uid === account.uid) === index);
-  const roles = [...Object.values(mockData.getCoreRoles()), ...Object.values(mockData.getCustomRoles())].filter(role => role.id !== 'admin');
-  return <form className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800" onSubmit={event => {
+  const accounts = [...appData.getOfficialAccounts(), ...appData.getAllStudents()].filter((account, index, all) => all.findIndex(item => item.uid === account.uid) === index);
+  const roles = [...Object.values(appData.getCoreRoles()), ...Object.values(appData.getCustomRoles())].filter(role => role.id !== 'admin');
+  return <form className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800" onSubmit={async event => {
     event.preventDefault();
-    try { mockData.assignAccountRole(profile!.uid, uid, roleId); setMessage('Assignment saved. Position-only roles preserve the existing access role.'); }
+    try { await appData.assignAccountRole(profile!.uid, uid, roleId); setMessage('Assignment saved. Position-only roles preserve the existing access role.'); }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to assign role.'); }
   }}>
     <h2 className="mb-3 font-bold text-brand-900 dark:text-white">Assign access role or position</h2>

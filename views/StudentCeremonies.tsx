@@ -1,4 +1,4 @@
-import { mockData } from '../lib/mockBackend';
+import { appData, uploadDocument } from '../lib/backend';
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { Modal } from '../components/ui/Modal';
@@ -26,63 +26,8 @@ interface SchoolCeremony {
   status: 'active' | 'scheduled' | 'archived';
 }
 
-const MOCK_CEREMONIES: SchoolCeremony[] = [
-  {
-    id: 'c1',
-    title: 'Weekly Institutional Flag Raising Ceremony',
-    type: 'flag_ceremony',
-    scheduleDay: 'Every Monday',
-    timeFrame: '07:00 AM - 07:30 AM',
-    locationName: 'RMC Main Campus Grounds & Track Oval',
-    geofenceRadius: 200,
-    attire: 'Complete Type-A School Uniform with Institutional ID',
-    description: 'Mandatory weekly flag raising ceremony, national anthem, and brief announcements by administrative heads.',
-    penaltyValue: 3,
-    status: 'active'
-  },
-  {
-    id: 'c2',
-    title: 'Monthly Flag Lowering & Retreat Ceremony',
-    type: 'flag_ceremony',
-    scheduleDay: 'Last Friday of the Month',
-    timeFrame: '04:30 PM - 05:00 PM',
-    locationName: 'RMC Quadrangle',
-    geofenceRadius: 150,
-    attire: 'Official School Uniform or Washday Uniform with ID',
-    description: 'Monthly ceremonial flag retreat honoring national symbols and student achievers.',
-    penaltyValue: 2,
-    status: 'scheduled'
-  },
-  {
-    id: 'c3',
-    title: 'Annual Founders Day Thanksgiving Mass & Convocation',
-    type: 'convocation',
-    scheduleDay: 'March 15, 2026',
-    timeFrame: '08:00 AM - 11:30 AM',
-    locationName: 'RMC Gym & Cultural Center',
-    geofenceRadius: 350,
-    attire: 'Formal White Filipiniana / Barong / Type-A Uniform',
-    description: 'Formal convocation celebrating RMC founding anniversary and honoring distinguished alumni and scholar awardees.',
-    penaltyValue: 6,
-    status: 'archived'
-  },
-  {
-    id: 'c4',
-    title: 'Senior High School Completion & Recognition Ceremony',
-    type: 'commencement',
-    scheduleDay: 'May 28, 2026',
-    timeFrame: '01:00 PM - 05:00 PM',
-    locationName: 'Davao City Recreation Center (Almendras Gym)',
-    geofenceRadius: 400,
-    attire: 'Formal Toga / Formal Attire',
-    description: 'Official commencement ceremony for graduating Grade 12 students and academic honor students.',
-    penaltyValue: 10,
-    status: 'archived'
-  }
-];
-
 const StudentCeremonies: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, revision } = useAuth();
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -99,10 +44,13 @@ const StudentCeremonies: React.FC = () => {
   const [excuseDetails, setExcuseDetails] = useState('');
   const [excuseContact, setExcuseContact] = useState('');
   const [filePreviewName, setFilePreviewName] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [submittedExcuse, setSubmittedExcuse] = useState(false);
+  const [excuseError, setExcuseError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const filteredCeremonies = useMemo(() => {
-    const ceremonies: SchoolCeremony[] = (profile ? mockData.getRecipientEvents(profile.uid) : []).filter(event => event.kind === 'flag_ceremony').map(event => ({
+    const ceremonies: SchoolCeremony[] = (profile ? appData.getRecipientEvents(profile.uid) : []).filter(event => event.kind === 'flag_ceremony' && !event.cancellationStatus).map(event => ({
       id: event.id, title: event.title, type: 'flag_ceremony', scheduleDay: new Date(event.startTime).toLocaleDateString(),
       timeFrame: `${new Date(event.startTime).toLocaleTimeString()} - ${new Date(event.endTime).toLocaleTimeString()}`,
       locationName: event.geofenceEnabled ? 'Designated event area' : 'See event instructions', geofenceRadius: event.location.radius_meters,
@@ -115,7 +63,7 @@ const StudentCeremonies: React.FC = () => {
       const matchesType = typeFilter === 'all' ? true : ceremony.type === typeFilter;
       return matchesSearch && matchesType;
     });
-  }, [searchTerm, typeFilter, profile]);
+  }, [searchTerm, typeFilter, profile, revision]);
 
   const activeCeremonies = useMemo(
     () => filteredCeremonies.filter(ceremony => ceremony.status === 'active'),
@@ -130,7 +78,7 @@ const StudentCeremonies: React.FC = () => {
     [filteredCeremonies]
   );
 
-  const canFileExcuse = (ceremony: SchoolCeremony) => ceremony.status !== 'archived';
+  const canFileExcuse = (_ceremony: SchoolCeremony) => true;
 
   const renderCeremonyCard = (ceremony: SchoolCeremony) => (
     <button
@@ -189,19 +137,20 @@ const StudentCeremonies: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFilePreviewName(e.target.files[0].name);
+      setSelectedFile(e.target.files[0]);
     }
   };
 
-  const handleExcuseSubmit = (e: React.FormEvent) => {
+  const handleExcuseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCeremony || !canFileExcuse(selectedCeremony) || !excuseDetails) return;
-    setSubmittedExcuse(true);
-    setTimeout(() => {
-      setSubmittedExcuse(false);
-      setShowExcuseModal(false);
-      setExcuseDetails('');
-      setFilePreviewName('');
-    }, 2000);
+    if (!selectedCeremony || !profile || submitting) return;
+    setSubmitting(true); setExcuseError('');
+    try {
+      const proof = selectedFile ? await uploadDocument(selectedFile, 'excuses') : undefined;
+      await appData.submitExcuseApplication({ event_id: selectedCeremony.id, reason: excuseDetails, category: /medical|health/i.test(excuseReason) ? 'medical' : /emergency/i.test(excuseReason) ? 'emergency' : /academic|official/i.test(excuseReason) ? 'institutional' : 'personal', proof_url: proof });
+      setSubmittedExcuse(true);
+    } catch (error) { setExcuseError(error instanceof Error ? error.message : 'Unable to submit excuse.'); }
+    finally { setSubmitting(false); }
   };
 
   return (
@@ -292,7 +241,7 @@ const StudentCeremonies: React.FC = () => {
               </p>
               <button
                 aria-label="File for excuse"
-                onClick={() => setShowExcuseModal(true)}
+                onClick={() => { setSubmittedExcuse(false); setExcuseError(''); setExcuseDetails(''); setSelectedFile(null); setFilePreviewName(''); setShowExcuseModal(true); }}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gold-gradient px-6 py-3 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition-all hover:brightness-110 active:scale-95 sm:w-auto"
                 type="button"
               >
@@ -386,6 +335,7 @@ const StudentCeremonies: React.FC = () => {
               </div>
             ) : (
               <form id="ceremony-excuse-form" onSubmit={handleExcuseSubmit} className="space-y-4">
+                {excuseError && <p role="alert" className="text-sm text-red-600">{excuseError}</p>}
                 <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Target Ceremony</p>
                   <p className="font-bold text-brand-900 dark:text-slate-100">{selectedCeremony.title}</p>

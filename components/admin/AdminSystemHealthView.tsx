@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, Database, HardDrive, Cpu, ShieldCheck, Zap, Server, RefreshCw, CheckCircle2, AlertTriangle, FileText, Users, Calendar, QrCode } from 'lucide-react';
-import { mockData } from '../../lib/mockBackend';
+import { appData } from '../../lib/backend';
 import { SystemHealthMetric } from '../../types';
 import { MetricCard } from '../ui/Page';
 
 export const AdminSystemHealthView: React.FC = () => {
-  const [metrics, setMetrics] = useState<SystemHealthMetric>(mockData.getSystemHealthMetrics());
-  const [auditLogs, setAuditLogs] = useState(mockData.getAccountAuditLogs());
+  const [metrics, setMetrics] = useState<SystemHealthMetric>(appData.getSystemHealthMetrics());
+  const [auditLogs, setAuditLogs] = useState(appData.getAccountAuditLogs());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [logFilter, setLogFilter] = useState('');
 
   const refreshHealth = () => {
     setIsRefreshing(true);
-    setMetrics(mockData.getSystemHealthMetrics());
-    setAuditLogs(mockData.getAccountAuditLogs());
+    setMetrics(appData.getSystemHealthMetrics());
+    setAuditLogs(appData.getAccountAuditLogs());
     setTimeout(() => setIsRefreshing(false), 300);
   };
 
@@ -31,8 +31,8 @@ export const AdminSystemHealthView: React.FC = () => {
 
   const filteredLogs = auditLogs.filter(log =>
     log.action.toLowerCase().includes(logFilter.toLowerCase()) ||
-    log.actor_name.toLowerCase().includes(logFilter.toLowerCase()) ||
-    log.target_name.toLowerCase().includes(logFilter.toLowerCase())
+    (log.actor_name || '').toLowerCase().includes(logFilter.toLowerCase()) ||
+    (log.target_name || log.target_uid || '').toLowerCase().includes(logFilter.toLowerCase())
   );
 
   return (
@@ -49,11 +49,11 @@ export const AdminSystemHealthView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold uppercase tracking-tight">System Health & Performance Monitor</h2>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white flex items-center gap-1">
-                  <CheckCircle2 size={12} /> {metrics.healthScore}% Healthy
+                  <CheckCircle2 size={12} /> {metrics.dbStatus === 'operational' ? 'Connected' : 'Connection unavailable'}
                 </span>
               </div>
               <p className="text-slate-300 text-xs mt-1 max-w-2xl">
-                Local browser data diagnostics and activity logs. Server, email delivery, and backup monitoring are not connected.
+                Supabase application connectivity and authorized record counts. Hosting, backup, and database capacity metrics are available in the Supabase dashboard.
               </p>
             </div>
           </div>
@@ -70,27 +70,27 @@ export const AdminSystemHealthView: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
           icon={<Zap size={20} className="text-amber-500" />}
-          label="Local Read Time"
+          label="Last API Read Time"
           value={`${metrics.latencyMs} ms`}
-          detail="Measured local storage read"
+          detail="Measured Supabase snapshot request"
         />
         <MetricCard
           icon={<HardDrive size={20} className="text-cyan-500" />}
           label="Storage Utilization"
-          value={`${metrics.storageUsagePercent}%`}
-          detail={`${formatBytes(metrics.storageUsedBytes)} / ${formatBytes(metrics.storageMaxBytes)}`}
+          value="See Supabase"
+          detail="Managed database capacity"
         />
         <MetricCard
           icon={<Users size={20} className="text-emerald-500" />}
-          label="Active Sessions"
+          label="This Session"
           value={metrics.activeSessions}
-          detail="Concurrent online users"
+          detail="Authenticated browser session"
         />
         <MetricCard
           icon={<Database size={20} className="text-purple-500" />}
           label="Database Status"
           value={metrics.dbStatus.toUpperCase()}
-          detail="Indexed DB operational"
+          detail="Last authorized Supabase read"
         />
       </div>
       {/* STORAGE & SUBSYSTEM MATRIX */}
@@ -101,24 +101,7 @@ export const AdminSystemHealthView: React.FC = () => {
             <HardDrive size={18} className="text-cyan-500" /> Database & Storage Allocation
           </h3>
 
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs font-bold">
-              <span className="text-slate-600 dark:text-slate-400">Local Browser Storage Quota</span>
-              <span className="text-slate-900 dark:text-white">{metrics.storageUsagePercent}% Used</span>
-            </div>
-            <div className="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div
-                className={`h-full transition-all duration-500 rounded-full ${
-                  metrics.storageUsagePercent > 80 ? 'bg-red-500' : metrics.storageUsagePercent > 50 ? 'bg-amber-500' : 'bg-cyan-500'
-                }`}
-                style={{ width: `${Math.max(5, metrics.storageUsagePercent)}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              {formatBytes(metrics.storageUsedBytes)} utilized out of {formatBytes(metrics.storageMaxBytes)} total capacity.
-            </p>
-          </div>
-
+          <p className="text-xs text-slate-500">Database size, storage capacity, backups, and uptime are available in your Supabase project dashboard.</p>
           <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-500">Total System Accounts:</span>
@@ -151,12 +134,12 @@ export const AdminSystemHealthView: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
-              { title: 'Authentication Gateway', status: metrics.authStatus, desc: 'OAuth & Session verification active' },
-              { title: 'QR Code Generation Engine', status: 'operational', desc: 'Real-time AES QR renderer online' },
-              { title: 'Geofence Location Service', status: metrics.geofenceStatus, desc: 'GPS radius calculation active' },
-              { title: 'Database & Sync Proxy', status: metrics.dbStatus, desc: 'LocalStorage & mock sync proxy running' },
-              { title: 'CSV & Report Exporter', status: 'operational', desc: 'Roster & ledger generator ready' },
-              { title: 'Audit Trail Logger', status: 'operational', desc: 'Real-time activity logging active' },
+              { title: 'Authentication Gateway', status: metrics.authStatus, desc: 'Supabase session state' },
+              { title: 'QR verification', status: 'configured', desc: 'Expiring tokens verified by the database' },
+              { title: 'Geofence Location Service', status: 'device dependent', desc: 'Fresh GPS is checked on every geofenced scan' },
+              { title: 'Database snapshot', status: metrics.dbStatus, desc: 'Authorized data loaded from Supabase' },
+              { title: 'CSV & Report Exporter', status: 'available', desc: 'Exports the currently authorized records' },
+              { title: 'Audit Trail Logger', status: 'configured', desc: 'Database writes record the acting account' },
             ].map(sub => (
               <div key={sub.title} className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -164,7 +147,7 @@ export const AdminSystemHealthView: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-slate-900 dark:text-white">{sub.title}</span>
                     <span className="text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.5 rounded">
-                      ONLINE
+                      {sub.status}
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{sub.desc}</p>
@@ -182,7 +165,7 @@ export const AdminSystemHealthView: React.FC = () => {
               <FileText size={18} className="text-purple-500" /> Security Audit & System Diagnostic Logs
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Live immutable stream of system events, account changes, and administrative actions.
+              Latest 500 authorized audit entries, refreshed with the application data.
             </p>
           </div>
 

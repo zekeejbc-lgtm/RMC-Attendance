@@ -8,7 +8,7 @@ import CustomSelect from '../components/ui/CustomSelect';
 import SearchInput from '../components/ui/SearchInput';
 import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
-import { mockData } from '../lib/mockBackend';
+import { appData } from '../lib/backend';
 import { AppEvent } from '../types';
 
 type StatusFilter = 'all' | AppEvent['status'];
@@ -44,7 +44,7 @@ export default function SSGEventCreation() {
   const { profile } = useAuth();
   const [events, setEvents] = useState<AppEvent[]>([]), [search, setSearch] = useState(''), [status, setStatus] = useState<StatusFilter>('all'), [audience, setAudience] = useState('all'), [geofence, setGeofence] = useState<GeofenceFilter>('all');
   const [scheduledOpen, setScheduledOpen] = useState(false), [archivedOpen, setArchivedOpen] = useState(false), [selected, setSelected] = useState<AppEvent | null>(null);
-  const refresh = () => setEvents(profile ? mockData.getVisibleEvents(profile.uid) : []);
+  const refresh = () => setEvents(profile ? appData.getVisibleEvents(profile.uid) : []);
   useEffect(refresh, []);
   const audiences = useMemo(() => Array.from(new Set(events.flatMap(e => e.recipientGroups || [recipients(e)]))).filter(Boolean).sort(), [events]);
   const filtered = useMemo(() => events.filter(e => [e.title, e.description || '', recipients(e)].join(' ').toLowerCase().includes(search.toLowerCase()) && (status === 'all' || e.status === status) && (audience === 'all' || e.recipientGroups?.includes(audience) || recipients(e) === audience) && (geofence === 'all' || (geofence === 'enabled') === (e.geofenceEnabled !== false))), [events, search, status, audience, geofence]);

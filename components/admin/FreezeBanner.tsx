@@ -1,27 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { ShieldAlert, AlertTriangle, Snowflake, Lock } from 'lucide-react';
-import { mockData } from '../../lib/mockBackend';
+import { appData } from '../../lib/backend';
 import { useAuth } from '../AuthContext';
 
 export const FreezeBanner: React.FC = () => {
   const { profile } = useAuth();
-  const [systemFreeze, setSystemFreeze] = useState(mockData.getSystemFreezeStatus());
+  const [systemFreeze, setSystemFreeze] = useState(appData.getSystemFreezeStatus());
   const [isScopeFrozen, setIsScopeFrozen] = useState(false);
 
   const refreshFreeze = () => {
-    const freezeState = mockData.getSystemFreezeStatus();
+    const freezeState = appData.getSystemFreezeStatus();
     setSystemFreeze(freezeState);
     if (profile) {
-      setIsScopeFrozen(mockData.isUserScopeFrozen(profile));
+      setIsScopeFrozen(appData.isUserScopeFrozen(profile));
     }
   };
 
   useEffect(() => {
     refreshFreeze();
-    window.addEventListener('rmc_auth_update', refreshFreeze);
+    window.addEventListener('rmc_data_update', refreshFreeze);
     const interval = setInterval(refreshFreeze, 4000);
     return () => {
-      window.removeEventListener('rmc_auth_update', refreshFreeze);
+      window.removeEventListener('rmc_data_update', refreshFreeze);
       clearInterval(interval);
     };
   }, [profile?.uid, profile?.student_id, profile?.role]);

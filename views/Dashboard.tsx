@@ -1,32 +1,36 @@
+import ProfileAvatar from '../components/ui/ProfileAvatar';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { AppEvent } from '../types';
-import { 
-  Calendar, Award, QrCode, FileText, User, ShieldAlert, CheckCircle2, 
+import {
+  Calendar, Award, QrCode, FileText, User, ShieldAlert, CheckCircle2,
   Clock, ArrowRight, Sparkles, TrendingUp, AlertTriangle, ChevronRight, Activity, MapPin,
   Building2, Users2, ScanLine, BarChart3, CalendarDays, ShieldCheck
 } from 'lucide-react';
-import { mockData } from '../lib/mockBackend';
+import { appData } from '../lib/backend';
 import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
 import { hasPermission } from '../lib/accessControl';
 
 const Dashboard: React.FC = () => {
-  const { profile, stats, isMock } = useAuth();
+  const { profile, stats, isMock, revision } = useAuth();
   const navigate = useNavigate();
   const [activeEvents, setActiveEvents] = useState<AppEvent[]>([]);
 
   useEffect(() => {
-    if (isMock) {
+    {
       const refresh = () => {
-        const events = mockData.getEvents().filter(e => e.status === 'active');
+        const events = (profile ? appData.getRecipientEvents(profile.uid) : []).filter(e => e.status === 'active' && !e.cancellationStatus);
         setActiveEvents(events);
       };
       refresh();
       const interval = setInterval(refresh, 5000);
       return () => clearInterval(interval);
     }
-  }, [isMock]);
+  }, [revision]);
+
+  const ceremonies = (profile ? appData.getRecipientEvents(profile.uid) : []).filter(e => e.kind === 'flag_ceremony' && e.status !== 'done' && !e.cancellationStatus).sort((a,b) => a.startTime - b.startTime);
+  const recent = appData.getAttendanceRecords(profile?.uid || '').sort((a,b) => (b.time_in || b.recorded_at || 0) - (a.time_in || a.recorded_at || 0)).slice(0, 5);
 
   if (profile?.role === 'admin') return <Navigate to="/ssg/panel" replace />;
   if (profile?.role === 'ssg' || profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
@@ -40,7 +44,7 @@ const Dashboard: React.FC = () => {
         title="Student Dashboard"
         description="Review your attendance standing, campus directives, ceremony schedule, and recent record updates."
       />
-      
+
       {/* HERO WELCOME BANNER */}
       <section className="bg-gradient-to-br from-brand-900 via-brand-950 to-slate-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg relative overflow-hidden border border-gold-400/30">
         <div className="absolute top-0 right-0 w-64 h-64 bg-gold-400/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -48,9 +52,9 @@ const Dashboard: React.FC = () => {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="relative shrink-0">
-              <img 
-                src={profile?.photo_url || 'https://i.pravatar.cc/150'} 
-                className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl object-cover border border-gold-400 shadow-md" 
+              <ProfileAvatar
+                src={profile?.photo_url || '/avatar-placeholder.svg'}
+                className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl object-cover border border-gold-400 shadow-md"
                 alt="Profile"
               />
               <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white p-0.5 rounded-md shadow">
@@ -144,14 +148,14 @@ const Dashboard: React.FC = () => {
 
       {/* MAIN ANALYTICS & ACTIVE DIRECTIVES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* LEFT 2 COLS: ACTIVE Directives & Events */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
             <h2 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
               <Activity size={16} className="text-gold-500" /> Active Campus Assemblies ({activeEvents.length})
             </h2>
-            <button 
+            <button
               onClick={() => navigate('/student/events')}
               className="text-[10px] font-bold text-gold-600 dark:text-gold-400 hover:text-brand-900 dark:hover:text-white flex items-center gap-1 uppercase tracking-wider"
             >
@@ -162,7 +166,7 @@ const Dashboard: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {activeEvents.length > 0 ? (
               activeEvents.map(event => (
-                <div 
+                <div
                   key={event.id}
                   onClick={() => navigate('/student/events')}
                   className="bg-brand-900 text-white p-6 rounded-3xl border-2 border-gold-400/50 shadow-xl hover:border-gold-400 transition-all cursor-pointer group"
@@ -203,7 +207,7 @@ const Dashboard: React.FC = () => {
               <h3 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
                 <Award size={16} className="text-gold-600 dark:text-gold-400" /> Recurring Ceremonies Protocol
               </h3>
-              <button 
+              <button
                 onClick={() => navigate('/student/ceremonies')}
                 className="text-[10px] font-bold text-gold-600 dark:text-gold-400 hover:text-brand-900 dark:hover:text-white uppercase"
               >
@@ -211,30 +215,16 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <span className="text-[9px] font-black uppercase text-gold-700 dark:text-gold-300 bg-gold-50 dark:bg-gold-500/10 border border-gold-200 dark:border-gold-500/30 px-2.5 py-0.5 rounded-full">
-                  Every Monday • 07:00 AM
-                </span>
-                <h4 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-tight mt-1">
-                  Weekly Institutional Flag Raising Ceremony
-                </h4>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Location: RMC Track Oval & Main Quadrangle</p>
-              </div>
-
-              <button
-                onClick={() => navigate('/student/ceremonies')}
-                className="px-4 py-2 bg-brand-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-800 transition-all self-start sm:self-auto"
-              >
-                Protocol
-              </button>
-            </div>
+            {ceremonies.length ? ceremonies.slice(0, 3).map(ceremony => <button key={ceremony.id} onClick={() => navigate('/student/ceremonies')} className="block w-full rounded-xl bg-slate-50 p-4 text-left dark:bg-slate-900">
+              <span className="block text-xs font-bold">{ceremony.title}</span>
+              <span className="mt-1 block text-xs text-slate-500">{new Date(ceremony.startTime).toLocaleString()}</span>
+            </button>) : <p className="text-sm text-slate-500">No upcoming ceremonies.</p>}
           </Surface>
         </div>
 
         {/* RIGHT 1 COL: RECENT ACTIVITY & SANCTION STATUS */}
         <div className="space-y-6">
-          
+
           {/* SANCTION SUMMARY WIDGET */}
           <Surface className="space-y-4 p-4 sm:p-6">
             <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-black text-xs uppercase tracking-widest">
@@ -266,25 +256,10 @@ const Dashboard: React.FC = () => {
             </h3>
 
             <div className="space-y-2">
-              <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs">
-                <div>
-                  <p className="font-bold text-brand-900 dark:text-slate-100 uppercase">Flag Ceremony</p>
-                  <p className="text-[10px] text-slate-400">July 27, 2026</p>
-                </div>
-                <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
-                  Present
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs">
-                <div>
-                  <p className="font-bold text-brand-900 dark:text-slate-100 uppercase">Midyear Convocation</p>
-                  <p className="text-[10px] text-slate-400">July 24, 2026</p>
-                </div>
-                <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50 px-2 py-0.5 rounded-full">
-                  Late
-                </span>
-              </div>
+              {recent.length ? recent.map(record => <div key={record.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-900">
+                <div className="min-w-0"><p className="font-bold">{record.event?.title || 'Attendance'}</p><p className="text-slate-500">{new Date(record.time_in || record.recorded_at).toLocaleDateString()}</p></div>
+                <span className="capitalize">{record.status}</span>
+              </div>) : <p className="text-sm text-slate-500">No attendance recorded yet.</p>}
             </div>
           </Surface>
 
@@ -297,9 +272,9 @@ const Dashboard: React.FC = () => {
 };
 
 const StaffHome = ({ name, role, navigate }: { name: string; role: 'ssg' | 'ossa' | 'ossa_staff'; navigate: ReturnType<typeof useNavigate> }) => {
-  const applications = mockData.getApplications();
-  const events = mockData.getEvents();
-  const campuses = mockData.getSchoolStructure();
+  const applications = appData.getApplications();
+  const events = appData.getEvents();
+  const campuses = appData.getSchoolStructure();
   const activeEvents = events.filter((event) => event.status === 'active');
   const isOSSA = role === 'ossa' || role === 'ossa_staff';
   const workspaceName = isOSSA ? 'OSSA' : 'SSG';

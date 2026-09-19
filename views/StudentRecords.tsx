@@ -1,3 +1,5 @@
+import { escapeHtml } from '../lib/export';
+import { appData } from '../lib/backend';
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { 
@@ -29,85 +31,17 @@ interface SanctionEntry {
   approvedBy: string;
 }
 
-const MOCK_ATTENDANCE_RECORDS: AttendanceRecord[] = [
-  {
-    id: 'r1',
-    title: 'Weekly Institutional Flag Raising Ceremony',
-    category: 'Ceremony',
-    date: '2026-07-27',
-    timeIn: '07:05 AM',
-    status: 'present',
-    scannedBy: 'Section Mayor (John Santos)'
-  },
-  {
-    id: 'r2',
-    title: 'University Midyear Leadership Convocation',
-    category: 'Event',
-    date: '2026-07-24',
-    timeIn: '08:45 AM',
-    status: 'late',
-    scannedBy: 'SSG Officer (Maria Clara)',
-    sanctionIncurred: 1
-  },
-  {
-    id: 'r3',
-    title: 'Disaster Risk & Safety Drill',
-    category: 'Event',
-    date: '2026-07-16',
-    timeIn: 'N/A',
-    status: 'absent',
-    scannedBy: 'System Auto-Log',
-    sanctionIncurred: 4
-  },
-  {
-    id: 'r4',
-    title: 'Monthly Flag Lowering & Retreat Ceremony',
-    category: 'Ceremony',
-    date: '2026-06-26',
-    timeIn: '04:35 PM',
-    status: 'present',
-    scannedBy: 'Section Mayor (John Santos)'
-  },
-  {
-    id: 'r5',
-    title: 'First Semester General Assembly 2025',
-    category: 'Event',
-    date: '2026-06-12',
-    timeIn: 'N/A',
-    status: 'excused',
-    scannedBy: 'Student Affairs (Approved Excuse Letter)'
-  }
-];
-
-const MOCK_SANCTIONS: SanctionEntry[] = [
-  {
-    id: 's1',
-    reason: 'Unexcused Absence - Disaster Risk & Safety Drill',
-    hours: 4,
-    dateAssigned: '2026-07-16',
-    status: 'active',
-    approvedBy: 'Prefect of Discipline'
-  },
-  {
-    id: 's2',
-    reason: 'Tardy Arrival - Midyear Leadership Convocation',
-    hours: 1,
-    dateAssigned: '2026-07-24',
-    status: 'active',
-    approvedBy: 'SSG Discipline Head'
-  },
-  {
-    id: 's3',
-    reason: 'Campus Library Community Service (Resolved)',
-    hours: -3,
-    dateAssigned: '2026-07-20',
-    status: 'resolved',
-    approvedBy: 'Head Librarian'
-  }
-];
-
 const StudentRecords: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, revision, stats: userStats } = useAuth();
+  const records: AttendanceRecord[] = useMemo(() => appData.getAttendanceRecords(profile?.uid || '').map(r => ({
+    id: r.id, title: r.event?.title || 'Archived event', category: r.event?.kind === 'flag_ceremony' ? 'Ceremony' : 'Event',
+    date: r.slot === 'default' ? new Date(r.event?.startTime || r.time_in).toLocaleDateString() : r.slot.split(':')[0],
+    timeIn: r.time_in ? new Date(r.time_in).toLocaleTimeString() : '?', status: r.status, scannedBy: r.scanned_by_name || 'System',
+  })), [profile?.uid, revision]);
+  const sanctions: SanctionEntry[] = (appData.getUserDetail(profile?.uid || '')?.sanction_logs || []).map(s => ({
+    id: s.id, reason: s.reason, hours: s.change, dateAssigned: new Date(s.timestamp).toLocaleDateString(),
+    status: s.change < 0 ? 'resolved' : 'active', approvedBy: s.performed_by,
+  }));
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -115,26 +49,26 @@ const StudentRecords: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   const filteredRecords = useMemo(() => {
-    return MOCK_ATTENDANCE_RECORDS.filter(record => {
+    return records.filter(record => {
       const matchesSearch = record.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             record.scannedBy.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' ? true : record.status === statusFilter;
       const matchesCategory = categoryFilter === 'all' ? true : record.category === categoryFilter;
       return matchesSearch && matchesStatus && matchesCategory;
     });
-  }, [searchTerm, statusFilter, categoryFilter]);
+  }, [searchTerm, statusFilter, categoryFilter, records]);
 
   // Statistics
   const stats = useMemo(() => {
-    const presentCount = MOCK_ATTENDANCE_RECORDS.filter(r => r.status === 'present').length;
-    const lateCount = MOCK_ATTENDANCE_RECORDS.filter(r => r.status === 'late').length;
-    const absentCount = MOCK_ATTENDANCE_RECORDS.filter(r => r.status === 'absent').length;
-    const excusedCount = MOCK_ATTENDANCE_RECORDS.filter(r => r.status === 'excused').length;
-    const total = MOCK_ATTENDANCE_RECORDS.length;
-    const rate = Math.round(((presentCount + lateCount * 0.8 + excusedCount) / total) * 100) || 100;
-    const totalSanctionHours = MOCK_SANCTIONS.filter(s => s.status === 'active').reduce((acc, curr) => acc + curr.hours, 0);
+    const presentCount = records.filter(r => r.status === 'present').length;
+    const lateCount = records.filter(r => r.status === 'late').length;
+    const absentCount = records.filter(r => r.status === 'absent').length;
+    const excusedCount = records.filter(r => r.status === 'excused').length;
+    const total = records.length;
+    const rate = total ? Math.round(((presentCount + lateCount + excusedCount) / total) * 100) : 0;
+    const totalSanctionHours = userStats?.sanction_hours || 0;
     return { presentCount, lateCount, absentCount, excusedCount, rate, totalSanctionHours };
-  }, []);
+  }, [records, revision]);
 
   const handleExportPDF = () => {
     const printWindow = window.open('', '_blank');
@@ -144,7 +78,7 @@ const StudentRecords: React.FC = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>RMC Attendance & Sanction Official Transcript - ${profile?.student_id}</title>
+          <title>RMC Attendance & Sanction Official Transcript - ${escapeHtml(profile?.student_id)}</title>
           <style>
             body { font-family: system-ui, sans-serif; padding: 40px; color: #0E1B42; }
             .header { text-align: center; border-bottom: 3px solid #D4AF37; padding-bottom: 20px; margin-bottom: 30px; }
@@ -168,10 +102,10 @@ const StudentRecords: React.FC = () => {
           </div>
 
           <div class="profile-box">
-            <div><strong>Student Name:</strong> ${profile?.name}</div>
-            <div><strong>Student ID:</strong> ${profile?.student_id}</div>
-            <div><strong>Department:</strong> ${profile?.school_data?.department}</div>
-            <div><strong>Section:</strong> ${profile?.school_data?.section}</div>
+            <div><strong>Student Name:</strong> ${escapeHtml(profile?.name)}</div>
+            <div><strong>Student ID:</strong> ${escapeHtml(profile?.student_id)}</div>
+            <div><strong>Department:</strong> ${escapeHtml(profile?.school_data?.department)}</div>
+            <div><strong>Section:</strong> ${escapeHtml(profile?.school_data?.section)}</div>
             <div><strong>Attendance Rate:</strong> ${stats.rate}%</div>
             <div><strong>Active Sanction Hours:</strong> ${stats.totalSanctionHours} Hours</div>
           </div>
@@ -189,14 +123,14 @@ const StudentRecords: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              ${MOCK_ATTENDANCE_RECORDS.map(r => `
+              ${records.map(r => `
                 <tr>
                   <td>${r.date}</td>
-                  <td>${r.title}</td>
+                  <td>${escapeHtml(r.title)}</td>
                   <td>${r.category}</td>
                   <td>${r.timeIn}</td>
                   <td class="status-${r.status}">${r.status.toUpperCase()}</td>
-                  <td>${r.scannedBy}</td>
+                  <td>${escapeHtml(r.scannedBy)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -214,13 +148,13 @@ const StudentRecords: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              ${MOCK_SANCTIONS.map(s => `
+              ${sanctions.map(s => `
                 <tr>
                   <td>${s.dateAssigned}</td>
-                  <td>${s.reason}</td>
+                  <td>${escapeHtml(s.reason)}</td>
                   <td>${s.hours > 0 ? `+${s.hours} Hours` : `${s.hours} Hours`}</td>
                   <td>${s.status.toUpperCase()}</td>
-                  <td>${s.approvedBy}</td>
+                  <td>${escapeHtml(s.approvedBy)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -392,7 +326,7 @@ const StudentRecords: React.FC = () => {
 
         <div className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {MOCK_SANCTIONS.map(sanc => (
+            {sanctions.map(sanc => (
               <div 
                 key={sanc.id}
                 className={`p-5 rounded-2xl border ${

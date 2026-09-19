@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Plus, Edit2, Trash2, CheckCircle2, Lock, UserCheck, Shield, Key, Sparkles, AlertCircle } from 'lucide-react';
-import { mockData } from '../../lib/mockBackend';
+import { appData } from '../../lib/backend';
 import { CustomRole, CoreRole, AppPermission } from '../../types';
 import { ALL_PERMISSIONS, roleLabels } from '../../lib/accessControl';
 import { Modal } from '../ui/Modal';
 
 export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName }) => {
-  const [coreRoles, setCoreRoles] = useState<Record<string, CoreRole>>(mockData.getCoreRoles());
-  const [customRoles, setCustomRoles] = useState<Record<string, CustomRole>>(mockData.getCustomRoles());
+  const [coreRoles, setCoreRoles] = useState<Record<string, CoreRole>>(appData.getCoreRoles());
+  const [customRoles, setCustomRoles] = useState<Record<string, CustomRole>>(appData.getCustomRoles());
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
 
@@ -19,14 +19,14 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
   });
 
   const refreshRoles = () => {
-    setCoreRoles(mockData.getCoreRoles());
-    setCustomRoles(mockData.getCustomRoles());
+    setCoreRoles(appData.getCoreRoles());
+    setCustomRoles(appData.getCustomRoles());
   };
 
   useEffect(() => {
     refreshRoles();
-    window.addEventListener('rmc_auth_update', refreshRoles);
-    return () => window.removeEventListener('rmc_auth_update', refreshRoles);
+    window.addEventListener('rmc_data_update', refreshRoles);
+    return () => window.removeEventListener('rmc_data_update', refreshRoles);
   }, []);
 
   const openCreateModal = () => {
@@ -51,18 +51,18 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
     setShowRoleModal(true);
   };
 
-  const handleSaveRole = (e: React.FormEvent) => {
+  const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingRoleId) {
       if (coreRoles[editingRoleId] || ['admin', 'ossa', 'ossa_staff', 'ssg', 'mayor', 'student'].includes(editingRoleId)) {
-        mockData.updateCoreRole(editingRoleId, {
+        await appData.updateCoreRole(editingRoleId, {
           name: roleForm.name,
           description: roleForm.description,
           isPositionOnly: roleForm.isPositionOnly,
           permissions: roleForm.isPositionOnly ? [] : roleForm.permissions
         });
       } else {
-        mockData.updateCustomRole(editingRoleId, {
+        await appData.updateCustomRole(editingRoleId, {
           name: roleForm.name,
           description: roleForm.description,
           isPositionOnly: roleForm.isPositionOnly,
@@ -70,7 +70,7 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
         });
       }
     } else {
-      mockData.createCustomRole({
+      await appData.createCustomRole({
         name: roleForm.name,
         description: roleForm.description,
         isPositionOnly: roleForm.isPositionOnly,
@@ -82,9 +82,9 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
     refreshRoles();
   };
 
-  const handleDeleteRole = (roleId: string, roleName: string) => {
+  const handleDeleteRole = async (roleId: string, roleName: string) => {
     if (confirm(`Are you sure you want to delete custom role "${roleName}"?`)) {
-      mockData.deleteCustomRole(roleId);
+      await appData.deleteCustomRole(roleId);
       refreshRoles();
     }
   };

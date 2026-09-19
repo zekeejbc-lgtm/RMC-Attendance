@@ -10,11 +10,13 @@ interface DirectoryNodeModalProps {
   parent?: SchoolNode | null;
   node?: SchoolNode | null;
   onClose: () => void;
-  onSave: (node: SchoolNode) => void;
+  onSave: (node: SchoolNode) => void | Promise<void>;
 }
 
 export function DirectoryNodeModal({ open, parent, node, onClose, onSave }: DirectoryNodeModalProps) {
   const suggestedTypes = useMemo(() => parent ? getAllowedChildTypes(parent) : academicNodeTypeOptions, [parent]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [name, setName] = useState('');
   const [type, setType] = useState<AcademicNodeType>('custom');
   const [shortCode, setShortCode] = useState('');
@@ -34,9 +36,10 @@ export function DirectoryNodeModal({ open, parent, node, onClose, onSave }: Dire
     setAllowedChildTypes(node?.metadata?.allowedChildTypes || []);
   }, [node, open, suggestedTypes]);
 
-  const save = () => {
-    if (!name.trim()) return;
-    onSave({
+  const save = async () => {
+    if (!name.trim() || saving) return;
+    setSaving(true); setSaveError('');
+    try { await onSave({
       id: node?.id || `${type}_${Date.now()}`,
       name: name.trim(),
       type,
@@ -46,12 +49,14 @@ export function DirectoryNodeModal({ open, parent, node, onClose, onSave }: Dire
         selectableForRegistration: registration, selectableForEvents: events,
         allowedChildTypes: customizeChildren ? allowedChildTypes : undefined,
       },
-    });
+    }); } catch (error) { setSaveError(error instanceof Error ? error.message : 'Unable to save unit.'); }
+    finally { setSaving(false); }
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={node ? 'Edit academic unit' : 'Establish unit'} description="Names are customizable; semantic types keep registration and targeting accurate." size="md" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button aria-label={node ? 'Save unit' : 'Establish unit'} variant="gold" onClick={save} disabled={!name.trim()}>Save unit</Button></>}>
+    <Modal open={open} onClose={onClose} title={node ? 'Edit academic unit' : 'Establish unit'} description="Names are customizable; semantic types keep registration and targeting accurate." size="md" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button aria-label={node ? 'Save unit' : 'Establish unit'} variant="gold" onClick={save} disabled={!name.trim() || saving}>Save unit</Button></>}>
       <div className="space-y-4">
+        {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
         <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Unit name<input aria-label="Unit designation" value={name} onChange={(event) => setName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="e.g. STEM-12-Newton or College of Computing" /></label>
         <CustomSelect
           label="Semantic type"

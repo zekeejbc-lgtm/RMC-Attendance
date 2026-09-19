@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { appData } from '../lib/backend';
 import QRCode from 'react-qr-code';
 import { useAuth } from '../components/AuthContext';
 import { ShieldCheck, Info, Download, Sparkles, CheckCircle2 } from 'lucide-react';
@@ -10,11 +11,23 @@ const StudentQR: React.FC = () => {
   const qrWrapperRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [qrToken, setQrToken] = useState('');
+  const [expiresAt, setExpiresAt] = useState(0);
+  const [qrError, setQrError] = useState('');
+  useEffect(() => {
+    let active = true;
+    const renew = async () => {
+      try {
+        const result = await appData.issueQr();
+        if (active) { setQrToken(result.token); setExpiresAt(result.expiresAt); setQrError(''); }
+      } catch (error) { if (active) { setQrToken(''); setQrError(error instanceof Error ? error.message : 'QR unavailable.'); } }
+    };
+    void renew();
+    const timer = setInterval(renew, 45000);
+    return () => { active = false; clearInterval(timer); };
+  }, [profile?.uid]);
 
   if (!profile) return null;
-
-  // Generate unique token identifier for QR security payload
-  const qrToken = `RMC_SECURE_PASSPORT:${profile.uid}:${btoa(profile.uid + '_sec_' + profile.student_id)}`;
 
   const handleDownloadPNG = () => {
     setDownloading(true);
@@ -280,10 +293,10 @@ const StudentQR: React.FC = () => {
           <div className="absolute top-3 right-3 bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[8px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
             Verified
           </div>
-          <img 
-            src="https://i.imgur.com/K3T5yIT.jpeg" 
-            alt="IARS Academic Seal" 
-            className="w-14 h-14 mx-auto rounded-full object-cover shadow-lg mb-2 ring-2 ring-gold-400/60" 
+          <img
+            src="https://i.imgur.com/K3T5yIT.jpeg"
+            alt="IARS Academic Seal"
+            className="w-14 h-14 mx-auto rounded-full object-cover shadow-lg mb-2 ring-2 ring-gold-400/60"
           />
           <h2 className="text-base font-bold text-white uppercase tracking-tight">Institution Attendance & Records</h2>
           <p className="text-gold-300 text-[9px] font-semibold uppercase tracking-widest mt-0.5">IARS • Student ID Card</p>
@@ -294,7 +307,7 @@ const StudentQR: React.FC = () => {
           <div className="text-center mb-4">
             <h3 className="text-base font-bold text-brand-900 dark:text-slate-100 uppercase tracking-tight">{profile.name}</h3>
             <p className="text-slate-500 dark:text-slate-400 font-mono text-[11px] font-semibold mt-0.5">ID: {profile.student_id}</p>
-            
+
             <div className="mt-2 flex flex-wrap justify-center gap-1.5">
               <span className="bg-brand-50 dark:bg-brand-900/40 text-brand-900 dark:text-brand-300 border border-brand-100 dark:border-brand-800 px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase">
                 {profile.school_data.department || 'General'}
@@ -312,20 +325,20 @@ const StudentQR: React.FC = () => {
             aria-label={`Student QR code for ${profile.name}`}
             className="mb-4 w-full max-w-[min(17rem,calc(100vw-4rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-inner transition-all hover:border-gold-400/60 dark:border-slate-700"
           >
-            <QRCode 
+            {qrToken && expiresAt > Date.now() ? <QRCode
               value={qrToken}
-              size={170} 
-              fgColor="#0E1B42" 
+              size={170}
+              fgColor="#0E1B42"
               level="H"
               className="h-auto w-full"
-            />
+            /> : <p role="status">{qrError || 'Generating secure QR…'}</p>}
           </div>
 
           {/* Download Action Button */}
           <Button
             aria-label="Download card as PNG"
             onClick={handleDownloadPNG}
-            disabled={downloading}
+            disabled={downloading || !qrToken || expiresAt <= Date.now()}
             className="w-full border border-gold-400/30 uppercase tracking-wider sm:w-auto"
           >
             {downloading ? (
@@ -350,7 +363,7 @@ const StudentQR: React.FC = () => {
              </div>
              <div className="min-w-0 text-left">
                 <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200">System-verified account</p>
-                <p className="text-[9px] text-emerald-700 font-medium [overflow-wrap:anywhere] dark:text-emerald-300">Linked to student record #{profile.student_id}; the QR uses an internal key and requires active student status.</p>
+                <p className="text-[9px] text-emerald-700 font-medium [overflow-wrap:anywhere] dark:text-emerald-300">Refreshes automatically. This QR expires at {expiresAt ? new Date(expiresAt).toLocaleTimeString() : '—'}. Downloaded copies expire at the same time.</p>
              </div>
           </div>
         </div>

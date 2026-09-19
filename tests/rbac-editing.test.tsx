@@ -1,13 +1,16 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { mockData } from '../lib/mockBackend';
+import { mockData } from './fixtures/demoBackend';
 import { hasPermission } from '../lib/accessControl';
 import { AdminRBACRoleView } from '../components/admin/AdminRBACRoleView';
+
+vi.mock('../lib/backend', async () => { const m = await import('./fixtures/demoBackend'); return { appData: m.mockData, appAuth: m.mockAuth, documentUrl: async (p: string) => p }; });
 
 describe('Admin RBAC Role Editing and Permission Enforcement', () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem('rmc_mock_session', 'mock_uid_admin');
   });
 
   it('allows admins to view and edit built-in core roles', () => {

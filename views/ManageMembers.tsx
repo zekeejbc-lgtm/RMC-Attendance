@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
-import { mockData } from '../lib/mockBackend';
+import { appData } from '../lib/backend';
 import { SchoolNode, UserProfile } from '../types';
 import { 
   ChevronRight, Plus, Users, School, GraduationCap, 
@@ -22,7 +22,7 @@ const deriveSchoolData = (path: SchoolNode[]): UserProfile['school_data'] => {
 };
 
 const ManageMembers: React.FC = () => {
-  const { isMock, profile } = useAuth();
+  const { isMock, profile, revision } = useAuth();
   const [structure, setStructure] = useState<SchoolNode[]>([]);
   const [currentPath, setCurrentPath] = useState<SchoolNode[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -43,14 +43,14 @@ const ManageMembers: React.FC = () => {
   const [memberSubmitError, setMemberSubmitError] = useState('');
 
   useEffect(() => {
-    if (isMock) {
-      const data = mockData.getSchoolStructure();
+    {
+      const data = appData.getSchoolStructure();
       setStructure(data);
       if (data.length > 0 && currentPath.length === 0) {
         setCurrentPath([data[0]]); // Start at root
       }
     }
-  }, [isMock]);
+  }, [revision]);
 
   const currentNode = useMemo(() => {
     if (currentPath.length === 0) return null;
@@ -86,7 +86,7 @@ const ManageMembers: React.FC = () => {
     }
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!currentNode) return;
     
     // If user selected a specific type in modal (e.g., Major vs Level), use that
@@ -101,12 +101,12 @@ const ManageMembers: React.FC = () => {
     };
 
     // Add Node to Backend
-    mockData.addSchoolNode(currentNode.id, newNode);
+    await appData.addSchoolNode(currentNode.id, newNode);
 
     // Create Officer if needed
     if (assignOfficer && officerData.name) {
       const role = type === 'section' ? 'mayor' : 'ssg'; // Governor/Council as SSG for now
-      mockData.createUser({
+      await appData.createUser({
         name: officerData.name,
         email: officerData.email,
         username: officerData.username,
@@ -118,7 +118,7 @@ const ManageMembers: React.FC = () => {
     }
 
     // Refresh Structure
-    const data = mockData.getSchoolStructure();
+    const data = appData.getSchoolStructure();
     setStructure(data);
     
     // Re-build current path with new data references
@@ -143,7 +143,7 @@ const ManageMembers: React.FC = () => {
     setOfficerData({ name: '', email: '', username: '' });
   };
 
-  const handleCreateMember = () => {
+  const handleCreateMember = async () => {
     if (!currentNode) return;
     const row: MemberCsvRow = {
       name: memberData.name.trim(),
@@ -156,7 +156,7 @@ const ManageMembers: React.FC = () => {
       guardian_contact: memberData.guardianContact.trim(),
       guardian_email: memberData.guardianEmail.trim(),
     };
-    const validation = validateMemberCsvRows([row], mockData.getAllAccountIdentities());
+    const validation = validateMemberCsvRows([row], appData.getAllAccountIdentities());
     if (!validation.valid) {
       setMemberErrors(validation.rows[0]?.errors || {});
       return;
@@ -178,7 +178,7 @@ const ManageMembers: React.FC = () => {
       school_data: deriveSchoolData(currentPath),
     } as const;
     try {
-      mockData.createSectionMembers([{ profile, makeMayor: row.role === 'mayor' }], currentNode.id, currentNode.name);
+      await appData.createSectionMembers([{ profile, makeMayor: row.role === 'mayor' }], currentNode.id, currentNode.name);
       closeMemberModal();
       setRegistryRevision((revision) => revision + 1);
     } catch (error) {
@@ -214,14 +214,14 @@ const ManageMembers: React.FC = () => {
         school_data: deriveSchoolData(currentPath),
       } as const,
     }));
-    mockData.createSectionMembers(members, currentNode.id, currentNode.name);
+    await appData.createSectionMembers(members, currentNode.id, currentNode.name);
     setShowBulkMemberModal(false);
     setRegistryRevision((revision) => revision + 1);
   };
 
-  const handleAssignMayor = (member: UserProfile) => {
+  const handleAssignMayor = async (member: UserProfile) => {
     if (!currentNode) return;
-    if (mockData.assignSectionMayor(member.uid, currentNode.id, currentNode.name)) {
+    if (await appData.assignSectionMayor(member.uid, currentNode.id, currentNode.name)) {
       setRegistryRevision((revision) => revision + 1);
     }
   };
@@ -250,7 +250,7 @@ const ManageMembers: React.FC = () => {
   // Determine if we need to ask for specific types (e.g. Major vs Level)
   const needsTypeSelection = ['program', 'strand'].includes(currentNode.type);
   const sectionMembers = isSection
-    ? mockData.getStudentsBySection(currentNode.name, currentNode.id) as Array<UserProfile & { stats?: { sanction_hours: number } }>
+    ? appData.getStudentsBySection(currentNode.name, currentNode.id) as Array<UserProfile & { stats?: { sanction_hours: number } }>
     : [];
   const filteredMembers = sectionMembers.filter((member) => {
     const query = memberSearch.trim().toLowerCase();
@@ -626,7 +626,7 @@ const ManageMembers: React.FC = () => {
       </Modal>
 
       <BulkMemberImportModal
-        existingMembers={mockData.getAllAccountIdentities()}
+        existingMembers={appData.getAllAccountIdentities()}
         onClose={() => setShowBulkMemberModal(false)}
         onConfirm={handleBulkCreateMembers}
         open={showBulkMemberModal}
