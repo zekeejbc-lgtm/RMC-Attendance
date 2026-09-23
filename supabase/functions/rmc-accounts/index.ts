@@ -15,6 +15,28 @@ Deno.serve(async (req: Request) => {
   const created: string[] = [];
   try {
     const { action, data } = await req.json();
+    if (action === 'access') {
+      const { error: permissionError } = await caller.rpc('rmc_assert_manage_accounts');
+      if (permissionError) throw permissionError;
+      const users: Array<{ id: string; last_sign_in_at?: string | null; created_at?: string }> = [];
+      let page = 1;
+      while (true) {
+        const result = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+        if (result.error) throw result.error;
+        users.push(...(result.data.users || []).map((item) => ({ id: item.id, last_sign_in_at: item.last_sign_in_at, created_at: item.created_at })));
+        if (!result.data.users || result.data.users.length < 1000) break;
+        page += 1;
+      }
+      return respond({ users });
+    }
+    if (action === 'reset_password') {
+      if (typeof data?.uid !== 'string' || typeof data?.password !== 'string' || data.password.length < 12) throw new Error('Passwords must contain at least 12 characters.');
+      const { error: permissionError } = await caller.rpc('rmc_change_account_password', { target: data.uid });
+      if (permissionError) throw permissionError;
+      const { error } = await admin.auth.admin.updateUserById(data.uid, { password: data.password });
+      if (error) throw error;
+      return respond({ ok: true });
+    }
     if (action === 'deactivate') {
       // Deactivation immediately revokes database access, including unexpired JWTs.
       const { error } = await caller.rpc('rmc_deactivate_account', { target: data.uid });

@@ -1,10 +1,11 @@
+import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
 import { useTheme } from '../components/ThemeContext';
 import ThemeToggle from '../components/ui/ThemeToggle';
-import { appAuth, appData } from '../lib/backend';
+import { appAuth, appData, refreshData, lookupEnrollment, EnrollmentLookup } from '../lib/backend';
 import { TEST_ACCOUNTS } from '../lib/seed';
 import { SchoolNode } from '../types';
 import Button from '../components/ui/Button';
@@ -13,6 +14,8 @@ import { Collapsible } from '../components/ui/Collapsible';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { serializeAcademicAssignment, findNodePath } from '../lib/academicDirectory';
 import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
+import { createDriveImage, deleteDriveImage, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
+import { enrollmentUsername, validEmergencyPhone, validStudentId } from '../lib/enrollment';
 import { 
   ArrowRight, Shield, Target, Users, 
   MapPin, Mail, Phone, Facebook, Instagram,
@@ -29,7 +32,8 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, defaultOpenRegister = false }) => {
   const navigate = useNavigate();
-  const { isMock, user, profile, revision } = useAuth();
+  const location = useLocation();
+  const { isMock, user, profile, revision, loading } = useAuth();
   
   // --- UI STATE ---
   const [scrolled, setScrolled] = useState(false);
@@ -47,14 +51,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [showTestPanel, setShowTestPanel] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [lookupId, setLookupId] = useState('');
+  const [lookupResult, setLookupResult] = useState<EnrollmentLookup | null>(null);
+  const [lookupError, setLookupError] = useState('');
+  const [lookingUp, setLookingUp] = useState(false);
+  const [showLookupModal, setShowLookupModal] = useState(false);
 
   // Register Logic State
   const [regStep, setRegStep] = useState(1);
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [checkingEnrollment, setCheckingEnrollment] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [savedPhotoUrl, setSavedPhotoUrl] = useState('');
+  const [readingPhoto, setReadingPhoto] = useState(false);
   const [regError, setRegError] = useState('');
   const [structure, setStructure] = useState<SchoolNode[]>([]);
   const [academicPath, setAcademicPath] = useState<SchoolNode[]>([]);
@@ -84,26 +99,34 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   }, [isDarkMode]);
 
   useEffect(() => {
-    if (user && !defaultOpenRegister && !showRegisterModal) {
+    if (!loading && user && !defaultOpenRegister && !showRegisterModal) {
       if (profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
         navigate('/ossa/dashboard');
       } else {
         navigate('/dashboard');
       }
     }
-  }, [user, profile, navigate, defaultOpenRegister, showRegisterModal]);
+  }, [loading, user, profile, navigate, defaultOpenRegister, showRegisterModal]);
 
   useEffect(() => {
     setStructure(appData.getSchoolStructure());
     setShowTestPanel(import.meta.env.DEV && import.meta.env.VITE_SHOW_TEST_ACCOUNTS === 'true');
   }, [revision]);
 
+  useEffect(() => {
+    if (!showRegisterModal || structure.length > 0) return;
+    void refreshData().catch(() => {
+      // AuthContext reports connection errors; keep the modal usable while it retries.
+    });
+  }, [showRegisterModal, structure.length]);
+
   const hydratedApplication = useRef<string | null>(null);
   useEffect(() => {
     if (!defaultOpenRegister || !user || hydratedApplication.current === user.uid) return;
-    const application = appData.getApplications().find(a => a.id === user.uid && a.status === 'rejected');
+    const application = appData.getApplications().find(a => a.id === user.uid && ['rejected', 'bounced', 'deleted'].includes(a.status));
     if (!application) return;
     const saved = application.form_data;
+    setSavedPhotoUrl(application.documents?.photo?.startsWith('https://drive.google.com/') ? application.documents.photo : saved.photo_url || '');
     setRegData(current => ({ ...current, name: saved.name, username: saved.username, email: saved.email, student_id: saved.student_id, guardianName: saved.guardian?.name || '', guardianPhone: saved.guardian?.contact || '' }));
     const terminalId = saved.school_data.academic_assignment?.terminalGroupId;
     if (terminalId) setAcademicPath(findNodePath(appData.getSchoolStructure(), terminalId) || []);
@@ -122,8 +145,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     setIsLoggingIn(true);
     setLoginError('');
     try {
+      if (identifier.trim().includes('@')) throw new Error('Use the username you submitted during registration to sign in.');
       await appAuth.signIn(identifier, password);
-      navigate('/dashboard');
+      const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+      navigate(returnTo || '/dashboard', { replace: true, state: null });
     } catch (err: any) {
       setLoginError(err.message || 'Failed to sign in.');
       setIsLoggingIn(false);
@@ -143,11 +168,58 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   };
 
   // Register Handlers
+  const enrollmentPerson = () => ({
+    name: regData.name.trim(), username: enrollmentUsername(regData.username, regData.student_id),
+    email: regData.email.trim().toLowerCase(), student_id: regData.student_id.trim(),
+    guardian: { name: regData.guardianName.trim(), contact: regData.guardianPhone.trim() },
+    photo_url: savedPhotoUrl,
+    school_data: { academic_assignment: { terminalGroupId: academicPath.at(-1)?.id } },
+  } as any);
+
+  const selectEnrollmentPhoto = async (file?: File) => {
+    if (!file) return;
+    setReadingPhoto(true); setRegError('');
+    setPhotoFile(null); setPhotoPreview(''); setSavedPhotoUrl('');
+    try {
+      validateProfileImage(file);
+      const preview = await fileAsDataUrl(file);
+      await new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => img.naturalWidth && img.naturalHeight ? resolve() : reject(new Error('Choose a readable image.'));
+        img.onerror = () => reject(new Error('This file is not a readable image. Choose another photo.'));
+        img.src = preview;
+      });
+      setPhotoFile(file); setPhotoPreview(preview);
+    } catch (error) { setRegError(error instanceof Error ? error.message : 'Unable to read the photo.'); }
+    finally { setReadingPhoto(false); }
+  };
+
+  const resendConfirmation = async () => {
+    if (!identifier.includes('@') || resendingConfirmation) return;
+    setResendingConfirmation(true);
+    try { await appAuth.resendConfirmation(identifier); setLoginError('Confirmation email sent. Check your inbox and spam folder.'); }
+    catch (error) { console.error('[Auth] resend confirmation failed', error); setLoginError(error instanceof Error ? error.message : 'Unable to resend confirmation email.'); }
+    finally { setResendingConfirmation(false); }
+  };
+
+  const handleEnrollmentLookup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLookupError(''); setLookupResult(null);
+    if (!validStudentId(lookupId)) { setLookupError('Use Student ID format YYYY-NNNNN, for example 2025-00046.'); return; }
+    setLookingUp(true);
+    try { setLookupResult(await lookupEnrollment(lookupId)); }
+    catch (error) { setLookupError(error instanceof Error && error.message ? error.message : 'Unable to check enrollment status.'); }
+    finally { setLookingUp(false); }
+  };
 
   const terminal = academicPath[academicPath.length - 1];
   const isMayorRegistered = terminal && ['section', 'block'].includes(terminal.type)
     ? appData.isMayorRegisteredForSection(terminal.id, terminal.name)
     : false;
+
+  useEffect(() => {
+    setSecurityKey('');
+  }, [terminal?.id]);
 
   const handleRegisterSubmit = async () => {
     if (isRegistering) return;
@@ -180,12 +252,31 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       school_data: { ...serialized.schoolData, school_id: serialized.assignment.campusId, academic_assignment: serialized.assignment }
     };
 
+    let uploadedDriveId = '';
     try {
+      if (!validStudentId(regData.student_id)) throw new Error('Use Student ID format YYYY-NNNNN, for example 2025-00046.');
+      if (regData.guardianName.trim().length < 2 || !validEmergencyPhone(regData.guardianPhone)) throw new Error('Enter the emergency contact’s full name and a valid mobile number.');
+      if (!photoFile && !savedPhotoUrl) throw new Error('Choose a profile picture before registering.');
+      let photoUrl = savedPhotoUrl;
+      if (!photoUrl && photoFile) {
+        const uploaded = await createDriveImage(photoFile, profile.name, profile.student_id);
+        uploadedDriveId = uploaded.id;
+        photoUrl = uploaded.url;
+        setSavedPhotoUrl(photoUrl);
+      }
+      profile.photo_url = photoUrl;
+      // Validate the exact payload that the signup trigger will receive. This
+      // turns a generic Auth "database error" into a useful field message and
+      // prevents uploading an image that can never be attached to an account.
+      await appData.validateEnrollment({ ...enrollmentPerson(), photo_url: photoUrl }, securityKey.trim(), 4);
       const result = await appData.submitApplication(profile, regData.password, securityKey.trim());
       setNeedsEmailConfirmation(result.needsEmailConfirmation);
       setIsRegistering(false);
       setRegSuccess(true);
     } catch (submissionError) {
+      if (uploadedDriveId) {
+        try { await deleteDriveImage(uploadedDriveId); } catch { /* keep the original error */ }
+      }
       setIsRegistering(false);
       setRegError(submissionError instanceof Error ? submissionError.message : 'Unable to submit the application.');
       setIsRegistering(false);
@@ -363,32 +454,37 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                        <span>{loginError}</span>
                      </div>
                    )}
+                   {loginError && /confirm|verification/i.test(loginError) && identifier.includes('@') && (
+                     <button type="button" onClick={() => void resendConfirmation()} disabled={resendingConfirmation} className="mb-4 text-xs font-bold text-brand-700 underline dark:text-gold-400">
+                       {resendingConfirmation ? 'Sending confirmation email…' : 'Resend confirmation email'}
+                     </button>
+                   )}
 
                    <form onSubmit={handleLogin} className="space-y-4">
                       <div className="space-y-1.5">
-                        <label htmlFor="landing-login-identifier" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Asset Identifier / Email</label>
+                        <label htmlFor="landing-login-identifier" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Username</label>
                         <div className="relative">
                           <UserCircle size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                           <input
                             id="landing-login-identifier"
-                            aria-label="Asset Identifier"
+                            aria-label="Username"
                             type="text"
                            required
                            value={identifier}
                            onChange={(e) => setIdentifier(e.target.value)}
                            className="w-full py-3.5 pl-12 pr-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-base text-brand-900 dark:text-white"
-                           placeholder="Username or Email address"
+                           placeholder="Your submitted username"
                          />
                        </div>
                      </div>
 
                      <div className="space-y-1.5">
-                       <label htmlFor="landing-login-password" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Security Key</label>
+                       <label htmlFor="landing-login-password" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Password</label>
                        <div className="relative">
                          <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                          <input
                            id="landing-login-password"
-                           aria-label="Security Key"
+                           aria-label="Password"
                            type={showPassword ? "text" : "password"}
                            required
                            value={password}
@@ -412,7 +508,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                      </Button>
                      <button type="button" className="text-sm underline" onClick={async () => {
                        if (!identifier.includes('@')) { setLoginError('Enter your email address above, then choose Forgot password.'); return; }
-                       const { error } = await supabase.auth.resetPasswordForEmail(identifier.trim(), { redirectTo: window.location.origin });
+                       const { error } = await toast.result(() => supabase.auth.resetPasswordForEmail(identifier.trim(), { redirectTo: window.location.origin }), 'Request password reset', 'Check your email for a reset link');
                        setLoginError(error ? error.message : 'Check your email for a password reset link.');
                      }}>Forgot password?</button>
                    </form>
@@ -473,9 +569,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       <Modal
         open={showRegisterModal}
         onClose={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); if (defaultOpenRegister) navigate('/'); }}
-        size="md"
+        size="xl"
         title={regSuccess ? "Enrollment Submitted" : "System Enrollment"}
-        description={regSuccess ? "Application Submitted • Status Pending Review" : `Stage ${regStep} of 3 • Protocol`}
+        description={regSuccess ? "Application Submitted • Status Pending Review" : `Stage ${regStep} of 4 • Protocol`}
       >
         {regSuccess ? (
           <div className="space-y-5 text-center py-2 animate-in fade-in zoom-in-95">
@@ -520,7 +616,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
            <div className="space-y-5">
               {regStep === 1 && (
                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                    <p className="text-sm text-slate-500">You can upload your photo and admission documents after verifying your email.</p>
+                     <p className="text-sm text-slate-500">Complete your account details, academic assignment, emergency contact, and profile picture.</p>
 
                     <div className="space-y-1">
                        <label htmlFor="landing-register-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Legal Full Name</label>
@@ -601,7 +697,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                     </div>
 
                     <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
-                    {structure.length === 0 && <p role="status" className="text-sm text-amber-700 dark:text-amber-300">Enrollment sections are not available yet. Ask your school administrator to set up the Academic Directory, then return to complete registration.</p>}
+                    {structure.length === 0 && <p role="status" className="text-sm text-amber-700 dark:text-amber-300">{loading ? 'Loading enrollment sections…' : 'Enrollment sections are not available yet. Ask your school administrator to set up the Academic Directory, then return to complete registration.'}</p>}
 
                     {terminal && appData.isMayorRegisteredForSection(terminal.id, terminal.name) && (
                       <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
@@ -635,50 +731,78 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                     <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-800">
                        <Shield size={28} className="text-brand-900 dark:text-gold-400 shrink-0" />
                        <div>
-                          <h4 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase">Optional Emergency Contact</h4>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Not required for attendance enrollment</p>
+                          <h4 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase">Emergency Contact — Required</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Provide a contact the school can reach in an emergency</p>
                        </div>
                     </div>
                     <div className="space-y-1">
                        <label htmlFor="landing-register-guardian-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Guardian Name</label>
-                       <input id="landing-register-guardian-name" placeholder="Legal Full Name" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianName} onChange={e => setRegData({...regData, guardianName: e.target.value})} />
+                       <input id="landing-register-guardian-name" required placeholder="Legal Full Name" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianName} onChange={e => setRegData({...regData, guardianName: e.target.value})} />
                     </div>
                     <div className="space-y-1">
                        <label htmlFor="landing-register-guardian-phone" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Emergency Contact #</label>
-                       <input id="landing-register-guardian-phone" placeholder="+63 9XX XXX XXXX" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianPhone} onChange={e => setRegData({...regData, guardianPhone: e.target.value})} />
+                       <input id="landing-register-guardian-phone" required inputMode="tel" placeholder="+63 9XX XXX XXXX" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianPhone} onChange={e => setRegData({...regData, guardianPhone: e.target.value})} />
                     </div>
                  </div>
               )}
 
+              {regStep === 4 && (
+                <section className="space-y-4">
+                  <h3 className="font-bold">Profile picture — Required</h3>
+                  <p className="text-sm text-slate-500">Choose a clear photo of yourself. JPG, PNG, or WebP, up to 5 MB. Your photo is saved through the school's Google Drive image service when you register.</p>
+                  {(photoPreview || savedPhotoUrl) && <img src={photoPreview || savedPhotoUrl} alt="Profile picture preview" className="h-36 w-36 rounded-2xl object-cover" />}
+                  <div className="space-y-2">
+                    <label htmlFor="enrollment-photo" className="block text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Choose profile picture</label>
+                    <input id="enrollment-photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={readingPhoto || isRegistering} className="sr-only" onChange={e => { void selectEnrollmentPhoto(e.target.files?.[0]); e.target.value = ''; }} />
+                    <label
+                      htmlFor="enrollment-photo"
+                      className={`inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-3 text-sm font-black transition-colors ${readingPhoto || isRegistering ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-700 dark:bg-slate-800' : 'border-brand-200 bg-brand-50 text-brand-900 hover:border-gold-400 hover:bg-gold-50 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:hover:border-gold-400'}`}
+                    >
+                      <Camera size={18} />
+                      {readingPhoto ? 'Checking image…' : photoFile ? 'Choose a different photo' : 'Choose a profile photo'}
+                    </label>
+                    {photoFile && <p className="truncate text-xs font-semibold text-slate-500" title={photoFile.name}>{photoFile.name}</p>}
+                  </div>
+                  {readingPhoto && <p role="status">Checking image…</p>}
+                </section>
+              )}
               {regError && (
-                <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-800 text-xs font-semibold">
+                <div role="alert" className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-800 text-xs font-semibold">
                   {regError}
                 </div>
               )}
 
               <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:gap-4">
                  {regStep > 1 && (
-                   <Button variant="secondary" aria-label="Previous registration phase" className="!w-full !rounded-xl sm:!w-16 sm:!p-0" onClick={() => setRegStep(regStep - 1)}>
+                   <Button disabled={checkingEnrollment || isRegistering || readingPhoto} variant="secondary" aria-label="Previous registration phase" className="!w-full !rounded-xl sm:!w-16 sm:!p-0" onClick={() => { setRegError(''); setRegStep(regStep - 1); }}>
                      <ChevronLeft size={20} />
                    </Button>
                  )}
-                 {regStep < 3 ? (
-                   <Button className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { 
-                     if (regStep === 1 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regData.email.trim())) {
-                       setRegError('Enter a valid email address.');
-                       return;
+                  {regStep < 4 ? (
+                    <Button disabled={checkingEnrollment} className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={async () => {
+                      if (regStep === 1 && !regData.name.trim()) {
+                        setRegError('Enter your full name.');
+                        return;
+                      }
+                      if (regStep === 1 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regData.email.trim())) {
+                        setRegError('Enter a valid email address.');
+                        return;
                      }
                      if (regStep === 1 && regData.username.trim() && !/^[a-zA-Z0-9_.-]{3,100}$/.test(regData.username.trim())) {
                        setRegError('Username must be 3–100 letters, numbers, dots, underscores, or hyphens.');
-                       return;
-                     }
-                     if (!user && regStep === 1 && regData.password !== regData.confirmPassword) {
-                       setRegError('Passwords do not match.');
-                       return;
+                        return;
+                      }
+                      if (!user && regStep === 1 && regData.password.length < 12) {
+                        setRegError('Password must be at least 12 characters.');
+                        return;
+                      }
+                      if (!user && regStep === 1 && regData.password !== regData.confirmPassword) {
+                        setRegError('Passwords do not match.');
+                        return;
                      }
                      if (regStep === 2) {
-                       if (!regData.student_id.trim()) {
-                         setRegError('Official Student ID # is required.');
+                       if (!validStudentId(regData.student_id)) {
+                         setRegError('Use Student ID format YYYY-NNNNN, for example 2025-00046.');
                          return;
                        }
                        const terminalNode = academicPath[academicPath.length - 1];
@@ -691,13 +815,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                          return;
                        }
                      }
-                     setRegError(''); 
-                     setRegStep(regStep + 1); 
-                   }} disabled={regStep === 1 && (!regData.name.trim() || !regData.email.trim() || (!user && (regData.password.length < 12 || !regData.confirmPassword || regData.password !== regData.confirmPassword)))}>
-                     Next
+                     if (regStep === 3 && (regData.guardianName.trim().length < 2 || !validEmergencyPhone(regData.guardianPhone))) {
+                       setRegError('Enter the emergency contact’s full name and a valid mobile number (09XXXXXXXXX or +639XXXXXXXXX).');
+                       return;
+                     }
+                     setCheckingEnrollment(true); setRegError('');
+                     try {
+                       await appData.validateEnrollment(enrollmentPerson(), securityKey.trim(), regStep);
+                       setRegStep(regStep + 1);
+                     } catch (error) {
+                       setRegError(error instanceof Error ? error.message : (error as { message?: string })?.message || 'Unable to validate enrollment. Please try again.');
+                     } finally { setCheckingEnrollment(false); }
+                    }}>
+                     {checkingEnrollment ? 'Checking…' : 'Next'}
                    </Button>
                  ) : (
-                   <Button variant="gold" className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={handleRegisterSubmit} disabled={isRegistering}>
+                   <Button variant="gold" className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={handleRegisterSubmit} disabled={isRegistering || readingPhoto}>
                      {isRegistering ? 'Submitting...' : 'Register'}
                    </Button>
                  )}
@@ -735,6 +868,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                  Register
               </button>
            </div>
+
+           <button type="button" onClick={() => { setShowLookupModal(true); setLookupError(''); setLookupResult(null); }} className="mt-8 inline-flex items-center justify-center gap-3 rounded-2xl border-2 border-gold-300 bg-white px-7 py-4 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition hover:-translate-y-1 hover:border-gold-500 dark:border-gold-700 dark:bg-slate-900 dark:text-white">
+             <Clock size={18} className="text-gold-500" /> Check enrollment progress
+           </button>
         </div>
 
         {/* HERO FEATURE HIGHLIGHT CARDS */}
@@ -765,6 +902,27 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
            </div>
         </div>
       </section>
+
+      <Modal open={showLookupModal} onClose={() => setShowLookupModal(false)} title="Check enrollment progress" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Enter your Student ID to see your latest application status.</p>
+          <form className="space-y-3" onSubmit={handleEnrollmentLookup}>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500" htmlFor="enrollment-lookup-id">Student ID</label>
+            <input id="enrollment-lookup-id" value={lookupId} onChange={event => setLookupId(event.target.value)} placeholder="YYYY-NNNNN" autoFocus className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800" />
+            <Button type="submit" variant="gold" disabled={lookingUp} className="w-full">{lookingUp ? 'Checking…' : 'Check status'}</Button>
+          </form>
+          {lookupError && <p role="alert" className="text-xs font-semibold text-red-600">{lookupError}</p>}
+          {lookupResult && <div role="status" className="space-y-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800">
+            {!lookupResult.found ? <p>No enrollment application was found for that Student ID.</p> : <>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs"><div><dt className="text-slate-500">Enrollee</dt><dd className="font-semibold">{lookupResult.namePreview || '—'}</dd></div><div><dt className="text-slate-500">Student ID</dt><dd className="font-semibold">{lookupId}</dd></div><div><dt className="text-slate-500">Email</dt><dd className="font-semibold">{lookupResult.emailPreview || '—'}</dd></div><div><dt className="text-slate-500">Section</dt><dd className="font-semibold">{lookupResult.sectionPreview || '—'}</dd></div></dl>
+              <p className="border-t border-slate-200 pt-3 dark:border-slate-700">{lookupResult.status === 'approved' ? 'Your enrollment is approved. You can log in to continue.' : lookupResult.status === 'bounced' ? 'Your application was returned for clarification.' : lookupResult.status === 'deleted' ? 'Your application was deleted. You may apply again.' : lookupResult.status === 'rejected' ? 'Your application was rejected. You may apply again.' : 'Your application is pending review by the school officer.'}</p>
+              {lookupResult.rejectionReason && ['rejected', 'bounced'].includes(lookupResult.status || '') && <div className="rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900/60 dark:bg-red-950/30"><p className="text-[10px] font-black uppercase tracking-wider text-red-700 dark:text-red-300">Reviewer reason</p><p className="mt-1 whitespace-pre-wrap text-sm text-red-900 dark:text-red-100">{lookupResult.rejectionReason}</p>{lookupResult.clarificationFields?.length ? <p className="mt-2 text-xs font-semibold text-red-800 dark:text-red-200">Please update: {lookupResult.clarificationFields.join(', ')}.</p> : null}</div>}
+              {lookupResult.status === 'bounced' && <Button type="button" variant="gold" className="w-full" onClick={() => user ? navigate('/register/status') : navigate('/login', { state: { returnTo: '/register/status' } })}>Edit and resubmit application</Button>}
+              {lookupResult.status === 'rejected' && <Button type="button" variant="secondary" className="w-full" onClick={() => user ? navigate('/register/status') : navigate('/login', { state: { returnTo: '/register/status' } })}>Sign in to reapply</Button>}
+            </>}
+          </div>}
+        </div>
+      </Modal>
 
       {/* FEATURES SECTION */}
       <section id="features" className="py-20 bg-white dark:bg-slate-900">

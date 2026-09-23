@@ -1393,6 +1393,23 @@ export const mockData = {
     if (changed) saveDB(db);
     return changed;
   },
+  restoreSchoolNode: (id: string) => {
+    requireSessionPermission('directory.manage_structure', false);
+    const db = getDB();
+    const restore = (nodes: SchoolNode[]): boolean => {
+      for (const item of nodes) {
+        if (item.id === id) {
+          item.metadata = { ...(item.metadata || {}), archived: false };
+          return true;
+        }
+        if (restore(item.children || [])) return true;
+      }
+      return false;
+    };
+    const changed = restore(db.school_structure);
+    if (changed) saveDB(db);
+    return changed;
+  },
   deleteSchoolNode: (id: string, actorUid?: string) => {
     const db = getDB();
     const actor = db.users[actorUid || localStorage.getItem('rmc_mock_session') || '']?.profile;

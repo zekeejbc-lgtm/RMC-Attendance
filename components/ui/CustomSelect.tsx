@@ -191,7 +191,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-haspopup="listbox"
         aria-label={ariaLabel}
         aria-labelledby={ariaLabel ? undefined : label ? `${labelId} ${valueId}` : valueId}
-        className={`group flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3.5 py-2.5 text-left text-sm font-bold text-brand-900 shadow-sm transition-[border-color,box-shadow,background-color] duration-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 ${isOpen ? 'border-gold-400 bg-white ring-4 ring-gold-400/10 dark:bg-slate-900' : 'border-slate-200 hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:hover:bg-slate-900'}`}
+        className={`group flex min-h-11 w-full min-w-0 cursor-pointer items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3.5 py-2.5 text-left text-sm font-bold text-brand-900 shadow-sm transition-[border-color,box-shadow,background-color] duration-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 ${isOpen ? 'border-gold-400 bg-white ring-4 ring-gold-400/10 dark:bg-slate-900' : 'border-slate-200 hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:hover:bg-slate-900'}`}
         disabled={disabled}
         role={combobox ? 'combobox' : undefined}
         value={typeof value === 'string' ? value : undefined}
@@ -208,7 +208,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         ref={triggerRef}
         type="button"
       >
-        <span className="select-none truncate" id={valueId}>{getDisplayValue()}</span>
+        <span className="min-w-0 flex-1 select-none truncate" id={valueId}>{getDisplayValue()}</span>
         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isOpen ? 'bg-gold-100 text-gold-700 dark:bg-gold-900/40 dark:text-gold-300' : 'bg-slate-100 text-slate-400 group-hover:text-brand-900 dark:bg-slate-700 dark:text-slate-300'}`}>
           <ChevronDown className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} size={15} strokeWidth={2.5} />
         </span>
@@ -293,7 +293,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                   tabIndex={activeKey === option.value ? 0 : -1}
                   type="button"
                 >
-                  <span className="truncate">{option.label}</span>
+                  <span className="min-w-0 truncate">{option.label}</span>
                   {isSelected ? <CheckCircle className="text-brand-900 dark:text-gold-400" size={14} /> : null}
                 </button>
               );

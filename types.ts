@@ -12,6 +12,9 @@ export type AppPermission =
   | 'directory.manage_structure'
   | 'directory.delete_structure'
   | 'directory.manage_members'
+  | 'directory.add_members_manually'
+  | 'directory.change_member_designation'
+  | 'directory.manage_student_sanctions'
   | 'attendance.scan'
   | 'attendance.manage'
   | 'events.manage'
@@ -275,12 +278,18 @@ export interface SchoolNode {
   };
 }
 
-export interface Application {
+  export interface Application {
   documents?: Record<string, string>;
   id: string;
-  status: 'pending' | 'approved' | 'rejected';
+    status: 'pending' | 'approved' | 'rejected' | 'bounced' | 'deleted';
   submission_date: number;
   rejection_count: number;
-  rejection_reason?: string;
+    rejection_reason?: string;
+    clarification_fields?: string[];
+    reviewed_at?: number;
+    reviewed_by?: string;
+  enrollment_node_id?: string;
+  enrollment_verified_at?: number;
   form_data: UserProfile;
 }
+

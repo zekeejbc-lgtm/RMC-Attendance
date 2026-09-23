@@ -58,6 +58,6 @@ export function AcademicPathPicker({ roots, value, onChange, purpose = 'any', in
         );
       })}
     </div>
-    {selectedPath.length > 0 && <div aria-label="Selected academic path" className="rounded-xl border border-brand-100 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-800 dark:border-brand-800 dark:bg-brand-900/30 dark:text-brand-200">{selectedPath.map((node) => node.name).join(' / ')}</div>}
+    {selectedPath.length > 0 && <div aria-label="Selected academic path" className="min-w-0 break-words rounded-xl border border-brand-100 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-800 dark:border-brand-800 dark:bg-brand-900/30 dark:text-brand-200">{selectedPath.map((node) => node.name).join(' / ')}</div>}
   </div>;
 }

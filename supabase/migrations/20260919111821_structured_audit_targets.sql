@@ -199,6 +199,6 @@ begin
  (select profile->>'name' from public.rmc_profiles where id::text=target),
  (select data->>'name' from public.rmc_nodes where id=target),
  (select data->>'title' from public.rmc_events where id::text=target),
- (select data->>'student_name' from public.rmc_excuses where id::text=target),target,'')));
+ (select data->>'student_name' from public.rmc_excuses where id::text=target),target,''),'reason',nullif(args#>>'{1,reason}','')));
  return result;
 end $$;

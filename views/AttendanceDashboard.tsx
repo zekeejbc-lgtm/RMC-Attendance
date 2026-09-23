@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../components/AuthContext';
@@ -163,6 +164,7 @@ const AttendanceDashboard: React.FC = () => {
 
   // --- Export Logic ---
   const handleExportPDF = async () => {
+    return toast.track(async () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
@@ -247,9 +249,11 @@ const AttendanceDashboard: React.FC = () => {
 
     doc.save('attendance_report.pdf');
     setShowExportModal(false);
+    }, 'Export PDF', 'PDF download started');
   };
 
   const handleExportCSV = () => {
+    return toast.sync(() => {
     const headers = ['Student Name', 'Student ID', 'Status', 'Section', 'Level', 'Time In'];
     const rows = attendanceData.map(r => [
       r.studentName,
@@ -270,6 +274,7 @@ const AttendanceDashboard: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    }, 'Export CSV', 'CSV download started');
   };
 
   return (

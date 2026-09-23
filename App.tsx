@@ -23,6 +23,8 @@ const OSSADashboard = lazy(() => import('./views/OSSADashboard'));
 const AdminControls = lazy(() => import('./views/AdminControls'));
 import { UserRole } from './types';
 import { hasPermission, AppPermission } from './lib/accessControl';
+import { AppLoading, PageSkeleton } from './components/ui/Skeleton';
+import ToastViewport from './components/ui/ToastViewport';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -34,11 +36,7 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permission, permissionAny }) => {
   const { user, loading, profile } = useAuth();
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-brand-900">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gold-400"></div>
-    </div>
-  );
+  if (loading) return <AppLoading label="Loading your workspace"><PageSkeleton /></AppLoading>;
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -66,9 +64,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
 const App: React.FC = () => {
   return (
     <ThemeProvider>
+      <ToastViewport />
       <AuthProvider>
         <HashRouter>
-          <Suspense fallback={<div role="status" className="p-8">Loading page...</div>}><Routes>
+          <Suspense fallback={<AppLoading label="Loading page"><PageSkeleton /></AppLoading>}><Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LandingPage defaultOpenLogin={true} />} />
           <Route path="/register" element={<LandingPage defaultOpenRegister={true} />} />
@@ -146,7 +145,7 @@ const App: React.FC = () => {
           } />
 
           <Route path="/admin/controls" element={
-            <ProtectedRoute permissionAny={['system.manage_rbac', 'system.health', 'system.freeze', 'system.payment_reminders']}>
+            <ProtectedRoute permissionAny={['system.manage_accounts', 'system.manage_rbac', 'system.health', 'system.freeze', 'system.payment_reminders']}>
               <AdminControls />
             </ProtectedRoute>
           } />

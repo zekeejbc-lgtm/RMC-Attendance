@@ -15,6 +15,7 @@ import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { getAllowedChildTypes, serializeAcademicAssignment } from '../lib/academicDirectory';
 import BulkMemberImportModal from '../components/members/BulkMemberImportModal';
 import { MemberCsvErrors, MemberCsvRow, validateMemberCsvRows } from '../lib/memberCsv';
+import { hasPermission } from '../lib/accessControl';
 
 const deriveSchoolData = (path: SchoolNode[]): UserProfile['school_data'] => {
   const serialized = serializeAcademicAssignment(path);
@@ -246,6 +247,8 @@ const ManageMembers: React.FC = () => {
   const childType = getChildType(currentNode.type, currentNode.name);
   const isSection = currentNode.type === 'section' || currentNode.type === 'block';
   const canManageStructure = profile?.role === 'admin' || profile?.role === 'ossa';
+  const canAddMembersManually = hasPermission(profile?.role, 'directory.add_members_manually', appData.getCustomRoles(), appData.getCoreRoles());
+  const canChangeDesignation = hasPermission(profile?.role, 'directory.change_member_designation', appData.getCustomRoles(), appData.getCoreRoles());
 
   // Determine if we need to ask for specific types (e.g. Major vs Level)
   const needsTypeSelection = ['program', 'strand'].includes(currentNode.type);
@@ -309,12 +312,14 @@ const ManageMembers: React.FC = () => {
               <div className="grid w-full gap-3 sm:grid-cols-2 lg:flex lg:w-auto lg:flex-wrap">
                 <SearchInput ariaLabel="Search section members" className="lg:w-64" onChange={setMemberSearch} placeholder="Search name, email, or ID" value={memberSearch} />
                 <CustomSelect ariaLabel="Filter members by role" className="min-w-0" combobox label="Role" onChange={(value) => setMemberRole(value as typeof memberRole)} options={[{ value: 'all', label: 'All roles' }, { value: 'student', label: 'Students' }, { value: 'mayor', label: 'Mayors' }]} value={memberRole} />
-                <Button aria-label="Bulk create members" variant="secondary" className="lg:w-auto" onClick={() => setShowBulkMemberModal(true)}>
+                {canAddMembersManually ? <Button aria-label="Bulk create members" variant="secondary" className="lg:w-auto" onClick={() => setShowBulkMemberModal(true)}>
                   <FileUp size={16} /> Bulk create
-                </Button>
-                <Button aria-label="Add member" variant="gold" className="lg:w-auto" onClick={() => setShowMemberModal(true)}>
-                  <UserPlus size={16} /> Add member
-                </Button>
+                </Button> : null}
+                {canAddMembersManually ? (
+                  <Button aria-label="Add member" variant="gold" className="lg:w-auto" onClick={() => setShowMemberModal(true)}>
+                    <UserPlus size={16} /> Add member
+                  </Button>
+                ) : null}
               </div>
             </div>
 
@@ -337,9 +342,9 @@ const ManageMembers: React.FC = () => {
                           <td className="p-3 text-right">
                             {member.role === 'mayor' ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2.5 py-1 text-xs font-bold text-gold-800 dark:bg-gold-950/50 dark:text-gold-300"><Crown size={13} /> Current mayor</span>
-                            ) : (
+                            ) : canChangeDesignation ? (
                               <Button aria-label={`Assign ${member.name} as mayor`} className="sm:w-auto" onClick={() => handleAssignMayor(member)} size="sm" variant="secondary">Assign mayor</Button>
-                            )}
+                            ) : <span className="text-xs text-slate-400">No designation access</span>}
                           </td>
                         </tr>
                       ))}
@@ -357,9 +362,9 @@ const ManageMembers: React.FC = () => {
                       </dl>
                       {member.role === 'mayor' ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-gold-100 px-2.5 py-1 text-xs font-bold text-gold-800 dark:bg-gold-950/50 dark:text-gold-300"><Crown size={13} /> Current mayor</span>
-                      ) : (
+                      ) : canChangeDesignation ? (
                         <Button aria-label={`Assign ${member.name} as mayor`} onClick={() => handleAssignMayor(member)} size="sm" variant="secondary">Assign as mayor</Button>
-                      )}
+                      ) : <span className="text-xs text-slate-400">No designation access</span>}
                     </article>
                   ))}
                 </div>
@@ -637,3 +642,4 @@ const ManageMembers: React.FC = () => {
 };
 
 export default ManageMembers;
+

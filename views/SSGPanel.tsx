@@ -6,7 +6,9 @@ import { appData, documentUrl } from '../lib/backend';
 import { Application, AppEvent, UserProfile, SchoolNode, UserStats } from '../types';
 import Button from '../components/ui/Button';
 import CustomSelect from '../components/ui/CustomSelect';
+import { SensitiveActionModal } from '../components/SensitiveActionModal';
 import { Modal } from '../components/ui/Modal';
+import { Collapsible } from '../components/ui/Collapsible';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { DirectoryNodeModal } from '../components/academic/DirectoryNodeModal';
 import { PresetPickerModal } from '../components/academic/PresetPickerModal';
@@ -28,7 +30,7 @@ import {
 const memberFieldClass = 'mt-1.5 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
 
 const SSGPanel: React.FC = () => {
-  const { profile, isMock } = useAuth();
+  const { profile, isMock, revision } = useAuth();
   const [tab, setTab] = useState<'hub' | 'events'>('hub');
 
   useEffect(() => {
@@ -45,6 +47,10 @@ const SSGPanel: React.FC = () => {
   const [path, setPath] = useState<SchoolNode[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<(UserProfile & { stats: UserStats }) | null>(null);
   const [selectedApplicant, setSelectedApplicant] = useState<Application | null>(null);
+  const [admissionDecision, setAdmissionDecision] = useState<{ application: Application; decision: 'rejected' | 'bounced' | 'deleted' } | null>(null);
+  const [admissionReason, setAdmissionReason] = useState('');
+  const [clarificationFields, setClarificationFields] = useState<string[]>([]);
+  const [admissionError, setAdmissionError] = useState('');
 
   const [nodeEditor, setNodeEditor] = useState<{ parentId: string | null; node?: SchoolNode } | null>(null);
   const [showPresetModal, setShowPresetModal] = useState(false);
@@ -53,6 +59,7 @@ const SSGPanel: React.FC = () => {
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [memberError, setMemberError] = useState('');
   const [memberData, setMemberData] = useState({ name: '', email: '', username: '', studentId: '', password: '' });
+  const [showMemberPassword, setShowMemberPassword] = useState(false);
   
   // Specific Asset Input State
   const [assetInput, setAssetInput] = useState('');
@@ -79,8 +86,9 @@ const SSGPanel: React.FC = () => {
   const canManageStructure = hasPermission(profile?.role, 'directory.manage_structure');
   const canDeleteStructure = hasPermission(profile?.role, 'directory.delete_structure');
   const canManageMembers = hasPermission(profile?.role, 'directory.manage_members');
+  const canAddMembersManually = hasPermission(profile?.role, 'directory.add_members_manually', appData.getCustomRoles(), appData.getCoreRoles());
   const canManageOfficers = profile?.role === 'admin' || profile?.role === 'ossa' || profile?.role === 'ssg';
-  const canReviewApplicants = profile?.role === 'admin' || profile?.role === 'ossa' || profile?.role === 'ssg';
+  const canReviewApplicants = hasPermission(profile?.role, 'directory.manage_members');
 
   // Fix: Enhanced refresh to update selected student details if a modal is active
   const refresh = () => {
@@ -107,6 +115,31 @@ const SSGPanel: React.FC = () => {
     refresh();
   };
 
+  const openAdmissionDecision = (application: Application, decision: 'rejected' | 'bounced' | 'deleted') => {
+    if (!canReviewApplicants || !nodeApplicants.some(item => item.id === application.id)) return;
+    setAdmissionDecision({ application, decision });
+    setAdmissionReason('');
+    setClarificationFields([]);
+    setAdmissionError('');
+  };
+
+  const submitAdmissionDecision = async () => {
+    if (!admissionDecision || admissionReason.trim().length < 3) return;
+    if (admissionDecision.decision === 'bounced' && clarificationFields.length === 0) {
+      setAdmissionError('Choose at least one item that the enrollee must clarify.');
+      return;
+    }
+    try {
+      setAdmissionError('');
+      await appData.reviewAdmission(admissionDecision.application.id, admissionDecision.decision, admissionReason.trim(), clarificationFields);
+      setAdmissionDecision(null);
+      setSelectedApplicant(null);
+      refresh();
+    } catch (caught) {
+      setAdmissionError(caught instanceof Error ? caught.message : 'The application decision could not be saved.');
+    }
+  };
+
   // Fix: Implemented missing handleAdjustSanctionHours function for student detail modal
   const handleAdjustSanctionHours = async (uid: string, delta: number) => {
     await appData.adjustSanctionHours(uid, delta, `Administrative Adjustment: ${profile?.name}`);
@@ -129,9 +162,7 @@ const SSGPanel: React.FC = () => {
 
   useEffect(() => {
     refresh();
-    const i = setInterval(refresh, 5000);
-    return () => clearInterval(i);
-  }, []);
+  }, [revision, profile?.uid]);
 
   const handleAddAsset = () => {
     if (assetInput.trim() && !eventData.specificPeople.includes(assetInput.trim())) {
@@ -208,62 +239,18 @@ const SSGPanel: React.FC = () => {
     refresh();
   };
 
-  // Node deletion confirmation modal state
-  const [deleteTargetNode, setDeleteTargetNode] = useState<SchoolNode | null>(null);
-  const [deleteTypedName, setDeleteTypedName] = useState('');
-  const [deleteTypedConfirmText, setDeleteTypedConfirmText] = useState('');
-  const [deletePassword, setDeletePassword] = useState('');
-  const [deleteConfirmPassword, setDeleteConfirmPassword] = useState('');
-  const [deleteError, setDeleteError] = useState('');
-  const [showDeletePass, setShowDeletePass] = useState(false);
-  const [showDeleteConfirmPass, setShowDeleteConfirmPass] = useState(false);
-
-  const handleArchiveNode = async (node: SchoolNode) => {
-    await appData.archiveSchoolNode(node.id);
-    refresh();
+  const [sensitiveTarget, setSensitiveTarget] = useState<{ action: 'ARCHIVE' | 'DELETE'; node: SchoolNode } | null>(null);
+  const [restoreError, setRestoreError] = useState('');
+  const [restoringId, setRestoringId] = useState('');
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const handleArchiveNode = (node: SchoolNode) => setSensitiveTarget({ action: 'ARCHIVE', node });
+  const handleDeleteNodeClick = (node: SchoolNode) => setSensitiveTarget({ action: 'DELETE', node });
+  const restoreNode = async (node: SchoolNode) => {
+    setRestoreError(''); setRestoringId(node.id);
+    try { await appData.restoreSchoolNode(node.id); refresh(); }
+    catch (error) { setRestoreError(error instanceof Error ? error.message : 'Unable to restore this unit.'); }
+    finally { setRestoringId(''); }
   };
-
-  const handleDeleteNodeClick = (node: SchoolNode) => {
-    setDeleteTargetNode(node);
-    setDeleteTypedName('');
-    setDeleteTypedConfirmText('');
-    setDeletePassword('');
-    setDeleteConfirmPassword('');
-    setDeleteError('');
-    setShowDeletePass(false);
-    setShowDeleteConfirmPass(false);
-  };
-
-  const handleConfirmDeleteNode = async () => {
-    if (!deleteTargetNode) return;
-    setDeleteError('');
-
-    const isPassValid = await appData.verifyUserPassword(profile?.uid || '', deletePassword);
-
-    if (!isPassValid) {
-      setDeleteError('Incorrect password. Please enter your valid account password.');
-      return;
-    }
-
-    const success = await appData.deleteSchoolNode(deleteTargetNode.id, profile?.uid);
-    if (!success) {
-      setDeleteError(
-        `Cannot delete "${deleteTargetNode.name}". Units with sub-units or active references (students, officers, or events) cannot be deleted. Please archive the unit instead.`
-      );
-      return;
-    }
-
-    setDeleteTargetNode(null);
-    refresh();
-  };
-
-  const isDeleteFormValid =
-    deleteTargetNode !== null &&
-    deleteTypedName.trim() === deleteTargetNode.name.trim() &&
-    deleteTypedConfirmText.trim() === 'DELETE' &&
-    deletePassword.length > 0 &&
-    deleteConfirmPassword.length > 0 &&
-    deletePassword === deleteConfirmPassword;
 
   const currentNode = path.length > 0 ? path[path.length - 1] : null;
   const subUnits = currentNode ? (currentNode.children || []) : structure;
@@ -289,6 +276,7 @@ const SSGPanel: React.FC = () => {
         },
       }], currentNode.id, currentNode.name, memberData.password);
       setMemberData({ name: '', email: '', username: '', studentId: '', password: '' });
+      setShowMemberPassword(false);
       setShowMemberModal(false);
       refresh();
     } catch (caught) {
@@ -347,7 +335,7 @@ const SSGPanel: React.FC = () => {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
           { label: profile?.role === 'admin' ? 'Campuses' : 'Visible roots', value: structure.length, detail: profile?.role === 'admin' ? 'Directory roots' : 'Assigned scope only', icon: Building2, tone: 'text-brand-700 bg-brand-50 dark:bg-brand-900/40 dark:text-brand-200' },
-          { label: 'Pending review', value: apps.length, detail: apps.length === 1 ? 'Application waiting' : 'Applications waiting', icon: UserCheck, tone: 'text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-200' },
+          { label: 'Pending review', value: apps.filter(application => application.status === 'pending').length, detail: 'Applications waiting', icon: UserCheck, tone: 'text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-200' },
           { label: 'Attendance events', value: events.length, detail: 'Institution records', icon: CalendarDays, tone: 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-200' },
         ].map(({ label, value, detail, icon: Icon, tone }) => (
           <section key={label} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -369,6 +357,8 @@ const SSGPanel: React.FC = () => {
               {canManageStructure && currentNode && ['campus', 'school'].includes(currentNode.type) && <button onClick={() => setShowPresetModal(true)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-50 px-3 text-xs font-bold text-brand-900 hover:bg-gold-50 dark:bg-brand-900/40 dark:text-brand-200"><WandSparkles size={15} /> Add template</button>}
             </div>
 
+            {restoreError && <p role="alert" className="text-sm text-red-600">{restoreError}</p>}
+            {path.some(node => node.metadata?.archived) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">You are viewing an archived hierarchy. Restore its archived parent units to make it available for enrollment again.</p>}
             {currentNode && <NodeOfficerManager actor={profile!} canManage={canManageOfficers} key={currentNode.id} node={currentNode} onChanged={refresh} />}
 
             {!isAtSection ? (
@@ -392,6 +382,18 @@ const SSGPanel: React.FC = () => {
                     </button>
                   </article>
                 ))}
+                {subUnits.some(node => node.metadata?.archived) && <section className="col-span-full mt-2 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20">
+                  <button type="button" aria-expanded={archivedOpen} aria-controls="archived-units-panel" onClick={() => setArchivedOpen(value => !value)} className="flex w-full items-center justify-between gap-3 p-4 text-left transition-colors hover:bg-amber-100/60 dark:hover:bg-amber-950/40">
+                    <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-amber-800 dark:text-amber-200"><Archive size={15}/> Archived units <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-[10px] dark:bg-amber-900/70">{subUnits.filter(node => node.metadata?.archived).length}</span></span>
+                    <ChevronDown className="app-disclosure-chevron text-amber-700 dark:text-amber-300" size={18}/>
+                  </button>
+                  <Collapsible id="archived-units-panel" open={archivedOpen} innerClassName="border-t border-amber-200/70 p-4 dark:border-amber-900/60">
+                    <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">{subUnits.filter(node => node.metadata?.archived).map(node => <article key={node.id} className="flex min-h-32 flex-col rounded-xl border border-amber-200 bg-white p-3 dark:border-amber-900/60 dark:bg-slate-800">
+                      <button type="button" onClick={() => navigateTo(node)} className="flex-1 text-left transition-colors hover:text-brand-700 dark:hover:text-gold-300"><p className="break-words text-sm font-bold leading-5 text-slate-800 dark:text-slate-100">{node.name}</p><p className="mt-1 text-[9px] uppercase tracking-wider text-slate-400">{getAcademicNodeLabel(node.type)}</p></button>
+                      {canManageStructure && <Button className="mt-3 w-full" size="sm" variant="secondary" disabled={Boolean(restoringId)} onClick={() => restoreNode(node)}>Restore</Button>}
+                    </article>)}</div>
+                  </Collapsible>
+                </section>}
                 {canManageStructure && <button aria-label="Add unit" onClick={() => setNodeEditor({ parentId: currentNode?.id || null })} className="group flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-5 transition-all hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800">
                    <Plus size={20} className="text-slate-300 dark:text-slate-500 mb-1" />
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Add</p>
@@ -401,10 +403,10 @@ const SSGPanel: React.FC = () => {
               <>
                 <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-lg overflow-hidden">
                  <div className="p-5 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-700">
-                    <h3 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest">Members ? {currentNode.name}</h3>
+                    <h3 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest">Members · {currentNode.name}</h3>
                     <div className="flex items-center gap-2">
                        <span className="bg-white dark:bg-slate-800 px-3 py-1 rounded-lg text-[8px] font-bold text-slate-500 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{students.length} Members</span>
-                       {canManageMembers && <Button className="w-auto" onClick={() => { setMemberError(''); setShowMemberModal(true); }} size="sm"><Plus size={14} /> Add member</Button>}
+                       {canAddMembersManually && <Button className="w-auto" onClick={() => { setMemberError(''); setShowMemberModal(true); }} size="sm"><Plus size={14} /> Add member</Button>}
                     </div>
                  </div>
                  <div className="hidden overflow-x-auto p-4 md:block">
@@ -450,23 +452,31 @@ const SSGPanel: React.FC = () => {
                  {nodeApplicants.length > 0 ? (
                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                      {nodeApplicants.map((app) => (
-                       <div key={app.id} onClick={() => setSelectedApplicant(app)} className="cursor-pointer bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-gold-400 transition-all flex flex-col justify-between space-y-3">
-                         <div className="flex items-center gap-3">
+                       <article key={app.id} onClick={() => setSelectedApplicant(app)} className="group cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm transition-all hover:border-gold-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
+                         <div className="flex min-w-0 items-start gap-3">
                            <ProfileAvatar alt={app.form_data.name} src={app.form_data.photo_url || '/avatar-placeholder.svg'} className="w-12 h-12 rounded-xl object-cover shadow-sm border border-slate-200 dark:border-slate-700 shrink-0" />
                            <div className="min-w-0 flex-1">
-                             <h4 className="text-xs font-black uppercase tracking-tight text-brand-900 dark:text-slate-100 truncate">{app.form_data.name}</h4>
-                             <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">{app.form_data.student_id}</p>
-                             <p className="text-[10px] text-slate-400 truncate">{app.form_data.email}</p>
-                             {Object.entries(app.documents || {}).map(([kind, path]) => <button key={kind} className="mr-3 text-xs underline" onClick={async () => { const url = await documentUrl(path); window.open(url, '_blank', 'noopener,noreferrer'); }}>{kind.replace('_', ' ')}</button>)}
-                             <button className="text-xs text-red-600 underline" onClick={async () => { const reason = window.prompt('Reason for returning this admission application:'); if (reason?.trim()) { await appData.rejectApplication(app.id, reason); refresh(); } }}>Return for revision</button>
+                             <h4 className="truncate text-xs font-black uppercase tracking-tight text-brand-900 dark:text-slate-100">{app.form_data.name}</h4>
+                             <p className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400">{app.form_data.student_id}</p>
+                             <p className="truncate text-[10px] text-slate-400">{app.form_data.email}</p>
                            </div>
                          </div>
-                         <div className="flex gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800">
-                           <button onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); }} className="flex-1 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-[9px] font-black rounded-lg uppercase tracking-wider hover:bg-slate-300 dark:hover:bg-slate-700">Details</button>
-                           <button onClick={(e) => { e.stopPropagation(); handleApprove(app.id); }} className="flex-1 py-1.5 bg-emerald-500 text-white text-[9px] font-black rounded-lg uppercase tracking-wider hover:bg-emerald-600">Verify</button>
-                           <button onClick={(e) => { e.stopPropagation(); handleApprove(app.id, true); }} className="flex-1 py-1.5 bg-brand-900 text-white text-[9px] font-black rounded-lg uppercase tracking-wider hover:bg-brand-800">Mayor</button>
+                         {Object.keys(app.documents || {}).length > 0 && (
+                           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-200/70 pt-3 dark:border-slate-800">
+                             {Object.entries(app.documents || {}).map(([kind, path]) => <button type="button" key={kind} className="text-[10px] font-semibold capitalize text-brand-700 underline underline-offset-2 hover:text-brand-900 dark:text-slate-300 dark:hover:text-white" onClick={async (event) => { event.stopPropagation(); const url = await documentUrl(path); window.open(url, '_blank', 'noopener,noreferrer'); }}>{kind.replace('_', ' ')}</button>)}
+                           </div>
+                         )}
+                         <button type="button" className="mt-3 text-[10px] font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-200" onClick={(event) => { event.stopPropagation(); openAdmissionDecision(app, 'bounced'); }}>Return for clarification</button>
+                         <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-200/70 pt-3 dark:border-slate-800">
+                           <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); }} className="rounded-lg bg-slate-200 px-2 py-2 text-[9px] font-black uppercase tracking-wider text-slate-800 transition-colors hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Details</button>
+                           <button type="button" onClick={(e) => { e.stopPropagation(); handleApprove(app.id); }} className="rounded-lg bg-emerald-500 px-2 py-2 text-[9px] font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-600">Verify</button>
+                           <button type="button" onClick={(e) => { e.stopPropagation(); handleApprove(app.id, true); }} className="rounded-lg bg-brand-900 px-2 py-2 text-[9px] font-black uppercase tracking-wider text-white transition-colors hover:bg-brand-800">Mayor</button>
                          </div>
-                       </div>
+                         <div className="mt-3 flex items-center gap-4 text-[10px] font-bold">
+                           <button type="button" className="text-red-600 underline underline-offset-2 dark:text-red-300" onClick={(event) => { event.stopPropagation(); openAdmissionDecision(app, 'rejected'); }}>Reject</button>
+                           <button type="button" className="text-slate-500 underline underline-offset-2 dark:text-slate-300" onClick={(event) => { event.stopPropagation(); openAdmissionDecision(app, 'deleted'); }}>Delete application</button>
+                         </div>
+                       </article>
                      ))}
                    </div>
                  ) : (
@@ -676,7 +686,7 @@ const SSGPanel: React.FC = () => {
           <label className="text-sm font-semibold">Student ID<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, studentId: event.target.value })} required value={memberData.studentId} /></label>
           <label className="text-sm font-semibold">Email<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, email: event.target.value })} required type="email" value={memberData.email} /></label>
           <label className="text-sm font-semibold">Username<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, username: event.target.value })} required value={memberData.username} /></label>
-          <label className="text-sm font-semibold sm:col-span-2">Temporary password<input className={memberFieldClass} minLength={8} onChange={(event) => setMemberData({ ...memberData, password: event.target.value })} required type="password" value={memberData.password} /></label>
+          <label className="text-sm font-semibold sm:col-span-2">Temporary password<div className="relative"><input className={`${memberFieldClass} pr-11`} minLength={8} onChange={(event) => setMemberData({ ...memberData, password: event.target.value })} required type={showMemberPassword ? 'text' : 'password'} value={memberData.password} /><button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setShowMemberPassword((visible) => !visible)} aria-label={showMemberPassword ? 'Hide temporary password' : 'Show temporary password'} aria-pressed={showMemberPassword} className="absolute inset-y-0 right-1 flex w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700">{showMemberPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
           {memberError ? <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 sm:col-span-2 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200" role="alert">{memberError}</p> : null}
         </div>
       </Modal>
@@ -766,6 +776,34 @@ const SSGPanel: React.FC = () => {
       >
         <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">The adjustment is recorded as an administrative action and updates the member's service-hour total immediately.</p>
       </Modal>
+      <Modal
+        open={Boolean(admissionDecision)}
+        onClose={() => setAdmissionDecision(null)}
+        closeOnBackdrop={false}
+        size="md"
+        title={admissionDecision?.decision === 'bounced' ? 'Return for clarification' : admissionDecision?.decision === 'deleted' ? 'Delete application' : 'Reject application'}
+        description={admissionDecision ? `${admissionDecision.application.form_data.name} will be able to apply again after this decision.` : ''}
+        footer={<>
+          <Button variant="secondary" onClick={() => setAdmissionDecision(null)}>Cancel</Button>
+          <Button variant={admissionDecision?.decision === 'bounced' ? 'gold' : 'danger'} disabled={admissionReason.trim().length < 3 || (admissionDecision?.decision === 'bounced' && clarificationFields.length === 0)} onClick={submitAdmissionDecision}>
+            Confirm {admissionDecision?.decision === 'bounced' ? 'return' : admissionDecision?.decision || 'decision'}
+          </Button>
+        </>}
+      >
+        {admissionDecision && <div className="space-y-4">
+          <label className="block text-sm font-semibold">Reason shown to the enrollee
+            <textarea rows={4} value={admissionReason} onChange={event => setAdmissionReason(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900" placeholder="Explain the decision clearly." />
+          </label>
+          {admissionDecision.decision === 'bounced' && <fieldset className="space-y-2">
+            <legend className="text-sm font-bold">Information requiring clarification</legend>
+            {[['name', 'Full name'], ['student_id', 'Student ID'], ['guardian_name', 'Guardian name'], ['guardian_phone', 'Guardian contact number'], ['photo', 'Profile photo'], ['id_front', 'Student ID front'], ['id_back', 'Student ID back']].map(([value, label]) => <label key={value} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={clarificationFields.includes(value)} onChange={event => setClarificationFields(current => event.target.checked ? [...current, value] : current.filter(field => field !== value))} /> {label}
+            </label>)}
+          </fieldset>}
+          {admissionError && <p role="alert" className="text-sm text-red-600">{admissionError}</p>}
+        </div>}
+      </Modal>
+
       {/* APPLICANT DETAIL MODAL */}
       <Modal
         open={Boolean(selectedApplicant)}
@@ -813,10 +851,17 @@ const SSGPanel: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <div className="grid grid-cols-1 gap-2 border-t border-slate-200 pt-4 dark:border-slate-700 sm:grid-cols-[auto_1fr_1fr] sm:items-center">
+              <Button
+                variant="secondary"
+                className="!w-full !rounded-xl text-xs font-black uppercase tracking-widest sm:order-first"
+                onClick={() => setSelectedApplicant(null)}
+              >
+                Close
+              </Button>
               <Button
                 variant="gold"
-                className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest"
+                className="!w-full !rounded-xl text-xs font-black uppercase tracking-widest"
                 onClick={() => {
                   handleApprove(selectedApplicant.id, false);
                   setSelectedApplicant(null);
@@ -826,7 +871,7 @@ const SSGPanel: React.FC = () => {
               </Button>
               <Button
                 variant="primary"
-                className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest"
+                className="!w-full !rounded-xl text-xs font-black uppercase tracking-widest"
                 onClick={() => {
                   handleApprove(selectedApplicant.id, true);
                   setSelectedApplicant(null);
@@ -834,167 +879,17 @@ const SSGPanel: React.FC = () => {
               >
                 Approve as Mayor
               </Button>
-              <Button
-                variant="secondary"
-                className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest"
-                onClick={() => setSelectedApplicant(null)}
-              >
-                Close
-              </Button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* DELETE UNIT CONFIRMATION MODAL */}
-      <Modal
-        open={Boolean(deleteTargetNode)}
-        onClose={() => setDeleteTargetNode(null)}
-        title={deleteTargetNode ? `Delete Unit: ${deleteTargetNode.name}` : 'Confirm Unit Deletion'}
-        description="Permanently remove an academic unit from the campus directory hierarchy."
-        size="md"
-        footer={(
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => setDeleteTargetNode(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              aria-label="Confirm Delete Unit"
-              variant="danger"
-              disabled={!isDeleteFormValid}
-              onClick={handleConfirmDeleteNode}
-            >
-              <Trash2 size={16} /> Confirm Delete
-            </Button>
-          </>
-        )}
-      >
-        {deleteTargetNode && (
-          <div className="space-y-4 text-left">
-            {/* IMPACT PREVIEW BOX */}
-            <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 dark:border-red-900/60 dark:bg-red-950/40">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
-                <div className="space-y-1 text-xs text-red-800 dark:text-red-200">
-                  <h4 className="font-black uppercase tracking-wider text-red-900 dark:text-red-100">
-                    What will happen if deleting this unit?
-                  </h4>
-                  <ul className="list-disc pl-4 space-y-1 font-medium">
-                    <li>
-                      <strong>"{deleteTargetNode.name}"</strong> ({getAcademicNodeLabel(deleteTargetNode.type)}) will be permanently deleted from the directory structure.
-                    </li>
-                    <li>
-                      Sub-units, sections, or assigned records will lose this node in their hierarchy path.
-                    </li>
-                    <li>
-                      <strong>Protection rule:</strong> If this unit currently has sub-units (child nodes) or active members/events assigned, deletion will be rejected automatically and you will be advised to archive it.
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            {deleteError && (
-              <div className="flex items-center gap-2.5 rounded-xl border border-red-300 bg-red-100 p-3 text-xs font-bold text-red-800 dark:border-red-800 dark:bg-red-900/60 dark:text-red-200" role="alert">
-                <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-                <span>{deleteError}</span>
-              </div>
-            )}
-
-            {/* CONFIRMATION INPUT 1: Unit Name */}
-            <div>
-              <label htmlFor="delete-unit-name" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                1. Type first the name of what will be deleted ({`"${deleteTargetNode.name}"`})
-              </label>
-              <input
-                id="delete-unit-name"
-                type="text"
-                value={deleteTypedName}
-                onChange={(e) => setDeleteTypedName(e.target.value)}
-                placeholder={deleteTargetNode.name}
-                className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white p-2.5 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-              />
-              {deleteTypedName && deleteTypedName.trim() !== deleteTargetNode.name.trim() && (
-                <p className="mt-1 text-[11px] font-semibold text-red-500">Name does not match "{deleteTargetNode.name}"</p>
-              )}
-            </div>
-
-            {/* CONFIRMATION INPUT 2: Type DELETE */}
-            <div>
-              <label htmlFor="delete-unit-confirm-text" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                2. Type DELETE
-              </label>
-              <input
-                id="delete-unit-confirm-text"
-                type="text"
-                value={deleteTypedConfirmText}
-                onChange={(e) => setDeleteTypedConfirmText(e.target.value)}
-                placeholder="DELETE"
-                className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white p-2.5 font-mono text-sm uppercase outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-              />
-              {deleteTypedConfirmText && deleteTypedConfirmText.trim() !== 'DELETE' && (
-                <p className="mt-1 text-[11px] font-semibold text-red-500">Must match exact text "DELETE"</p>
-              )}
-            </div>
-
-            {/* CONFIRMATION INPUT 3: Password */}
-            <div>
-              <label htmlFor="delete-unit-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                3. Password of the person
-              </label>
-              <div className="relative mt-1.5">
-                <input
-                  id="delete-unit-password"
-                  type={showDeletePass ? 'text' : 'password'}
-                  value={deletePassword}
-                  onChange={(e) => setDeletePassword(e.target.value)}
-                  placeholder="Enter your login password"
-                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 pr-10 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                />
-                <button
-                  type="button"
-                  aria-label={showDeletePass ? 'Hide password' : 'Show password'}
-                  onClick={() => setShowDeletePass(!showDeletePass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                >
-                  {showDeletePass ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {/* CONFIRMATION INPUT 4: Confirm Password */}
-            <div>
-              <label htmlFor="delete-unit-confirm-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                4. Confirm Password
-              </label>
-              <div className="relative mt-1.5">
-                <input
-                  id="delete-unit-confirm-password"
-                  type={showDeleteConfirmPass ? 'text' : 'password'}
-                  value={deleteConfirmPassword}
-                  onChange={(e) => setDeleteConfirmPassword(e.target.value)}
-                  placeholder="Re-enter your login password"
-                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 pr-10 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                />
-                <button
-                  type="button"
-                  aria-label={showDeleteConfirmPass ? 'Hide password' : 'Show password'}
-                  onClick={() => setShowDeleteConfirmPass(!showDeleteConfirmPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                >
-                  {showDeleteConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              {deleteConfirmPassword && deletePassword !== deleteConfirmPassword && (
-                <p className="mt-1 text-[11px] font-semibold text-red-500">Passwords do not match</p>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
+      {sensitiveTarget && <SensitiveActionModal action={sensitiveTarget.action} targetName={sensitiveTarget.node.name}
+        description={sensitiveTarget.action === 'ARCHIVE' ? 'The unit and its children remain available in Archived units. You can restore the unit later.' : 'Only units without children or linked members, applications, officers, or events can be permanently deleted.'}
+        onClose={() => setSensitiveTarget(null)} onConfirm={async confirmation => {
+          await appData.performSensitiveAction(sensitiveTarget.action === 'ARCHIVE' ? 'archiveSchoolNode' : 'deleteSchoolNode', sensitiveTarget.node.id, confirmation);
+          setSensitiveTarget(null); refresh();
+        }} />}
     </Page>
   );
 };
@@ -1008,3 +903,5 @@ const EmptyState = ({ icon: Icon, title, description }: { icon: React.ElementTyp
 );
 
 export default SSGPanel;
+
+

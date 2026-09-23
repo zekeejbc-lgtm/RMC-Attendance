@@ -71,7 +71,7 @@ function updateBackgroundInertness() {
   }
 
   Array.from(document.body.children).forEach((element) => {
-    if (!(element instanceof HTMLElement) || element.dataset.modalRoot === 'true') return;
+    if (!(element instanceof HTMLElement) || element.dataset.modalRoot === 'true' || element.dataset.toastRoot === 'true') return;
     if (!backgroundState.has(element)) {
       backgroundState.set(element, {
         ariaHidden: element.getAttribute('aria-hidden'),
@@ -189,7 +189,7 @@ export function Modal({
           aria-describedby={description ? descriptionId : undefined}
           aria-labelledby={titleId}
           aria-modal="true"
-          className={`app-modal-panel relative flex w-full max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl border border-gold-400/30 bg-white shadow-modal dark:bg-slate-800 sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl ${sizeClasses[size]}`}
+          className={`app-modal-panel relative flex w-full min-w-0 max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl border border-gold-400/30 bg-white shadow-modal dark:bg-slate-800 sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl ${sizeClasses[size]}`}
           onClick={(event) => event.stopPropagation()}
           ref={dialogRef}
           role="dialog"
@@ -213,7 +213,7 @@ export function Modal({
               <span aria-hidden="true" className="text-2xl leading-none">×</span>
             </button>
           </div>
-          <div className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
+          <div className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
           {footer ? (
             <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-700">
               {footer}

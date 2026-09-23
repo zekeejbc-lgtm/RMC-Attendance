@@ -1,3 +1,4 @@
+import { toast } from '../lib/toast';
 import { GeofenceMap } from '../components/events/GeofenceMap';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -212,7 +213,7 @@ const MayorScanner: React.FC = () => {
       const scanner = scannerRef.current || new Html5Qrcode(scannerId);
       scannerRef.current = scanner;
       const source = cameraId === 'environment' || cameraId === 'user' ? { facingMode: cameraId } : cameraId;
-      await scanner.start(source, { fps: 12, qrbox: { width: 260, height: 260 }, aspectRatio: 1.777 }, handleDecoded, () => undefined);
+      await toast.track(() => scanner.start(source, { fps: 12, qrbox: { width: 260, height: 260 }, aspectRatio: 1.777 }, handleDecoded, () => undefined), 'Start camera', 'Camera ready');
       setScannerState('scanning');
       discoverCameras();
     } catch {

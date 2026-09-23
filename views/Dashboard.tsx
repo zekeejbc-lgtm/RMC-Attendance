@@ -1,7 +1,7 @@
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../components/AuthContext';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { AppEvent } from '../types';
 import {
   Calendar, Award, QrCode, FileText, User, ShieldAlert, CheckCircle2,
@@ -32,8 +32,7 @@ const Dashboard: React.FC = () => {
   const ceremonies = (profile ? appData.getRecipientEvents(profile.uid) : []).filter(e => e.kind === 'flag_ceremony' && e.status !== 'done' && !e.cancellationStatus).sort((a,b) => a.startTime - b.startTime);
   const recent = appData.getAttendanceRecords(profile?.uid || '').sort((a,b) => (b.time_in || b.recorded_at || 0) - (a.time_in || a.recorded_at || 0)).slice(0, 5);
 
-  if (profile?.role === 'admin') return <Navigate to="/ssg/panel" replace />;
-  if (profile?.role === 'ssg' || profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
+  if (profile?.role === 'admin' || profile?.role === 'ssg' || profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
     return <StaffHome name={profile.name} role={profile.role} navigate={navigate} />;
   }
 
@@ -271,13 +270,13 @@ const Dashboard: React.FC = () => {
   );
 };
 
-const StaffHome = ({ name, role, navigate }: { name: string; role: 'ssg' | 'ossa' | 'ossa_staff'; navigate: ReturnType<typeof useNavigate> }) => {
+const StaffHome = ({ name, role, navigate }: { name: string; role: 'admin' | 'ssg' | 'ossa' | 'ossa_staff'; navigate: ReturnType<typeof useNavigate> }) => {
   const applications = appData.getApplications();
   const events = appData.getEvents();
   const campuses = appData.getSchoolStructure();
   const activeEvents = events.filter((event) => event.status === 'active');
   const isOSSA = role === 'ossa' || role === 'ossa_staff';
-  const workspaceName = isOSSA ? 'OSSA' : 'SSG';
+  const workspaceName = role === 'admin' ? 'Administration' : isOSSA ? 'OSSA' : 'SSG';
 
   const actions = [
     ...(role !== 'ossa_staff' ? [{ label: `${workspaceName} Control Panel`, description: 'Manage the institution directory and applications.', path: '/ssg/panel', icon: ShieldCheck, tone: 'bg-brand-50 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200' }] : []),
@@ -311,7 +310,7 @@ const StaffHome = ({ name, role, navigate }: { name: string; role: 'ssg' | 'ossa
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={`${workspaceName} overview metrics`}>
         <MetricCard icon={<Building2 size={20} />} label="Campuses" value={campuses.length} detail="Directory roots" />
-        <MetricCard icon={<Users2 size={20} />} label="Applications" value={applications.length} detail="Pending review" />
+          <MetricCard icon={<Users2 size={20} />} label="Applications" value={applications.filter(application => application.status === 'pending').length} detail="Pending review" />
         <MetricCard icon={<CalendarDays size={20} />} label="Active Events" value={activeEvents.length} detail={`${events.length} total records`} />
         <MetricCard icon={<Activity size={20} />} label="Operations" value={actions.length} detail="Available workspaces" />
       </div>

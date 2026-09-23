@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { appData } from '../../lib/backend';
 import { useAuth } from '../AuthContext';
 import Button from '../ui/Button';
+import CustomSelect from '../ui/CustomSelect';
 
 export function RoleAssignment() {
   const { profile } = useAuth();
@@ -17,8 +18,8 @@ export function RoleAssignment() {
   }}>
     <h2 className="mb-3 font-bold text-brand-900 dark:text-white">Assign access role or position</h2>
     <div className="grid gap-3 sm:grid-cols-3">
-      <label className="app-field-label">Account<select required className="input-field mt-2" value={uid} onChange={event => setUid(event.target.value)}><option value="">Select account</option>{accounts.filter(account => account.role !== 'admin').map(account => <option key={account.uid} value={account.uid}>{account.name}</option>)}</select></label>
-      <label className="app-field-label">Role or position<select required className="input-field mt-2" value={roleId} onChange={event => setRoleId(event.target.value)}><option value="">Select role</option>{roles.map(role => <option key={role.id} value={role.id}>{role.name}{role.isPositionOnly ? ' (position)' : ''}</option>)}</select></label>
+      <CustomSelect label="Account" ariaLabel="Account" options={accounts.filter(account => account.role !== 'admin').map(account => ({ value: account.uid, label: account.name }))} placeholder="Select account" searchable value={uid} onChange={value => setUid(String(value))} />
+      <CustomSelect label="Role or position" ariaLabel="Role or position" options={roles.map(role => ({ value: role.id, label: `${role.name}${role.isPositionOnly ? ' (position)' : ''}` }))} placeholder="Select role" value={roleId} onChange={value => setRoleId(String(value))} />
       <Button type="submit" className="self-end" disabled={!uid || !roleId}>Save assignment</Button>
     </div>
     {message && <p role="status" className="mt-3 text-sm">{message}</p>}

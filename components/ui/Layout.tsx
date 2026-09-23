@@ -89,7 +89,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     icon: Building2,
     path: '/ossa/dashboard',
     permission: 'ossa.manage_cases',
-    roles: ['ossa', 'ossa_staff', 'admin']
+    roles: ['ossa', 'ossa_staff']
   },
 
   {
@@ -211,6 +211,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     icon: Sliders,
     path: '/admin/controls',
     permissionAny: [
+      'system.manage_accounts',
       'system.manage_rbac',
       'system.health',
       'system.freeze',

@@ -67,6 +67,15 @@ try {
   const id = await command('createEvent', [event('attendance')]);
   const qr = await ok('issue expiring QR', await student.who.rpc('rmc_issue_qr'));
   await ok('resolve student QR as scanner', await mayor.who.rpc('rmc_resolve_qr', { token: qr.token }));
+  const printedQr = await ok('issue persistent printed QR', await student.who.rpc('rmc_get_print_qr'));
+  assert.equal(printedQr.persistent, true);
+  assert.equal(printedQr.expiresAt, null);
+  const printedQrAgain = await ok('reuse persistent printed QR', await student.who.rpc('rmc_get_print_qr'));
+  assert.equal(printedQrAgain.token, printedQr.token);
+  await ok('resolve persistent printed QR as scanner', await mayor.who.rpc('rmc_resolve_qr', { token: printedQr.token }));
+  const replacedQr = await ok('replace persistent printed QR', await student.who.rpc('rmc_refresh_print_qr'));
+  assert.notEqual(replacedQr.token, printedQr.token);
+  deny('replaced printed QR is revoked', await mayor.who.rpc('rmc_resolve_qr', { token: printedQr.token }));
   deny('reject forged legacy QR', await mayor.who.rpc('rmc_resolve_qr', { token: `RMC_SECURE_PASSPORT:${student.id}:fake` }));
   deny('out-of-scope QR rejected', await mayor.who.rpc('rmc_resolve_qr', { token: (await other.who.rpc('rmc_issue_qr')).data.token }));
   const scan = { event_id: id, student_id: student.id, direction: 'in', qr_token: qr.token };

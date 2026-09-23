@@ -19,6 +19,9 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'directory.manage_structure', name: 'Manage Directory Structure', category: 'Directory', description: 'Add, modify, or archive campus hierarchy units' },
   { id: 'directory.delete_structure', name: 'Delete Directory Structure & Units', category: 'Directory', description: 'Delete school units, departments, and academic hierarchy nodes' },
   { id: 'directory.manage_members', name: 'Manage Members & Students', category: 'Directory', description: 'Create and update student rosters and section assignments' },
+  { id: 'directory.add_members_manually', name: 'Add Members Manually', category: 'Directory', description: 'Open the manual form to add an individual member to a class section' },
+  { id: 'directory.change_member_designation', name: 'Change Member Designation', category: 'Directory', description: 'Assign or change a student designation, including mayor' },
+  { id: 'directory.manage_student_sanctions', name: 'Manage Student Sanctions', category: 'Directory', description: 'Add, deduct, or clear student sanction hours' },
   { id: 'attendance.scan', name: 'Scan Attendance QR', category: 'Attendance', description: 'Use QR code scanner to take event attendance' },
   { id: 'attendance.manage', name: 'Manage Attendance Logs', category: 'Attendance', description: 'Review, modify, or export attendance records' },
   { id: 'events.manage', name: 'Create & Manage Events', category: 'Events', description: 'Schedule institutional events and set geofence rules' },
@@ -35,6 +38,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
       'system.manage_accounts', 'system.view_audit', 'system.freeze', 'system.health',
       'system.payment_reminders', 'system.manage_rbac', 'directory.manage_structure',
       'directory.delete_structure', 'directory.manage_members', 'attendance.scan',
+      'directory.add_members_manually', 'directory.change_member_designation', 'directory.manage_student_sanctions',
       'attendance.manage', 'events.manage', 'ossa.manage_cases',
     ],
     isBuiltIn: true,
@@ -46,6 +50,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     isPositionOnly: false,
     permissions: [
       'directory.manage_structure', 'directory.manage_members', 'attendance.scan',
+      'directory.add_members_manually', 'directory.change_member_designation', 'directory.manage_student_sanctions',
       'attendance.manage', 'events.manage', 'ossa.manage_cases', 'system.health',
     ],
     isBuiltIn: true,
@@ -55,7 +60,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'OSSA Staff',
     description: 'Scans attendance and reviews student excuse applications',
     isPositionOnly: false,
-    permissions: ['attendance.scan', 'attendance.manage', 'ossa.manage_cases'],
+    permissions: ['attendance.scan', 'attendance.manage', 'ossa.manage_cases', 'directory.manage_student_sanctions'],
     isBuiltIn: true,
   },
   ssg: {
@@ -63,7 +68,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'SSG Officer',
     description: 'Manages events, geofencing, and directory section rosters',
     isPositionOnly: false,
-    permissions: ['directory.manage_structure', 'directory.manage_members', 'attendance.scan', 'attendance.manage', 'events.manage'],
+    permissions: ['directory.manage_structure', 'directory.manage_members', 'directory.add_members_manually', 'directory.change_member_designation', 'attendance.scan', 'attendance.manage', 'events.manage'],
     isBuiltIn: true,
   },
   mayor: {
@@ -133,3 +138,4 @@ export const roleLabels: Record<string, string> = {
 };
 
 export const schoolOfficialRoles: readonly UserRole[] = ['ossa', 'ossa_staff', 'ssg', 'mayor'];
+

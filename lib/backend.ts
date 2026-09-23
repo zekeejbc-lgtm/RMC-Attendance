@@ -1,8 +1,10 @@
-import { supabase, requireConfiguration, verifyPassword } from './supabase';
+﻿import { toast } from './toast';
+import { supabase, requireConfiguration, verifyPassword, executeSensitiveAction, type SensitiveConfirmation } from './supabase';
 import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, CoreRole, CustomRole, PaymentInfo, SystemFreezeState, NodeFreezeState } from '../types';
 import { DEFAULT_CORE_ROLES, setMockDataRef } from './accessControl';
 import { findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNodeInSubtree, profileMatchesDirectorySection } from './academicDirectory';
 import { isEventRecipient } from './eventAudience';
+import { publicDriveImageUrl } from './googleDrive';
 
 type Student = UserProfile & { stats: UserStats; sanction_logs: any[] };
 type Snapshot = {
@@ -41,13 +43,13 @@ export async function refreshData() {
   const started = performance.now();
   if (!currentUserId) {
     const { data, error } = await supabase.from('rmc_nodes').select('id,parent_id,data');
-    if (error) throw error;
-    if (requestGeneration !== generation || request !== snapshotRequest) return;
-    snapshot.school_structure = tree(data || []); notifyAuthChange(); return;
+    if (error) { console.error('[Supabase] school structure refresh failed', error); throw error; }
+    if (requestGeneration !== generation || request !== snapshotRequest) return false;
+    snapshot.school_structure = tree(data || []); notifyAuthChange(); return true;
   }
   const { data, error } = await supabase.rpc('rmc_snapshot');
-  if (error) throw error;
-  if (requestGeneration !== generation || request !== snapshotRequest) return;
+  if (error) { console.error('[Supabase] snapshot refresh failed', error); throw error; }
+  if (requestGeneration !== generation || request !== snapshotRequest) return false;
   const next = empty();
   next.school_structure = tree(data.nodes);
   for (const [id, role] of Object.entries(data.roles)) (role as CoreRole).isBuiltIn ? next.core_roles[id] = role as CoreRole : next.custom_roles[id] = role as CustomRole;
@@ -74,24 +76,48 @@ export async function refreshData() {
   next.payment_info = data.settings.payment_info || next.payment_info;
   next.audit_logs = data.audit;
   snapshot = next; lastSync = Date.now(); latency = Math.round(performance.now() - started); notifyAuthChange();
+  return true;
 }
 
 async function rpc<T = any>(name: string, args: Record<string, unknown> = {}): Promise<T> {
   requireConfiguration();
   const { data, error } = await supabase.rpc(name, args);
-  if (error) throw new Error(error.message);
+  if (error) {
+    const rpcError = error as typeof error & { status?: number };
+    console.error('[Supabase] RPC failed', {
+      name,
+      args,
+      errorName: error.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      errorStatus: rpcError.status,
+      errorRaw: JSON.stringify(error),
+    });
+    throw error;
+  }
   return data as T;
+}
+
+export type EnrollmentLookup = { found: boolean; status?: 'pending' | 'approved' | 'rejected' | 'bounced' | 'deleted'; submittedAt?: number; reviewedAt?: number; rejectionReason?: string; clarificationFields?: string[]; namePreview?: string; emailPreview?: string; sectionPreview?: string };
+export async function lookupEnrollment(studentId: string): Promise<EnrollmentLookup> {
+  return rpc<EnrollmentLookup>('rmc_lookup_enrollment', { lookup_student_id: studentId.trim() });
 }
 async function refreshAfterWrite() {
   try { await refreshData(); }
-  catch { window.dispatchEvent(new CustomEvent('rmc_sync_error', { detail: 'Your change was saved, but the latest data could not be loaded. Reconnect or refresh the page.' })); }
+  catch (error) { console.error('[Supabase] refresh after write failed', error); window.dispatchEvent(new CustomEvent('rmc_sync_error', { detail: 'Your change was saved, but the latest data could not be loaded. Reconnect or refresh the page.' })); }
 }
 async function command<T = any>(action: string, args: unknown[]): Promise<T> {
+  return toast.track(async () => {
   const result = await rpc<T>('rmc_command', { action, args });
   await refreshAfterWrite();
   return result;
+
+  }, action.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase()));
 }
 async function accounts(action: string, data: unknown) {
+  return toast.track(async () => {
   const { data: result, error } = await supabase.functions.invoke('rmc-accounts', { body: { action, data } });
   if (error) {
     const body = await error.context?.json?.().catch(() => null);
@@ -99,28 +125,50 @@ async function accounts(action: string, data: unknown) {
   }
   if (result.error) throw new Error(result.error);
   await refreshAfterWrite(); return result;
+
+  }, action === 'create' ? 'Create accounts' : 'Update account');
 }
 export const appAuth = {
-  async signIn(identifier: string, password: string) {
+  async resendConfirmation(email: string) {
     requireConfiguration();
+    const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase() });
+    if (error) { console.error('[Supabase] resend confirmation failed', error); throw error; }
+  },
+  async signIn(identifier: string, password: string) {
+  return toast.track(async () => {
+    requireConfiguration();
+    if (identifier.trim().includes('@')) throw new Error('Use the username you submitted during registration to sign in.');
     // Usernames are resolved on the server; no public email directory is exposed.
     const { data, error } = await supabase.functions.invoke('rmc-login', { body: { identifier: identifier.trim(), password } });
     if (error || data?.error) throw new Error(data?.error || 'Unable to sign in. Check your credentials.');
     const { error: sessionError } = await supabase.auth.setSession(data);
     if (sessionError) throw sessionError;
-  },
-  async signOut() { const { error } = await supabase.auth.signOut(); if (error) throw error; resetData(); },
+  
+  }, 'Sign in');
+},
+  async signOut() {
+  return toast.track(async () => { const { error } = await supabase.auth.signOut(); if (error) throw error; resetData(); 
+  }, 'Sign out');
+},
   getCurrentUser: () => currentUserId ? snapshot.users[currentUserId] || null : null,
   async changePassword(currentPassword: string, password: string) {
-    const email = snapshot.users[currentUserId || '']?.profile.email;
+  return toast.track(async () => {
+    // The profile snapshot can be refreshed independently of the auth session.
+    // Read the email from the current Supabase user so password changes do not
+    // incorrectly ask a valid session to sign in again.
+    const { data: { user } } = await supabase.auth.getUser();
+    const email = user?.email || snapshot.users[currentUserId || '']?.profile.email;
     if (!email) throw new Error('Sign in again to change your password.');
     const verified = await verifyPassword(email, currentPassword);
     if (!verified) throw new Error('Current password is incorrect.');
     const result = await supabase.auth.updateUser({ password }); if (result.error) throw result.error;
-  },
+  
+  }, 'Change password');
+},
 };
 
 export async function uploadDocument(file: File, kind: string) {
+  return toast.track(async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Sign in and verify your email before uploading documents.');
   if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type) || file.size > 5 * 1024 * 1024) throw new Error('Choose a JPG, PNG, WebP, or PDF file up to 5 MB.');
@@ -128,14 +176,25 @@ export async function uploadDocument(file: File, kind: string) {
   const { error } = await supabase.storage.from('rmc-documents').upload(path, file, { upsert: false });
   if (error) throw error;
   return `storage://${path}`;
+
+  }, 'Upload document');
 }
 export async function documentUrl(path: string) {
-  if (!path.startsWith('storage://')) return path;
+  if (!path.startsWith('storage://')) return publicDriveImageUrl(path);
   const { data, error } = await supabase.storage.from('rmc-documents').createSignedUrl(path.slice(10), 300);
   if (error) throw error; return data.signedUrl;
 }
 
 export const appData = {
+  performSensitiveAction: (action: string, target: string, confirmation: SensitiveConfirmation) => toast.track(async () => {
+    const result = await executeSensitiveAction(action, target, confirmation);
+    await refreshAfterWrite();
+    return result;
+  }, confirmation.typedAction === 'DELETE' ? 'Delete record' : 'Archive record'),
+  validateEnrollment: async (person: Partial<UserProfile>, enrollmentKey: string, phase: number) => {
+    const errors = await rpc<Record<string, string>>('rmc_validate_enrollment', { person, enrollment_key: enrollmentKey || null, phase });
+    if (Object.keys(errors).length) throw new Error(Object.values(errors).join(' '));
+  },
   updatePhoto: (uid: string, path: string) => command('updatePhoto', [uid, { path }]),
   getEvents: (): AppEvent[] => Object.values(snapshot.events),
   getCoreRoles: () => snapshot.core_roles,
@@ -148,30 +207,49 @@ export const appData = {
   createSchoolOfficial: (_actor: string, profile: Omit<UserProfile, 'uid' | 'photo_url'>, password: string) => accounts('create', { members: [{ profile, password }] }).then(r => r.ids[0]),
   deleteSchoolOfficial: (_actor: string, uid: string) => accounts('deactivate', { uid }),
   createUser: (profile: Omit<UserProfile, 'uid' | 'photo_url'>, password?: string) => accounts('create', { members: [{ profile, password }] }).then(r => r.ids[0]),
+  getAccountAccess: async () => {
+    const result = await accounts('access', {});
+    return Object.fromEntries((result.users || []).map((item: { id: string; last_sign_in_at?: string | null; created_at?: string }) => [item.id, item]));
+  },
+  resetAccountPassword: (uid: string, password: string) => accounts('reset_password', { uid, password }),
   createSectionMembers: (members: Array<{ profile: Omit<UserProfile, 'uid' | 'photo_url'>; makeMayor: boolean }>, _id: string, _name: string, password?: string) => accounts('create', { members: members.map(m => ({ profile: { ...m.profile, role: m.makeMayor ? 'mayor' : 'student' }, password })) }).then(r => r.ids),
   submitApplication: async (profile: UserProfile, password: string, enrollmentKey?: string) => {
+  return toast.track(async () => {
     requireConfiguration();
-    if (currentUserId && snapshot.applications[currentUserId]?.status === 'rejected') {
+    if (currentUserId && ['rejected', 'bounced', 'deleted'].includes(snapshot.applications[currentUserId]?.status || '')) {
       await rpc('rmc_admission_update', { documents: {}, person: profile, enrollment_key: enrollmentKey || null });
       await refreshAfterWrite(); return { uid: currentUserId, needsEmailConfirmation: false };
     }
     if (currentUserId) throw new Error('You already have an account. Open your application status or sign out to register another student.');
     const { data, error } = await supabase.auth.signUp({ email: profile.email, password, options: { data: { profile, enrollment_key: enrollmentKey }, emailRedirectTo: window.location.origin } });
-    if (error) throw error;
+    if (error) {
+      const message = error.message || '';
+      if (/name, email, username|already exists|duplicate key/i.test(message)) {
+        throw new Error('This name, username, or email address is already enrolled. Use different account details.');
+      }
+      throw error;
+    }
     if (!data.user || data.user.identities?.length === 0) throw new Error('Unable to create a new account with these details. If you already registered, confirm your email and sign in.');
     return { uid: data.user?.id, needsEmailConfirmation: !data.session };
-  },
+  
+  }, 'Submit application');
+},
   verifyUserPassword: async (_uid: string, password: string) => {
     const email = snapshot.users[currentUserId || '']?.profile.email;
     if (!email) return false;
     return verifyPassword(email, password);
   },
-  issueQr: () => rpc<{ token: string; expiresAt: number }>('rmc_issue_qr'),
+  issueQr: () => rpc<{ token: string; expiresAt: number; persistent?: false }>('rmc_issue_qr'),
+  getPrintQr: () => rpc<{ token: string; expiresAt: null; persistent: true }>('rmc_get_print_qr'),
+  refreshPrintQr: () => rpc<{ token: string; expiresAt: null; persistent: true }>('rmc_refresh_print_qr'),
   resolveQr: (token: string) => rpc<UserProfile>('rmc_resolve_qr', { token }),
   logAttendance: async (eventId: string, studentUid: string, _actor?: string, _name?: string, _time?: number, direction: 'in' | 'out' = 'in', verification?: { qrToken?: string; position?: unknown; manualReason?: string }) => {
+  return toast.track(async () => {
     const result = await rpc('rmc_record_attendance', { event_id: eventId, student_id: studentUid, direction, qr_token: verification?.qrToken || null, scan_position: verification?.position || null, manual_reason: verification?.manualReason || null });
     await refreshAfterWrite(); return result;
-  },
+  
+  }, 'Record attendance');
+},
 getApplications: () => Object.values(getDB().applications),
 getExcuseApplications: () => Object.values(getDB().excuse_applications || {}),
 getSchoolStructure: () => getDB().school_structure,
@@ -313,12 +391,24 @@ isUserScopeFrozen: (profile?: UserProfile | null) => {
   addSchoolNode: (...args: any[]) => command('addSchoolNode', args),
   updateSchoolNode: (...args: any[]) => command('updateSchoolNode', args),
   archiveSchoolNode: (...args: any[]) => command('archiveSchoolNode', args),
+  restoreSchoolNode: async (id: string, confirmation?: unknown) => { const node = findNodeById(getDB().school_structure, id); if (!node) throw new Error('Unit not found.'); return appData.updateSchoolNode(id, { metadata: { ...(node.metadata || {}), archived: false } }); },
   deleteSchoolNode: (...args: any[]) => command('deleteSchoolNode', args),
   replaceSchoolStructure: (...args: any[]) => command('replaceSchoolStructure', args),
   setSectionSecurityKey: (...args: any[]) => command('setSectionSecurityKey', args),
+  clearSectionSecurityKey: (nodeId: string) => toast.track(async () => {
+    const { error } = await supabase.rpc('rmc_clear_section_security_key', { target: nodeId });
+    if (error) throw error;
+    await refreshAfterWrite();
+  }, 'Clear enrollment key'),
   updateContactDetails: (...args: any[]) => command('updateContactDetails', args),
   approveApplication: (...args: any[]) => command('approveApplication', args),
   rejectApplication: (...args: any[]) => command('rejectApplication', args),
+  reviewAdmission: async (applicationId: string, decision: 'rejected' | 'bounced' | 'deleted', reason: string, clarificationFields: string[] = []) => {
+    await toast.track(async () => {
+      await rpc('rmc_review_admission', { application_id: applicationId, decision, reason, clarification_fields: clarificationFields });
+      await refreshAfterWrite();
+    }, decision === 'bounced' ? 'Return application' : decision === 'deleted' ? 'Delete application' : 'Reject application');
+  },
   assignSectionMayor: (...args: any[]) => command('assignSectionMayor', args),
   assignRole: (...args: any[]) => command('assignRole', args),
   assignAccountRole: (...args: any[]) => command('assignAccountRole', args),
@@ -335,10 +425,16 @@ isUserScopeFrozen: (profile?: UserProfile | null) => {
   setSystemFreezeStatus: (...args: any[]) => command('setSystemFreezeStatus', args),
   setNodeFreezeStatus: (...args: any[]) => command('setNodeFreezeStatus', args),
   createCustomRole: (...args: any[]) => command('createCustomRole', args),
-  updateCoreRole: (...args: any[]) => command('updateCoreRole', args),
+  updateCoreRole: (roleId: string, changes: Partial<CoreRole>) => toast.track(async () => {
+    const result = await rpc<CoreRole>('rmc_update_core_role', { target: roleId, changes });
+    await refreshAfterWrite();
+    return result;
+  }, 'Update core role'),
   updateCustomRole: (...args: any[]) => command('updateCustomRole', args),
   deleteCustomRole: (...args: any[]) => command('deleteCustomRole', args),
   updatePaymentInfo: (...args: any[]) => command('updatePaymentInfo', args),
   sendPaymentReminderToOSAS: (...args: any[]) => command('sendPaymentReminderToOSAS', args),
 };
 setMockDataRef(appData);
+
+

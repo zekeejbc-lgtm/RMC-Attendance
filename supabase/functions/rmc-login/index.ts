@@ -26,7 +26,11 @@ Deno.serve(async (req: Request) => {
     const { data: profile } = await admin.from('rmc_profiles').select('status').eq('id', data.user.id).single();
     if (!profile || !['pending', 'active'].includes(profile.status)) throw new Error('Invalid credentials');
     return respond({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (/email not confirmed|email.*confirm|not verified/i.test(message)) {
+      return respond({ error: 'Confirm your email address before signing in. Use the resend confirmation option.' }, 401);
+    }
     return respond({ error: 'Unable to sign in. Check your credentials and email verification.' }, 401);
   }
 });

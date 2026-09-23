@@ -1,290 +1,289 @@
+import { toast } from '../lib/toast';
 import React, { useEffect, useRef, useState } from 'react';
 import { appData } from '../lib/backend';
 import QRCode from 'react-qr-code';
 import { useAuth } from '../components/AuthContext';
-import { ShieldCheck, Info, Download, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Info, Download, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 
 const StudentQR: React.FC = () => {
   const { profile } = useAuth();
   const qrWrapperRef = useRef<HTMLDivElement>(null);
+  const printQrWrapperRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [qrToken, setQrToken] = useState('');
   const [expiresAt, setExpiresAt] = useState(0);
   const [qrError, setQrError] = useState('');
+  const [printQrToken, setPrintQrToken] = useState('');
+  const [printQrError, setPrintQrError] = useState('');
+  const [refreshingPrintQr, setRefreshingPrintQr] = useState(false);
   useEffect(() => {
     let active = true;
-    const renew = async () => {
+    const renewLiveQr = async () => {
       try {
         const result = await appData.issueQr();
         if (active) { setQrToken(result.token); setExpiresAt(result.expiresAt); setQrError(''); }
       } catch (error) { if (active) { setQrToken(''); setQrError(error instanceof Error ? error.message : 'QR unavailable.'); } }
     };
-    void renew();
-    const timer = setInterval(renew, 45000);
+    const loadPrintQr = async () => {
+      try {
+        const result = await appData.getPrintQr();
+        if (active) { setPrintQrToken(result.token); setPrintQrError(''); }
+      } catch (error) { if (active) { setPrintQrToken(''); setPrintQrError(error instanceof Error ? error.message : 'Printed QR unavailable.'); } }
+    };
+    void renewLiveQr();
+    void loadPrintQr();
+    const timer = setInterval(renewLiveQr, 45000);
     return () => { active = false; clearInterval(timer); };
   }, [profile?.uid]);
 
   if (!profile) return null;
 
+  const handleRefreshPrintQr = async (checked: boolean) => {
+    if (!checked || refreshingPrintQr) return;
+    setRefreshingPrintQr(true);
+    try {
+      const result = await appData.refreshPrintQr();
+      setPrintQrToken(result.token);
+      setPrintQrError('');
+      toast.success('Printed QR replaced. Download a new card.');
+    } catch (error) {
+      setPrintQrError(error instanceof Error ? error.message : 'Printed QR unavailable.');
+      toast.error(error);
+    } finally {
+      setRefreshingPrintQr(false);
+    }
+  };
+
   const handleDownloadPNG = () => {
+    const toastId = toast.progress('Preparing QR download...');
+    const failed = (error: unknown) => { toast.error(error, toastId); setDownloading(false); };
     setDownloading(true);
     setDownloadSuccess(false);
 
     try {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      if (!ctx) throw new Error('Canvas unavailable');
 
-      // Canvas dimensions for crisp high resolution export
-      canvas.width = 700;
-      canvas.height = 1050;
-
+      // Export at a print-friendly 3:4 ratio so the QR stays crisp when shared or printed.
+      canvas.width = 900;
+      canvas.height = 1280;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      // 1. Outer Background (White background)
-      ctx.fillStyle = '#FFFFFF';
+      const cardX = 36;
+      const cardY = 36;
+      const cardW = 828;
+      const cardH = 1208;
+      const cardBottom = cardY + cardH;
+      const navy = '#0E1B42';
+      const ink = '#14213D';
+      const muted = '#64748B';
+      const gold = '#D4AF37';
+      const border = '#DCE4EF';
+      const green = '#059669';
+      const school = profile.school_data;
+      const department = school.department || school.program || school.track || school.strand || 'General studies';
+      const assignment = [school.level, school.section].filter(Boolean).join(' | ') || 'N/A';
+
+      const rounded = (x: number, y: number, w: number, h: number, radius: number, fill?: string, stroke?: string) => {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, radius);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
+      };
+      const fitFont = (value: string, maxWidth: number, weight: number, maxSize: number, minSize = 14) => {
+        let size = maxSize;
+        while (size > minSize) {
+          ctx.font = `${weight} ${size}px Arial, sans-serif`;
+          if (ctx.measureText(value).width <= maxWidth) break;
+          size -= 1;
+        }
+        return size;
+      };
+      const drawCentered = (value: string, x: number, y: number, maxWidth: number, weight: number, maxSize: number, color: string, minSize = 10) => {
+        const size = fitFont(value, maxWidth, weight, maxSize, minSize);
+        ctx.font = `${weight} ${size}px Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = color;
+        ctx.fillText(value, x, y);
+      };
+
+      // Soft page background and a raised white card.
+      ctx.fillStyle = '#EEF2F7';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // 2. Lifted Card Container with Shadow
-      const cardX = 40;
-      const cardY = 40;
-      const cardW = 620;
-      const cardH = 970;
-
       ctx.save();
-      ctx.shadowColor = 'rgba(15, 23, 42, 0.22)';
-      ctx.shadowBlur = 32;
-      ctx.shadowOffsetX = 0;
+      ctx.shadowColor = 'rgba(15, 23, 42, 0.20)';
+      ctx.shadowBlur = 34;
       ctx.shadowOffsetY = 16;
-      ctx.fillStyle = '#FFFFFF';
+      rounded(cardX, cardY, cardW, cardH, 34, '#FFFFFF');
+      ctx.restore();
+      rounded(cardX, cardY, cardW, cardH, 34, undefined, border);
+
+      // Branded header with a subtle security pattern.
+      ctx.save();
       ctx.beginPath();
-      ctx.roundRect(cardX, cardY, cardW, cardH, 28);
+      ctx.roundRect(cardX, cardY, cardW, 250, [34, 34, 0, 0]);
+      ctx.clip();
+      ctx.fillStyle = navy;
+      ctx.fillRect(cardX, cardY, cardW, 250);
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 2;
+      for (let i = -250; i < cardW + 250; i += 34) {
+        ctx.beginPath();
+        ctx.moveTo(cardX + i, cardY);
+        ctx.lineTo(cardX + i + 250, cardY + 250);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(212,175,55,0.10)';
+      ctx.beginPath();
+      ctx.arc(cardX + cardW - 12, cardY + 26, 150, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+      ctx.fillStyle = gold;
+      ctx.fillRect(cardX, cardY + 250, cardW, 7);
 
-      // Card outline border for clean definition on white canvas
-      ctx.strokeStyle = '#E2E8F0';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(cardX, cardY, cardW, cardH, 28);
-      ctx.stroke();
-
-      // Determine Role Details & Colors
-      // Color scheme requirements:
-      // student (or mayor): Blue (#2563EB / #1D4ED8)
-      // SSG officer (ssg): Green (#16A34A / #15803D)
-      // OSAS officer/staff (ossa / ossa_staff): Orange (#EA580C / #C2410C)
-      // default / admin: Gold/Slate (#0E1B42 / #D4AF37)
       let roleLabel = 'STUDENT';
-      let roleBgColor = '#2563EB'; // Blue
-      let roleTextColor = '#FFFFFF';
-
+      let roleBgColor = '#2563EB';
       const userRole = profile.role;
-      if (userRole === 'ssg') {
-        roleLabel = 'SSG OFFICER';
-        roleBgColor = '#16A34A'; // Green
-      } else if (userRole === 'ossa' || userRole === 'ossa_staff') {
-        roleLabel = 'OSAS OFFICER';
-        roleBgColor = '#EA580C'; // Orange
-      } else if (userRole === 'mayor') {
-        roleLabel = 'STUDENT (SECTION MAYOR)';
-        roleBgColor = '#2563EB'; // Blue
-      } else if (userRole === 'admin') {
-        roleLabel = 'SYSTEM ADMINISTRATOR';
-        roleBgColor = '#475569'; // Slate/Gray
-      } else {
-        roleLabel = 'STUDENT';
-        roleBgColor = '#2563EB'; // Blue
-      }
+      if (userRole === 'ssg') { roleLabel = 'SSG OFFICER'; roleBgColor = '#16A34A'; }
+      else if (userRole === 'ossa' || userRole === 'ossa_staff') { roleLabel = 'OSAS OFFICER'; roleBgColor = '#EA580C'; }
+      else if (userRole === 'mayor') { roleLabel = 'STUDENT (SECTION MAYOR)'; }
+      else if (userRole === 'admin') { roleLabel = 'SYSTEM ADMINISTRATOR'; roleBgColor = '#475569'; }
 
-      // Top Header Banner
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(cardX, cardY, cardW, 165, [28, 28, 0, 0]);
-      ctx.clip();
-      ctx.fillStyle = '#0E1B42';
-      ctx.fillRect(cardX, cardY, cardW, 165);
-      ctx.restore();
+      // Header copy is drawn before the remote seal so a missing logo never leaves a blank header.
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '900 25px Arial, sans-serif';
+      ctx.fillText('INSTITUTION ATTENDANCE', cardX + 188, cardY + 108);
+      ctx.fillText('& RECORDS', cardX + 188, cardY + 140);
+      ctx.fillStyle = gold;
+      ctx.font = '700 16px Arial, sans-serif';
+      ctx.fillText('OFFICIAL DIGITAL PASSPORT', cardX + 188, cardY + 176);
+      ctx.fillStyle = 'rgba(255,255,255,0.72)';
+      ctx.font = '600 11px Arial, sans-serif';
+      ctx.fillText('IARS  |  SECURE DIGITAL IDENTITY', cardX + 188, cardY + 199);
 
-      // Gold accent line below header
-      ctx.fillStyle = '#D4AF37';
-      ctx.fillRect(cardX, cardY + 165, cardW, 5);
-
-      // App Logo Image loading
+      const centerX = cardX + cardW / 2;
       const logoImg = new Image();
       logoImg.crossOrigin = 'anonymous';
       logoImg.src = 'https://i.imgur.com/K3T5yIT.jpeg';
 
-      const finishExport = () => {
-        // Draw Logo cleanly on Header
-        if (logoImg.complete && logoImg.naturalWidth > 0) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(100, 122, 36, 0, Math.PI * 2);
-          ctx.closePath();
-          ctx.clip();
-          ctx.drawImage(logoImg, 64, 86, 72, 72);
-          ctx.restore();
+      // Identity section is intentionally compact, leaving the QR as the visual focus.
+      drawCentered(profile.name.toUpperCase(), centerX, cardY + 324, cardW - 100, 900, 30, ink, 18);
+      drawCentered(`ID  ${profile.student_id}`, centerX, cardY + 358, 500, 700, 15, muted, 12);
+      ctx.font = '800 12px Arial, sans-serif';
+      const roleWidth = Math.max(164, ctx.measureText(roleLabel).width + 48);
+      rounded(centerX - roleWidth / 2, cardY + 380, roleWidth, 34, 17, roleBgColor);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.fillText(roleLabel, centerX, cardY + 402);
 
-          // High definition logo gold ring border
-          ctx.strokeStyle = '#D4AF37';
-          ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          ctx.arc(100, 122, 36, 0, Math.PI * 2);
-          ctx.stroke();
+      const infoY = cardY + 452;
+      rounded(cardX + 56, infoY, 342, 96, 18, '#F7F9FC', border);
+      rounded(cardX + 430, infoY, 342, 96, 18, '#F7F9FC', border);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = muted;
+      ctx.font = '800 10px Arial, sans-serif';
+      ctx.fillText('PROGRAM / DEPARTMENT', cardX + 82, infoY + 30);
+      ctx.fillText('YEAR & SECTION', cardX + 456, infoY + 30);
+      drawCentered(department.toUpperCase(), cardX + 227, infoY + 66, 290, 800, 16, ink, 11);
+      drawCentered(assignment.toUpperCase(), cardX + 601, infoY + 66, 290, 800, 16, ink, 11);
 
-          // Header Text (with logo aligned on left)
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '900 18px sans-serif';
-          ctx.textAlign = 'left';
-          ctx.fillText('INSTITUTION ATTENDANCE & RECORDS', 152, 112);
+      const drawQrAndDownload = () => {
+        const svgElement = printQrWrapperRef.current?.querySelector('svg');
+        if (!svgElement) { failed(new Error('QR image unavailable')); return; }
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const qrImage = new Image();
+        qrImage.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+        qrImage.onload = () => {
+          try {
+            const qrFrameX = centerX - 205;
+            const qrFrameY = cardY + 570;
+            rounded(qrFrameX, qrFrameY, 410, 410, 26, '#FFFFFF', border);
+            rounded(qrFrameX + 15, qrFrameY + 15, 380, 380, 20, '#F8FAFC');
+            ctx.drawImage(qrImage, qrFrameX + 40, qrFrameY + 40, 330, 330);
+            drawCentered('SCAN FOR EVENT & CEREMONY CHECK-IN', centerX, cardY + 1004, 700, 800, 16, ink, 11);
+            drawCentered('PRINTED QR  |  VALID UNTIL REPLACED', centerX, cardY + 1032, 700, 800, 12, green, 10);
 
-          ctx.fillStyle = '#D4AF37';
-          ctx.font = 'bold 13px sans-serif';
-          ctx.fillText('OFFICIAL DIGITAL PASSPORT', 152, 135);
+            drawCentered('IF LOST, USE REPLACE BEFORE DOWNLOADING A NEW CARD', centerX, cardY + 1096, 700, 800, 12, muted, 10);
+            rounded(cardX + 56, cardY + 1110, cardW - 112, 54, 16, '#FFF7ED', '#FED7AA');
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#9A3412';
+            ctx.font = '800 11px Arial, sans-serif';
+            ctx.fillText('DIGITAL ACCESS CARD  |  NOT VALID FOR FINANCIAL OR ACADEMIC TRANSACTIONS', centerX, cardY + 1132);
+            ctx.fillStyle = '#C2410C';
+            ctx.font = '500 9px Arial, sans-serif';
+            ctx.fillText('If lost or compromised, replace the printed QR before using a new card.', centerX, cardY + 1148);
 
-          ctx.fillStyle = 'rgba(255,255,255,0.75)';
-          ctx.font = '10px sans-serif';
-          ctx.fillText('IARS • VERIFIED SECURE IDENTITY', 152, 153);
-        } else {
-          // Centered Header Text fallback
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = '900 19px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('INSTITUTION ATTENDANCE & RECORDS', 350, 105);
-
-          ctx.fillStyle = '#D4AF37';
-          ctx.font = 'bold 13px sans-serif';
-          ctx.fillText('OFFICIAL DIGITAL PASSPORT', 350, 132);
-
-          ctx.fillStyle = 'rgba(255,255,255,0.75)';
-          ctx.font = '10px sans-serif';
-          ctx.fillText('IARS • VERIFIED SECURE IDENTITY', 350, 153);
-        }
-
-        // Student Details
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#0E1B42';
-        ctx.font = '900 24px sans-serif';
-        ctx.fillText(profile.name.toUpperCase(), 350, 245);
-
-        ctx.fillStyle = '#64748B';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(`ID: ${profile.student_id}`, 350, 270);
-
-        // Role Badge Pill (Student = Blue, SSG = Green, OSAS = Orange)
-        ctx.font = 'bold 12px sans-serif';
-        const roleWidth = Math.max(140, ctx.measureText(roleLabel).width + 36);
-        ctx.fillStyle = roleBgColor;
-        ctx.beginPath();
-        ctx.roundRect(350 - roleWidth / 2, 285, roleWidth, 28, 14);
-        ctx.fill();
-
-        ctx.fillStyle = roleTextColor;
-        ctx.fillText(roleLabel, 350, 303);
-
-        // Department & Section Pill
-        ctx.fillStyle = '#F1F5F9';
-        ctx.beginPath();
-        ctx.roundRect(80, 325, 540, 34, 17);
-        ctx.fill();
-
-        ctx.fillStyle = '#0E1B42';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText(`${profile.school_data.department || 'GENERAL'} • ${profile.school_data.level || ''} ${profile.school_data.section || 'N/A'}`.trim(), 350, 346);
-
-        // Draw SVG QR Code to Canvas
-        const svgElement = qrWrapperRef.current?.querySelector('svg');
-        if (svgElement) {
-          const svgData = new XMLSerializer().serializeToString(svgElement);
-          const img = new Image();
-          img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
-
-          img.onload = () => {
-            // Crisp White QR Card Area
-            ctx.fillStyle = '#FAFAFA';
-            ctx.strokeStyle = '#E2E8F0';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.roundRect(205, 380, 290, 290, 22);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.drawImage(img, 220, 395, 260, 260);
-
-            // Scan Info Text
-            ctx.fillStyle = '#0E1B42';
-            ctx.font = 'bold 13px sans-serif';
-            ctx.fillText('SCAN FOR EVENT & CEREMONY CHECK-IN', 350, 698);
-
-            ctx.fillStyle = '#10B981';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.fillText('✓ SYSTEM VERIFIED & SECURITY STAMPED', 350, 720);
-
-            // Official Disclaimer Notice Box
-            ctx.fillStyle = '#FEF2F2';
-            ctx.strokeStyle = '#FCA5A5';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.roundRect(70, 745, 560, 68, 14);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.fillStyle = '#991B1B';
-            ctx.font = 'bold 11px sans-serif';
-            ctx.fillText('DISCLAIMER: NOT VALID FOR OFFICIAL TRANSACTIONS', 350, 767);
-            ctx.font = '10px sans-serif';
-            ctx.fillStyle = '#7F1D1D';
-            ctx.fillText('This digital ID card cannot be used for any official financial or academic transaction.', 350, 784);
-            ctx.fillText('If lost or compromised, please contact system administration immediately.', 350, 799);
-
-            // Loss Contact Notice Footer
-            ctx.fillStyle = '#64748B';
-            ctx.font = '11px sans-serif';
-            ctx.fillText('Notice: If lost or found, please contact the system administration or OSAS.', 350, 955);
-
+            ctx.fillStyle = muted;
+            ctx.font = '500 10px Arial, sans-serif';
+            ctx.fillText('IARS  |  Keep this card available during active attendance scanning', centerX, cardBottom - 22);
             ctx.fillStyle = '#94A3B8';
-            ctx.font = '10px sans-serif';
-            ctx.fillText(`Generated on ${new Date().toLocaleDateString('en-US', { dateStyle: 'medium' })}`, 350, 975);
+            ctx.font = '500 9px Arial, sans-serif';
+            ctx.fillText(`Generated ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, centerX, cardBottom - 8);
 
-            // Trigger download
             const link = document.createElement('a');
             link.download = `RMC_Student_QR_${profile.student_id}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
-
+            toast.success('QR download started', toastId);
             setDownloading(false);
             setDownloadSuccess(true);
             setTimeout(() => setDownloadSuccess(false), 3000);
-          };
-        } else {
-          setDownloading(false);
-        }
+          } catch (error) { failed(error); }
+        };
+        qrImage.onerror = () => failed(new Error('QR image could not be rendered'));
       };
 
-      logoImg.onload = finishExport;
-      logoImg.onerror = finishExport;
-      // In case image is already cached or fails immediately
-      if (logoImg.complete) {
-        finishExport();
-      }
-    } catch (e) {
-      console.error('PNG export error', e);
+      let logoRendered = false;
+      const drawLogoAndContinue = () => {
+        if (logoRendered) return;
+        logoRendered = true;
+        if (logoImg.complete && logoImg.naturalWidth > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cardX + 112, cardY + 126, 66, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(logoImg, cardX + 46, cardY + 60, 132, 132);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(cardX + 112, cardY + 126, 66, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = navy;
+          ctx.font = '900 24px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('IARS', cardX + 112, cardY + 134);
+        }
+        ctx.strokeStyle = gold;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cardX + 112, cardY + 126, 67, 0, Math.PI * 2);
+        ctx.stroke();
+        drawQrAndDownload();
+      };
+
+      logoImg.onload = drawLogoAndContinue;
+      logoImg.onerror = drawLogoAndContinue;
+      if (logoImg.complete) drawLogoAndContinue();
+    } catch (error) {
+      failed(error);
+      console.error('PNG export error', error);
       setDownloading(false);
     }
   };
-
   return (
     <Page className="max-w-lg animate-in zoom-in duration-200">
       <PageHeader
         className="justify-center text-center"
         eyebrow={<span className="inline-flex items-center gap-1.5"><Sparkles size={12} /> Digital Access Card</span>}
         title="Student QR Passport"
-        description="Use this minimalist QR code for instant event and ceremony attendance scanning."
+        description="Use the live QR for quick check-in, or download a permanent printed ID card."
       />
 
       {/* Main Card */}
@@ -299,7 +298,7 @@ const StudentQR: React.FC = () => {
             className="w-14 h-14 mx-auto rounded-full object-cover shadow-lg mb-2 ring-2 ring-gold-400/60"
           />
           <h2 className="text-base font-bold text-white uppercase tracking-tight">Institution Attendance & Records</h2>
-          <p className="text-gold-300 text-[9px] font-semibold uppercase tracking-widest mt-0.5">IARS • Student ID Card</p>
+          <p className="text-gold-300 text-[9px] font-semibold uppercase tracking-widest mt-0.5">IARS | Student ID Card</p>
         </div>
 
         <div className="p-5 flex flex-col items-center">
@@ -331,14 +330,19 @@ const StudentQR: React.FC = () => {
               fgColor="#0E1B42"
               level="H"
               className="h-auto w-full"
-            /> : <p role="status">{qrError || 'Generating secure QR…'}</p>}
+            /> : <p role="status">{qrError || 'Generating live QR...'}</p>}
+          </div>
+
+          {/* The printed card uses a separate persistent QR token. Keep its SVG out of the live preview. */}
+          <div ref={printQrWrapperRef} aria-hidden="true" className="pointer-events-none absolute left-[-10000px] top-0 h-60 w-60 opacity-0">
+            {printQrToken ? <QRCode value={printQrToken} size={240} fgColor="#0E1B42" level="H" /> : null}
           </div>
 
           {/* Download Action Button */}
           <Button
             aria-label="Download card as PNG"
             onClick={handleDownloadPNG}
-            disabled={downloading || !qrToken || expiresAt <= Date.now()}
+            disabled={downloading || !printQrToken}
             className="w-full border border-gold-400/30 uppercase tracking-wider sm:w-auto"
           >
             {downloading ? (
@@ -351,23 +355,49 @@ const StudentQR: React.FC = () => {
             ) : (
               <>
                 <Download size={16} className="text-gold-400 group-hover:translate-y-0.5 transition-transform" />
-                <span>Download</span>
+                <span>Download permanent ID</span>
               </>
             )}
           </Button>
 
-          {/* Security Badge */}
+          {/* Manual rotation for a lost or compromised printed card. */}
+          <div className="mt-4 w-full rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 text-left">
+                <p className="text-[11px] font-bold text-amber-950 dark:text-amber-100">Printed ID QR</p>
+                <p className="text-[9px] leading-relaxed text-amber-800 dark:text-amber-200">Stays valid until you replace it. Re-download the card after rotating.</p>
+              </div>
+              <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  className="peer sr-only"
+                  checked={refreshingPrintQr}
+                  disabled={refreshingPrintQr || !printQrToken}
+                  onChange={(event) => { void handleRefreshPrintQr(event.target.checked); }}
+                  aria-label="Replace printed QR"
+                />
+                <span aria-hidden="true" className="relative h-6 w-11 rounded-full bg-amber-200 transition-colors peer-checked:bg-amber-600 peer-checked:[&>span]:translate-x-5 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-gold-500 peer-disabled:opacity-60 dark:bg-amber-900">
+                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform" />
+                </span>
+                <RefreshCw size={13} className={refreshingPrintQr ? 'animate-spin' : ''} aria-hidden="true" />
+                <span>{refreshingPrintQr ? 'Replacing...' : 'Replace'}</span>
+              </label>
+            </div>
+            {printQrError ? <p className="mt-2 text-[10px] font-medium text-red-700 dark:text-red-300">{printQrError}</p> : null}
+          </div>
+
+          {/* Live QR status */}
           <div className="mt-4 flex w-full items-center gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/50">
              <div className="w-7 h-7 bg-emerald-600 rounded-lg flex items-center justify-center text-white shrink-0 shadow-xs">
                 <ShieldCheck size={15} />
              </div>
              <div className="min-w-0 text-left">
-                <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200">System-verified account</p>
-                <p className="text-[9px] text-emerald-700 font-medium [overflow-wrap:anywhere] dark:text-emerald-300">Refreshes automatically. This QR expires at {expiresAt ? new Date(expiresAt).toLocaleTimeString() : '—'}. Downloaded copies expire at the same time.</p>
+                <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200">Live web QR</p>
+                <p className="text-[9px] text-emerald-700 font-medium [overflow-wrap:anywhere] dark:text-emerald-300">Refreshes automatically every 45 seconds and is separate from your permanent printed ID QR.</p>
              </div>
           </div>
         </div>
-
         {/* Card Footer */}
         <div className="flex items-start gap-2 border-t border-slate-100 bg-slate-50 p-3.5 dark:border-slate-700 dark:bg-slate-900/60">
           <Info size={14} className="text-slate-400 mt-0.5 shrink-0" />

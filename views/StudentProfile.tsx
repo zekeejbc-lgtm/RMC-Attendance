@@ -1,18 +1,22 @@
 import ProfileAvatar from '../components/ui/ProfileAvatar';
+import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
-import { appAuth, appData, uploadDocument } from '../lib/backend';
+import { appAuth, appData } from '../lib/backend';
+import { verifyPassword } from '../lib/supabase';
+import { createDriveImage, deleteDriveImage, driveFileIdFromUrl, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
 import {
   User, ShieldCheck, KeyRound, Lock, Smartphone, CheckCircle2,
-  Building2, GraduationCap, School, Sparkles, Save, Eye, EyeOff, AlertCircle, LogOut, Pencil
+  Building2, GraduationCap, School, Sparkles, Save, Eye, EyeOff, AlertCircle, LogOut, Pencil, Upload, X
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import Button from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { Collapsible } from '../components/ui/Collapsible';
+import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 
 const StudentProfile: React.FC = () => {
   const { profile, isMock } = useAuth();
@@ -30,6 +34,8 @@ const StudentProfile: React.FC = () => {
 
   // Password Reset state
   const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [passwordStep, setPasswordStep] = useState<'current' | 'mfa' | 'change'>('current');
+  const [passwordMfaCode, setPasswordMfaCode] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -46,8 +52,14 @@ const StudentProfile: React.FC = () => {
   const [factorId, setFactorId] = useState('');
   const [factorUri, setFactorUri] = useState('');
   const [factorSecret, setFactorSecret] = useState('');
+  const [factorCreatedAt, setFactorCreatedAt] = useState<string | null>(null);
+  const [showDisable2FA, setShowDisable2FA] = useState(false);
+  const [disablePassword, setDisablePassword] = useState('');
+  const [showDisablePassword, setShowDisablePassword] = useState(false);
+  const [disableCode, setDisableCode] = useState('');
+  const [disableBusy, setDisableBusy] = useState(false);
   const [factorError, setFactorError] = useState('');
-  useEffect(() => { void supabase.auth.mfa.listFactors().then(({ data }) => { const factor = data?.totp.find(f => f.status === 'verified'); setIs2FAEnabled(Boolean(factor)); if (factor) setFactorId(factor.id); }); }, []);
+  useEffect(() => { void supabase.auth.mfa.listFactors().then(({ data }) => { const factor = data?.totp.find(f => f.status === 'verified'); setIs2FAEnabled(Boolean(factor)); if (factor) { setFactorId(factor.id); setFactorCreatedAt((factor as { created_at?: string }).created_at || null); } }); }, []);
   const [twoFactorStatus, setTwoFactorStatus] = useState<'idle' | 'success'>('idle');
 
   // Editable Profile fields
@@ -57,6 +69,14 @@ const StudentProfile: React.FC = () => {
   const [isEditingContacts, setIsEditingContacts] = useState(false);
   const [isSavingContacts, setIsSavingContacts] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState(profile?.photo_url || '');
+  const [photoError, setPhotoError] = useState('');
+  const [isSavingPhoto, setIsSavingPhoto] = useState(false);
+
+  useEffect(() => {
+    if (profile && !photoFile) setPhotoPreview(profile.photo_url || '');
+  }, [profile?.photo_url, photoFile]);
 
   useEffect(() => {
     if (!profile || isEditingContacts) return;
@@ -67,9 +87,27 @@ const StudentProfile: React.FC = () => {
 
   if (!profile) return null;
 
+  const openPasswordChange = () => {
+    setPasswordStatus('idle'); setPasswordMessage(''); setPasswordStep('current'); setPasswordMfaCode('');
+    setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setShowPasswordSection(true);
+  };
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPassword || !newPassword) {
+    if (passwordStep === 'current') {
+      if (!currentPassword) { setPasswordStatus('error'); setPasswordMessage('Enter your current password to continue.'); return; }
+      let verified = false;
+      try { verified = await verifyPassword(profile.email, currentPassword); }
+      catch (error) { setPasswordStatus('error'); setPasswordMessage(error instanceof Error ? error.message : 'Unable to verify your current password.'); return; }
+      if (!verified) { setPasswordStatus('error'); setPasswordMessage('Current password is incorrect.'); return; }
+      setPasswordStatus('idle'); setPasswordMessage(''); setPasswordStep(is2FAEnabled ? 'mfa' : 'change'); return;
+    }
+    if (passwordStep === 'mfa') {
+      if (!/^\d{6}$/.test(passwordMfaCode)) { setPasswordStatus('error'); setPasswordMessage('Enter the six-digit authenticator code.'); return; }
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: passwordMfaCode });
+      if (error) { setPasswordStatus('error'); setPasswordMessage(error.message); return; }
+      setPasswordMfaCode(''); setPasswordStatus('idle'); setPasswordStep('change'); return;
+    }
+    if (!newPassword) {
       setPasswordStatus('error');
       setPasswordMessage('Please fill in all password fields.');
       return;
@@ -102,20 +140,19 @@ const StudentProfile: React.FC = () => {
     setFactorError('');
     try {
       if (is2FAEnabled) {
-        const { error } = await supabase.auth.mfa.unenroll({ factorId });
-        if (error) throw error; setIs2FAEnabled(false); return;
+        setDisablePassword(''); setShowDisablePassword(false); setDisableCode(''); setShowDisable2FA(true); return;
       }
       const { data: factors } = await supabase.auth.mfa.listFactors();
       for (const f of factors?.all || []) if (f.status === 'unverified') await supabase.auth.mfa.unenroll({ factorId: f.id });
-      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', issuer: 'RMC Attendance' });
+      const { data, error } = await toast.result(() => supabase.auth.mfa.enroll({ factorType: 'totp', issuer: 'RMC Attendance' }), 'Prepare authenticator', 'Authenticator ready to verify');
       if (error) throw error;
-      setFactorId(data.id); setFactorUri(data.totp.uri); setFactorSecret(data.totp.secret); setShow2FASetup(true);
+      setFactorId(data.id); setFactorUri(data.totp.uri); setFactorSecret(data.totp.secret); setFactorCreatedAt(new Date().toISOString()); setShow2FASetup(true);
     } catch (error) { setFactorError(error instanceof Error ? error.message : 'Unable to update two-factor authentication.'); }
   };
   const close2FASetup = () => { setShow2FASetup(false); setTwoFactorCode(''); setTwoFactorStatus('idle'); };
   const handleVerify2FA = async (e: React.FormEvent) => {
     e.preventDefault(); setFactorError('');
-    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: twoFactorCode });
+    const { error } = await toast.result(() => supabase.auth.mfa.challengeAndVerify({ factorId, code: twoFactorCode }), 'Verify authenticator');
     if (error) { setFactorError(error.message); return; }
     setTwoFactorStatus('success'); setIs2FAEnabled(true); close2FASetup();
   };
@@ -150,6 +187,71 @@ const StudentProfile: React.FC = () => {
       }
     }
     setIsEditingContacts(false);
+  };
+  const handleDisable2FA = async (e: React.FormEvent) => {
+    e.preventDefault(); setFactorError(''); setDisableBusy(true);
+    try {
+      if (!disablePassword || !/^\d{6}$/.test(disableCode)) throw new Error('Enter your password and six-digit authenticator code.');
+      if (!await verifyPassword(profile.email, disablePassword)) throw new Error('Current password is incorrect.');
+      const { error: challengeError } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: disableCode });
+      if (challengeError) throw challengeError;
+      const { error } = await supabase.auth.mfa.unenroll({ factorId });
+      if (error) throw error;
+      setIs2FAEnabled(false); setFactorId(''); setFactorCreatedAt(null); setShowDisable2FA(false);
+    } catch (error) { setFactorError(error instanceof Error ? error.message : 'Unable to disable two-factor authentication.'); }
+    finally { setDisableBusy(false); }
+  };
+
+  const handlePhotoSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setPhotoError('');
+    try {
+      validateProfileImage(file);
+      setPhotoPreview(await fileAsDataUrl(file));
+      setPhotoFile(file);
+    } catch (error) {
+      setPhotoFile(null);
+      setPhotoPreview(profile.photo_url || '');
+      setPhotoError(error instanceof Error ? error.message : 'Unable to select this image.');
+    }
+  };
+
+  const cancelPhotoChange = () => {
+    setPhotoFile(null);
+    setPhotoPreview(profile.photo_url || '');
+    setPhotoError('');
+  };
+
+  const savePhoto = async () => {
+    if (!photoFile || isSavingPhoto) return;
+    setPhotoError('');
+    setIsSavingPhoto(true);
+    let uploadedId = '';
+    try {
+      const previousUrl = profile.photo_url;
+      const uploaded = await createDriveImage(photoFile, profile.name, profile.student_id);
+      uploadedId = uploaded.id;
+      await appData.updatePhoto(profile.uid, uploaded.url);
+      // Remove the replaced Drive object only after Supabase points at the new one.
+      const previousId = driveFileIdFromUrl(previousUrl);
+      if (previousId && previousId !== uploaded.id) {
+        try { await deleteDriveImage(previousId); } catch (error) { console.warn('Old profile image could not be removed from Drive.', error); }
+      }
+      setPhotoFile(null);
+      setPhotoPreview(uploaded.url);
+    } catch (error) {
+      // Supabase errors are plain objects in some browser builds, so do not lose
+      // their useful message behind an instanceof Error check.
+      const detail = error && typeof error === 'object' && 'message' in error
+        ? String((error as { message?: unknown }).message || '')
+        : error instanceof Error ? error.message : '';
+      if (uploadedId) void deleteDriveImage(uploadedId).catch(() => undefined);
+      setPhotoError(detail || 'Unable to save your profile photo.');
+    } finally {
+      setIsSavingPhoto(false);
+    }
   };
 
   const isStudent = profile.role === 'student' || profile.role === 'mayor';
@@ -297,7 +399,7 @@ const StudentProfile: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => setShowPasswordSection(!showPasswordSection)}
+                onClick={() => showPasswordSection ? setShowPasswordSection(false) : openPasswordChange()}
                 aria-expanded={showPasswordSection}
                 aria-controls="password-fields"
                 aria-label={showPasswordSection ? 'Cancel password change' : 'Change password'}
@@ -320,6 +422,8 @@ const StudentProfile: React.FC = () => {
                   </div>
                 )}
 
+                {passwordStep === 'current' && <>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">First, verify your current password.</p>
                 <div className="relative">
                   <label htmlFor="current-password" className="sr-only">Current password</label>
                   <input
@@ -332,14 +436,28 @@ const StudentProfile: React.FC = () => {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPass(!showPass)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setShowPass((visible) => !visible)}
                     aria-label={showPass ? 'Hide current password' : 'Show current password'}
                     aria-pressed={showPass}
-                    className="absolute right-1 top-1 flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                    className="absolute inset-y-0 right-1 z-10 flex w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
                     {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+
+                <Button type="submit" className="uppercase tracking-widest">Continue</Button>
+                </>}
+
+                {passwordStep === 'mfa' && <>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Enter the code from Google Authenticator to continue.</p>
+                  <label htmlFor="password-mfa-code" className="sr-only">Authenticator code</label>
+                  <input id="password-mfa-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6-digit authenticator code" value={passwordMfaCode} onChange={(e) => setPasswordMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className="input-field p-3 text-center font-mono tracking-widest" />
+                  <Button type="submit" className="uppercase tracking-widest">Verify code</Button>
+                </>}
+
+                {passwordStep === 'change' && <>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Choose a new password.</p>
 
                 <div className="relative">
                   <label htmlFor="new-password" className="sr-only">New password</label>
@@ -353,10 +471,11 @@ const StudentProfile: React.FC = () => {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowNewPass(!showNewPass)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setShowNewPass((visible) => !visible)}
                     aria-label={showNewPass ? 'Hide new password' : 'Show new password'}
                     aria-pressed={showNewPass}
-                    className="absolute right-1 top-1 flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                    className="absolute inset-y-0 right-1 z-10 flex w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
                     {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -374,18 +493,21 @@ const StudentProfile: React.FC = () => {
                   />
                   <button
                     type="button"
-                    onClick={() => setShowConfirmPass(!showConfirmPass)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setShowConfirmPass((visible) => !visible)}
                     aria-label={showConfirmPass ? 'Hide password confirmation' : 'Show password confirmation'}
                     aria-pressed={showConfirmPass}
-                    className="absolute right-1 top-1 flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                    className="absolute inset-y-0 right-1 z-10 flex w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
                     {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
 
+                <PasswordStrengthMeter password={newPassword} />
                 <Button type="submit" className="uppercase tracking-widest">
                   Update
                 </Button>
+                </>}
               </form>
             </Collapsible>
           </Surface>
@@ -402,6 +524,7 @@ const StudentProfile: React.FC = () => {
                   <p className="text-slate-400 dark:text-slate-400 text-[10px] font-medium">
                     {is2FAEnabled ? 'Status: Active & Enrolled' : 'Status: Disabled'}
                   </p>
+                  {is2FAEnabled && factorCreatedAt && <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Added {new Date(factorCreatedAt).toLocaleDateString()}</p>}
                 </div>
               </div>
 
@@ -478,11 +601,53 @@ const StudentProfile: React.FC = () => {
         </form>
       </Modal>
 
-      <Surface className="mt-6 p-5">
-        <label className="block text-sm font-bold">Update profile photo<input type="file" className="mt-2 block" accept="image/jpeg,image/png,image/webp" onChange={async event => {
-          const file = event.target.files?.[0]; if (!file) return;
-          const path = await uploadDocument(file, 'photo'); await appData.updatePhoto(profile.uid, path);
-        }} /></label>
+      <Modal
+        open={showDisable2FA}
+        onClose={() => { if (!disableBusy) setShowDisable2FA(false); }}
+        size="sm"
+        title="Disable Google Authenticator"
+        description="Verify your password and current authenticator code before disabling two-factor authentication."
+        footer={(
+          <>
+            <Button className="sm:!w-auto" onClick={() => setShowDisable2FA(false)} variant="secondary" disabled={disableBusy}>Cancel</Button>
+            <Button className="bg-red-600 hover:bg-red-700 sm:!w-auto" form="disable-2fa-form" type="submit" disabled={disableBusy || !disablePassword || !/^\d{6}$/.test(disableCode)}>{disableBusy ? 'Verifying...' : 'Disable 2FA'}</Button>
+          </>
+        )}
+      >
+        <form id="disable-2fa-form" onSubmit={handleDisable2FA} className="space-y-3">
+          {factorError && <p role="alert" className="text-sm font-semibold text-red-600">{factorError}</p>}
+          <div className="relative">
+            <label htmlFor="disable-2fa-password" className="sr-only">Current password</label>
+            <input id="disable-2fa-password" type={showDisablePassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Current password" value={disablePassword} onChange={(e) => setDisablePassword(e.target.value)} className="input-field p-3 pr-12" />
+            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setShowDisablePassword((visible) => !visible)} aria-label={showDisablePassword ? 'Hide current password' : 'Show current password'} aria-pressed={showDisablePassword} className="absolute inset-y-0 right-1 z-10 flex w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700">
+              {showDisablePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <label htmlFor="disable-2fa-code" className="sr-only">Authenticator code</label>
+          <input id="disable-2fa-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6-digit authenticator code" value={disableCode} onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className="input-field p-3 text-center font-mono tracking-widest" />
+        </form>
+      </Modal>
+
+      <Surface className="mt-6 space-y-4 p-5">
+        <div>
+          <h3 className="text-sm font-black uppercase tracking-tight text-brand-900 dark:text-slate-100">Profile photo</h3>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Choose a JPG, PNG, or WebP image up to 5 MB. It uploads to Drive only when you press Save.</p>
+        </div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <ProfileAvatar src={photoPreview || '/avatar-placeholder.svg'} alt={`${profile.name} preview`} className="h-24 w-24 rounded-2xl border-2 border-gold-400 object-cover shadow-sm" />
+          <div className="min-w-0 flex-1 space-y-3">
+            <label htmlFor="profile-photo-file" className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-brand-900 transition hover:border-gold-500 hover:bg-gold-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+              <Upload size={16} /> Choose image
+            </label>
+            <input id="profile-photo-file" type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoSelected} />
+            {photoFile && <p className="break-all text-xs font-semibold text-slate-600 dark:text-slate-300">{photoFile.name} · {(photoFile.size / 1024 / 1024).toFixed(2)} MB</p>}
+            {photoError && <p role="alert" className="text-xs font-bold text-red-600 dark:text-red-400">{photoError}</p>}
+            {photoFile && <div className="flex flex-wrap gap-2">
+              <Button className="!w-auto" disabled={isSavingPhoto} onClick={savePhoto} size="sm"><Save size={14} /> {isSavingPhoto ? 'Uploading...' : 'Save photo'}</Button>
+              <Button className="!w-auto" disabled={isSavingPhoto} onClick={cancelPhotoChange} size="sm" variant="secondary"><X size={14} /> Cancel</Button>
+            </div>}
+          </div>
+        </div>
       </Surface>
       {/* ACCOUNT SESSION & SIGN OUT CARD */}
       <Surface className="mt-6 flex flex-col items-center justify-between gap-4 p-5 sm:flex-row">

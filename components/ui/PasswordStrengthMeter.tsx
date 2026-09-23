@@ -13,8 +13,8 @@ export function getPasswordStrength(password: string) {
   let score = 0;
   
   // Length checks
-  if (password.length >= 6) score += 1;
-  if (password.length >= 10) score += 1;
+  if (password.length >= 12) score += 1;
+  if (password.length >= 16) score += 1;
   
   // Complexity checks
   if (/[A-Z]/.test(password)) score += 1;
@@ -38,7 +38,7 @@ export const PasswordStrengthMeter: React.FC<PasswordStrengthMeterProps> = ({ pa
   const strength = getPasswordStrength(password);
   
   const requirements = [
-    { label: 'At least 6 characters', met: password.length >= 6 },
+    { label: 'At least 12 characters', met: password.length >= 12 },
     { label: 'Contains uppercase letter', met: /[A-Z]/.test(password) },
     { label: 'Contains number', met: /[0-9]/.test(password) },
     { label: 'Contains special character', met: /[^A-Za-z0-9]/.test(password) },
