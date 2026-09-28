@@ -27,7 +27,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '', size =
           nextLabel: 'Dark Mode',
           icon: (
             <Sun 
-              className={`transition-all duration-300 text-amber-500 ${
+              className={`transition-all duration-base text-amber-500 ${
                 isAnimating ? 'rotate-180 scale-110' : 'rotate-0 scale-100'
               }`} 
               size={size === 'sm' ? 14 : size === 'lg' ? 20 : 16} 
@@ -40,7 +40,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '', size =
           nextLabel: 'System Theme',
           icon: (
             <Moon 
-              className={`transition-all duration-300 text-slate-700 ${
+              className={`transition-all duration-base text-slate-700 ${
                 isAnimating ? '-rotate-180 scale-110' : 'rotate-0 scale-100'
               }`} 
               size={size === 'sm' ? 14 : size === 'lg' ? 20 : 16} 
@@ -54,7 +54,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '', size =
           nextLabel: 'Light Mode',
           icon: (
             <Monitor 
-              className={`transition-all duration-300 text-slate-600 ${
+              className={`transition-all duration-base text-slate-600 ${
                 isAnimating ? 'scale-110' : 'scale-100'
               }`} 
               size={size === 'sm' ? 14 : size === 'lg' ? 20 : 16} 
@@ -78,7 +78,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '', size =
       type="button"
       aria-label={`Current theme: ${details.label}. Click to switch to ${details.nextLabel}`}
       title={`Theme: ${details.label} (Click for ${details.nextLabel})`}
-      className={`group relative flex items-center justify-center rounded-full border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 shadow-sm transition-all duration-200 active:scale-90 cursor-pointer select-none shrink-0 ${dimensionClasses} ${className}`}
+      className={`group relative flex items-center justify-center rounded-full border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 shadow-sm transition-all duration-fast active:scale-90 cursor-pointer select-none shrink-0 ${dimensionClasses} ${className}`}
     >
       <div className="relative flex items-center justify-center shrink-0">
         {details.icon}

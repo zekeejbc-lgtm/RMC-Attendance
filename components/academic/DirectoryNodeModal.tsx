@@ -57,7 +57,7 @@ export function DirectoryNodeModal({ open, parent, node, onClose, onSave }: Dire
     <Modal open={open} onClose={onClose} title={node ? 'Edit academic unit' : 'Establish unit'} description="Names are customizable; semantic types keep registration and targeting accurate." size="md" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button aria-label={node ? 'Save unit' : 'Establish unit'} variant="gold" onClick={save} disabled={!name.trim() || saving}>Save unit</Button></>}>
       <div className="space-y-4">
         {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
-        <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Unit name<input aria-label="Unit designation" value={name} onChange={(event) => setName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="e.g. STEM-12-Newton or College of Computing" /></label>
+        <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Unit name<input aria-label="Unit designation" value={name} onChange={(event) => setName(event.target.value)} className="app-control mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="e.g. STEM-12-Newton or College of Computing" /></label>
         <CustomSelect
           label="Semantic type"
           onChange={(value) => setType(value as AcademicNodeType)}
@@ -68,7 +68,7 @@ export function DirectoryNodeModal({ open, parent, node, onClose, onSave }: Dire
           searchable
           value={type}
         />
-        <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Short code <span className="font-normal text-slate-400">(optional)</span><input aria-label="Short code" value={shortCode} onChange={(event) => setShortCode(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm uppercase dark:border-slate-700 dark:bg-slate-900" placeholder="e.g. CCE" /></label>
+        <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Short code <span className="font-normal text-slate-400">(optional)</span><input aria-label="Short code" value={shortCode} onChange={(event) => setShortCode(event.target.value)} className="app-control mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm uppercase dark:border-slate-700 dark:bg-slate-900" placeholder="e.g. CCE" /></label>
         <div className="grid gap-3 sm:grid-cols-2"><label className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700"><input type="checkbox" checked={registration} onChange={(event) => setRegistration(event.target.checked)} /> Available in registration</label><label className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700"><input type="checkbox" checked={events} onChange={(event) => setEvents(event.target.checked)} /> Available for events</label></div>
         <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
           <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200"><input type="checkbox" checked={customizeChildren} onChange={(event) => { setCustomizeChildren(event.target.checked); if (!event.target.checked) setAllowedChildTypes([]); }} /> Customize allowed child types</label>

@@ -135,7 +135,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     roles: [
       'student',
       'mayor',
-      'ssg'
+      'ssg',
+      'admin',
+      'ossa',
+      'ossa_staff'
     ]
   },
 
@@ -277,14 +280,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   const navButtonClass = (isActive: boolean, compact = false) => (
-    `w-full min-h-11 flex items-center gap-4 rounded-xl transition-all duration-200 ${
+    `w-full min-h-11 flex items-center gap-4 rounded-xl transition-all duration-fast ${
       compact ? 'justify-center px-2 py-3' : 'px-4 py-3.5'
     } ${isActive ? 'bg-gold-400 text-brand-900 shadow-lg font-bold' : 'text-gold-100 hover:bg-brand-800'}`
   );
 
   const renderDirectory = (mobile = false) => {
     const controlsId = mobile ? 'mobile-directory-links' : 'desktop-directory-links';
-    const itemClass = (path: string) => `w-full min-h-11 flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${
+    const itemClass = (path: string) => `w-full min-h-11 flex items-center gap-3 p-3 rounded-xl transition-all duration-fast ${
       location.pathname === path
         ? 'bg-white/10 text-white font-bold border border-white/10 shadow-sm'
         : 'text-gold-100/70 hover:bg-brand-800 hover:text-white'
@@ -333,7 +336,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   return (
-    <div className={`min-h-dvh bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row transition-[padding] duration-300 ease-in-out ${
+    <div className={`min-h-dvh bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row transition-[padding] duration-base ease-standard ${
       isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'
     }`}>
       <header className="md:hidden sticky top-0 z-40 min-h-14 bg-brand-900 text-white px-4 pt-[max(0.625rem,env(safe-area-inset-top))] pb-2.5 flex justify-between items-center shadow-md">
@@ -410,7 +413,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </aside>
       )}
 
-      <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 z-30 bg-brand-900 text-white border-r border-brand-800 shadow-2xl transition-[width] duration-300 ease-in-out ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}>
+      <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 z-30 bg-brand-900 text-white border-r border-brand-800 shadow-2xl transition-[width] duration-base ease-standard ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}>
         <div className={`relative shrink-0 p-4 border-b border-brand-800 flex items-center justify-between ${isSidebarCollapsed ? 'overflow-visible' : 'overflow-hidden'}`}>
           <div className="flex items-center gap-3 min-w-0"><img src="https://i.imgur.com/K3T5yIT.jpeg" alt="IARS Academic Seal" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/60 shadow-md shrink-0" />{!isSidebarCollapsed && <div className="min-w-0 truncate"><h2 className="font-extrabold text-lg leading-tight">IARS</h2><p className="text-emerald-400 text-[10px] font-semibold uppercase tracking-wider truncate">Attendance &amp; Records</p></div>}</div>
           {!isSidebarCollapsed ? (

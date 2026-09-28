@@ -249,7 +249,7 @@ function testEvents(): any[] {
 const useStaff = () => {
   routeState.auth = {
     isMock: true,
-    profile: { ...studentProfile, uid: 'staff-1', name: 'SSG President', role: 'ssg' } as typeof studentProfile,
+    profile: { ...studentProfile, uid: 'staff-1', name: 'SSG President', role: 'ssg', official_data: { assignment_node_id: 'school-rmc' } } as typeof studentProfile,
     stats: null,
     user: { uid: 'staff-1' },
   };
@@ -1068,9 +1068,10 @@ describe('staff route UI behavior', () => {
   it('shows one Edit action and opens the prefilled create-style event editor', async () => {
     const user = userEvent.setup();
     useStaff();
+    seedCollegeDirectory();
     const now = Date.now();
     const baseEvent = {
-      description: 'Complete event details', created_by: 'SSG President', startTime: now, endTime: now + 3600000,
+      description: 'Complete event details', created_by: 'SSG President', scopeNodeId: 'school-rmc', startTime: now, endTime: now + 3600000,
       penaltyValue: 2, penaltyUnit: 'hours', participantsType: 'all', target: { all: true },
       recipientGroups: ['All Students'], geofenceEnabled: true,
       location: { lat: 7.0736, lng: 125.6126, radius_meters: 100 }, timestamp: now,
@@ -1140,14 +1141,19 @@ describe('staff route UI behavior', () => {
     await user.type(details, 'Required institutional assembly.');
     fireEvent.change(within(form).getByLabelText(/^start date$/i), { target: { value: '2026-08-10' } });
     fireEvent.change(within(form).getByLabelText(/^end date$/i), { target: { value: '2026-08-11' } });
-    const recipientSearch = within(form).getByRole('combobox', { name: /search and add event recipients/i });
-    await user.type(recipientSearch, 'JHS, College,');
-    await user.type(recipientSearch, 'BS Comp');
-    await user.click(within(form).getByRole('option', { name: /^bs computer science$/i }));
-    await user.type(recipientSearch, 'Nursing,');
+    const recipientPicker = within(form).getByRole('group', { name: /choose recipient unit/i });
+    await user.click(within(recipientPicker).getAllByRole('button')[0]);
+    await user.click(screen.getByRole('option', { name: 'RMC Campus' }));
+    await user.click(within(recipientPicker).getAllByRole('button')[1]);
+    await user.click(screen.getByRole('option', { name: 'College' }));
+    await user.click(within(form).getByRole('button', { name: /^add recipient$/i }));
+    await user.click(within(form).getByRole('button', { name: /^recipient type/i }));
+    await user.click(screen.getByRole('option', { name: 'All Mayors' }));
+    await user.click(within(form).getByRole('button', { name: /^add recipient$/i }));
     const addedRecipients = within(form).getByRole('status', { name: /added event recipients/i });
-    expect(addedRecipients).toHaveTextContent('JHS, College, BS Computer Science, Nursing');
-    expect(addedRecipients).toHaveTextContent('4 recipients added');
+    expect(addedRecipients).toHaveTextContent('RMC Campus / College');
+    expect(addedRecipients).toHaveTextContent('All Mayors');
+    expect(addedRecipients).toHaveTextContent('2 recipients added');
     await user.click(within(form).getByRole('switch', { name: /enable geofencing/i }));
     expect(within(form).getByRole('region', { name: /event geofence map/i })).toBeInTheDocument();
     const radius = within(form).getByRole('spinbutton', { name: /geofence radius/i });
@@ -1180,9 +1186,9 @@ describe('staff route UI behavior', () => {
       penaltyValue: 1,
       penaltyUnit: 'hours',
       participantsType: 'specific',
-      targetValue: 'JHS, College, BS Computer Science, Nursing',
-      recipientGroups: ['JHS', 'College', 'BS Computer Science', 'Nursing'],
-      audienceTarget: { mode: 'group_list', groups: ['JHS', 'College', 'BS Computer Science', 'Nursing'], snapshotLabel: 'JHS, College, BS Computer Science, Nursing' },
+      targetValue: 'RMC Campus / College, All Mayors',
+      recipientGroups: ['RMC Campus / College', 'All Mayors'],
+      audienceTarget: { mode: 'group_list', groups: ['node:department-college', 'All Mayors'], snapshotLabel: 'RMC Campus / College, All Mayors' },
       target: { all: false },
       geofenceEnabled: true,
       location: { lat: 7.0736, lng: 125.6126, radius_meters: 275 },
@@ -1197,6 +1203,7 @@ describe('staff route UI behavior', () => {
   it('rejects overlapping windows and schedules out-of-order windows chronologically', async () => {
     const user = userEvent.setup();
     useStaff();
+    seedCollegeDirectory();
     renderRoute(<SSGCreateEvent />);
     fireEvent.change(screen.getByLabelText(/event title/i), { target: { value: 'Two sessions' } });
     fireEvent.change(screen.getByLabelText(/event details/i), { target: { value: 'Morning and afternoon' } });

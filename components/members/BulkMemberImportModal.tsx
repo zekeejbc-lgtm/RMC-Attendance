@@ -1,3 +1,4 @@
+import { SelectField } from '../ui/SelectField';
 import { useMemo, useRef, useState } from 'react';
 import { AlertCircle, Download, FileSpreadsheet, Trash2, Upload } from 'lucide-react';
 import Button from '../ui/Button';
@@ -230,7 +231,7 @@ export default function BulkMemberImportModal({
                         aria-label={`${label} for person ${rowIndex + 1}`}
                         aria-describedby={errors[key] ? `review-${reviewIds[rowIndex]}-${key}-error` : undefined}
                         aria-invalid={Boolean(errors[key])}
-                        className={`h-11 w-full rounded-xl border bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:bg-slate-900 dark:text-white ${errors[key] ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-slate-700'}`}
+                        className={`app-control ${`h-11 w-full rounded-xl border bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:bg-slate-900 dark:text-white ${errors[key] ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-slate-700'}`}`}
                         onChange={(event) => updateRow(rowIndex, key, event.target.value)}
                         type={type}
                         value={row[key]}
@@ -240,18 +241,18 @@ export default function BulkMemberImportModal({
                   ))}
                   <label className="space-y-1.5">
                     <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Role</span>
-                    <select
+                    <SelectField
                       aria-label={`Role for person ${rowIndex + 1}`}
                       aria-describedby={errors.role ? `review-${reviewIds[rowIndex]}-role-error` : undefined}
                       aria-invalid={Boolean(errors.role)}
-                      className={`h-11 w-full rounded-xl border bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:bg-slate-900 dark:text-white ${errors.role ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-slate-700'}`}
-                      onChange={(event) => updateRow(rowIndex, 'role', event.target.value)}
+                      className="mt-1 min-w-0"
+                      onChange={(event) => updateRow(rowIndex, 'role', event)}
                       value={row.role}
                     >
                       {!['student', 'mayor'].includes(row.role) ? <option value={row.role}>{row.role || 'Invalid role'}</option> : null}
                       <option value="student">Student</option>
                       <option value="mayor">Mayor</option>
-                    </select>
+                    </SelectField>
                     {errors.role ? <span className="block text-xs text-red-600 dark:text-red-300" id={`review-${reviewIds[rowIndex]}-role-error`}>{errors.role}</span> : null}
                   </label>
                 </div>

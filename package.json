@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "test:integration": "node scripts/verify-supabase.mjs",
+    "test:events": "node scripts/verify-events.mjs",
+    "test:events:browser": "node scripts/browser-events-check.mjs",
     "seed:test-accounts": "node scripts/seed-test-accounts.mjs"
   },
   "dependencies": {

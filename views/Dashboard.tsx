@@ -37,7 +37,7 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <Page className="max-w-6xl animate-in fade-in duration-200">
+    <Page className="max-w-6xl animate-in fade-in duration-fast">
       <PageHeader
         eyebrow={<span className="inline-flex items-center gap-1.5"><Sparkles size={14} /> Student Portal</span>}
         title="Student Dashboard"
@@ -285,7 +285,7 @@ const StaffHome = ({ name, role, navigate }: { name: string; role: 'admin' | 'ss
   ];
 
   return (
-    <Page className="max-w-6xl animate-in fade-in duration-200">
+    <Page className="max-w-6xl animate-in fade-in duration-fast">
       <PageHeader
         eyebrow={<span className="inline-flex items-center gap-1.5"><ShieldCheck size={14} /> {workspaceName} workspace</span>}
         title={`Welcome, ${name || (isOSSA ? 'OSSA Officer' : 'SSG Officer')}`}

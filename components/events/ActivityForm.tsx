@@ -1,0 +1,352 @@
+import React, { useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Archive, ArrowLeft, CalendarRange, CircleOff, Clock3, Crosshair, MapPin, Plus, Save as SaveIcon, Trash2, Users2, XCircle } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../../components/AuthContext';
+import { GeofenceMap } from '../../components/events/GeofenceMap';
+import { FlagProtocolSettings } from '../../components/events/FlagProtocolSettings';
+import { hasPermission } from '../../lib/accessControl';
+import { dateStamp } from '../../lib/ceremonySchedule';
+import { CeremonySchedulePicker } from '../../components/events/CeremonySchedulePicker';
+import { CeremonyAttendanceSettings } from '../../components/events/CeremonyAttendanceSettings';
+import { canScheduleCeremony, validWindows } from '../../lib/ceremonySchedule';
+import { EventRecipientPicker } from '../../components/events/EventRecipientPicker';
+import Button from '../../components/ui/Button';
+import CustomSelect from '../../components/ui/CustomSelect';
+import { Page, PageHeader, Surface } from '../../components/ui/Page';
+import { canManageEventInScope, eventRecipientRoots, recipientGroupLabel } from '../../lib/eventAudience';
+import { findNodePath } from '../../lib/academicDirectory';
+import { appData } from '../../lib/backend';
+import { AppEvent, EventAttendanceWindow, EventSanctionRule } from '../../types';
+
+const newWindow = (index: number): EventAttendanceWindow => ({
+  id: `window-${Date.now()}-${index}`,
+  label: `Window ${index}`,
+  timeIn: '',
+  timeOut: '',
+  lateAfterMinutes: 15,
+});
+
+// The page fixes the purpose; changing activity types cannot turn an event into a ceremony.
+const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) => {
+  const navigate = useNavigate();
+  const { eventId } = useParams();
+  const isCeremony = purpose === 'ceremony';
+  const { profile, revision, loading } = useAuth();
+  const editingEvent = useMemo(() => eventId ? appData.getEvents().find((event) => event.id === eventId) : undefined, [eventId]);
+  const isEditing = Boolean(editingEvent);
+  const phasedCreation = !eventId;
+  const phases = ['Details', 'Schedule', 'Attendees', 'Rules & Location', 'Review'];
+  const [phase, setPhase] = useState(0);
+  const [phaseError, setPhaseError] = useState('');
+  const phaseHeading = useRef<HTMLHeadingElement>(null);
+  const goToPhase = (next: number) => {
+    setPhase(next);
+    setPhaseError('');
+    requestAnimationFrame(() => {
+      phaseHeading.current?.focus();
+      phaseHeading.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    });
+  };
+  const editingActiveEvent = editingEvent?.status === 'active';
+  const datePart = (value: number) => new Date(value + 8 * 3600000).toISOString().slice(0, 10);
+  const timePart = (value: number) => new Date(value + 8 * 3600000).toISOString().slice(11, 16);
+  const [kind, setKind] = useState<AppEvent['kind']>(isCeremony ? 'flag_ceremony' : editingEvent?.kind || 'attendance');
+  const returnPath = isCeremony ? '/student/ceremonies' : '/ssg/events';
+  const [ceremonyDates, setCeremonyDates] = useState<string[]>([]);
+  const [ceremony, setCeremony] = useState<NonNullable<AppEvent['ceremony']>>(editingEvent?.ceremony || { exemptStudentIds: [], allowVolunteerMerit: false, volunteerMeritHours: 1, classWindows: {} });
+  const [meritHours, setMeritHours] = useState(editingEvent?.meritHours || 1);
+  const [serviceOverflow, setServiceOverflow] = useState<'clear' | 'merit'>(editingEvent?.service?.overflow || 'clear');
+  const [extensionDate, setExtensionDate] = useState('');
+  const [extending, setExtending] = useState(false);
+  const canSetOverflow = Boolean(profile && (profile.role === 'admin' || hasPermission(profile.role, 'ossa.manage_cases')));
+  const hasRecordedAttendance = Boolean(editingEvent && Object.keys(appData.getAttendanceLogs?.(editingEvent.id) || {}).length);
+  const [occurrences, setOccurrences] = useState(1);
+  const [saveError, setSaveError] = useState('');
+  const [title, setTitle] = useState(editingEvent?.title || '');
+  const [description, setDescription] = useState(editingEvent?.description || '');
+  const [startDate, setStartDate] = useState(editingEvent?.startDate || (editingEvent ? datePart(editingEvent.startTime) : ''));
+  const [endDate, setEndDate] = useState(editingEvent?.endDate || (editingEvent ? datePart(editingEvent.endTime) : ''));
+  const [selectedGroups, setSelectedGroups] = useState<string[]>(editingEvent?.audienceTarget?.groups
+    || (editingEvent?.audienceTarget?.mode === 'directory_node' && editingEvent.audienceTarget.nodeId ? [`node:${editingEvent.audienceTarget.nodeId}`] : undefined)
+    || editingEvent?.recipientGroups || [editingEvent?.targetValue || 'All Students']);
+  const [geofenceEnabled, setGeofenceEnabled] = useState(editingEvent?.geofenceEnabled ?? false);
+  const [location, setLocation] = useState({ lat: editingEvent?.location.lat ?? 7.0736, lng: editingEvent?.location.lng ?? 125.6126, radius: editingEvent?.location.radius_meters ?? 100, isLocating: false });
+  const [attendanceWindows, setAttendanceWindows] = useState<EventAttendanceWindow[]>(editingEvent?.attendanceWindows?.length ? editingEvent.attendanceWindows : editingEvent ? [{ id: 'window-1', label: 'Window 1', timeIn: timePart(editingEvent.startTime), timeOut: timePart(editingEvent.endTime), lateAfterMinutes: 15 }] : [newWindow(1)]);
+  const [lateSanction, setLateSanction] = useState<EventSanctionRule>(editingEvent?.sanctionRules?.late || { value: 30, unit: 'minutes' });
+  const [absentSanction, setAbsentSanction] = useState<EventSanctionRule>(editingEvent?.sanctionRules?.absent || (editingEvent ? { value: editingEvent.penaltyValue, unit: editingEvent.penaltyUnit } : { value: 1, unit: 'hours' }));
+
+  const directory = useMemo(() => appData.getSchoolStructure(), [revision]);
+  const recipientRoots = useMemo(() => eventRecipientRoots(profile, directory), [profile, directory]);
+  const hasAssignedScope = profile?.role === 'admin' || recipientRoots.length > 0;
+  const eventInScope = !editingEvent || canManageEventInScope(profile, editingEvent, directory);
+  const recipientGroups = selectedGroups.map(group => recipientGroupLabel(group, directory));
+  const recipientsInScope = selectedGroups.every(group => !group.startsWith('node:')
+    || Boolean(findNodePath(recipientRoots, group.slice(5))));
+
+  const ceremonyStudents = useMemo(() => isCeremony && profile ? appData.getVisibleStudents(profile.uid) : [], [isCeremony, profile, revision]);
+  const ceremonyDatesValid = ceremonyDates.length > 0 && ceremonyDates.length <= 62 && ceremonyDates.every(day => canScheduleCeremony(day) && (!ceremony.useStandardSchedule || new Date(dateStamp(day)).getUTCDay() === (ceremony.flagKind === 'retreat' ? 5 : 1)));
+  const ceremonyValid = !isCeremony || ((isEditing ? startDate === endDate : ceremonyDatesValid)
+    && (!ceremony.allowVolunteerMerit || Number.isFinite(ceremony.volunteerMeritHours) && ceremony.volunteerMeritHours > 0 && ceremony.volunteerMeritHours <= 24)
+    && Object.values(ceremony.classWindows).every(validWindows));
+
+  const updateWindow = (id: string, update: Partial<EventAttendanceWindow>) => {
+    setAttendanceWindows((windows) => windows.map((window) => window.id === id ? { ...window, ...update } : window));
+  };
+
+  const captureLocation = () => {
+    setLocation((current) => ({ ...current, isLocating: true }));
+    navigator.geolocation.getCurrentPosition(
+      (position) => setLocation((current) => ({ ...current, lat: position.coords.latitude, lng: position.coords.longitude, isLocating: false })),
+      () => {
+        window.alert('Location permission was denied. You can still enter coordinates manually.');
+        setLocation((current) => ({ ...current, isLocating: false }));
+      },
+      { enableHighAccuracy: true },
+    );
+  };
+
+  const datesValid = Boolean(startDate && endDate && endDate >= startDate);
+  const sortedWindows = [...attendanceWindows].sort((a, b) => a.timeIn.localeCompare(b.timeIn));
+  const windowsOverlap = sortedWindows.some((window, index) => index > 0 && window.timeIn < sortedWindows[index - 1].timeOut);
+  const windowsValid = attendanceWindows.length > 0 && attendanceWindows.every((window) => (
+    Boolean(window.timeIn && window.timeOut)
+    && window.timeOut > window.timeIn
+    && Number.isFinite(window.lateAfterMinutes) && window.lateAfterMinutes >= 0
+  ));
+  const sanctionsValid = [lateSanction.value, absentSanction.value].every(value => Number.isFinite(value) && value >= 0);
+  const activityNumbersValid = (kind !== 'merit' || (Number.isFinite(meritHours) && meritHours > 0 && meritHours <= 24))
+    && (isEditing || (Number.isInteger(occurrences) && occurrences >= 1 && occurrences <= 52));
+  const numbersValid = sanctionsValid && activityNumbersValid;
+  const geofenceValid = !geofenceEnabled || (Number.isFinite(location.lat) && Math.abs(location.lat) <= 90
+    && Number.isFinite(location.lng) && Math.abs(location.lng) <= 180
+    && Number.isFinite(location.radius) && location.radius >= 10 && location.radius <= 5000);
+  const formValid = Boolean(profile && !loading && hasAssignedScope && eventInScope && recipientsInScope && (!eventId || (editingEvent && editingEvent.status !== 'done'))
+    && (!editingEvent || (editingEvent.kind === 'flag_ceremony') === isCeremony)
+    && title.trim() && description.trim() && (isCeremony && !isEditing || datesValid) && windowsValid && !windowsOverlap
+    && !hasRecordedAttendance && numbersValid && geofenceValid && recipientGroups.length > 0 && ceremonyValid);
+
+  const [saving, setSaving] = useState(false);
+  const phaseIssues = [
+    !title.trim() || !description.trim() ? 'Enter a title and instructions before continuing.' : !activityNumbersValid ? 'Check the activity hours and weekly occurrences before continuing.' : '',
+    (isCeremony ? !ceremonyDatesValid : !datesValid)
+      ? isCeremony ? 'Choose 1?62 allowed ceremony dates. Remove preview-only dates and follow the selected ceremony weekday.' : 'Choose a start and end date. The end date must be on or after the start date.'
+      : !windowsValid || windowsOverlap ? 'Enter valid, non-overlapping attendance windows and non-negative late thresholds.' : '',
+    !hasAssignedScope || !recipientsInScope || !recipientGroups.length ? 'Choose at least one recipient within your assigned school unit.'
+      : isCeremony && !ceremonyValid ? 'Check class attendance windows and volunteer merit hours (greater than 0 and up to 24).' : '',
+    !geofenceValid ? 'Enter valid coordinates and a radius between 10 and 5000 meters.' : !sanctionsValid ? 'Sanction values must be zero or greater.' : '',
+  ];
+  const nextPhase = () => {
+    if (phaseIssues[phase]) { setPhaseError(phaseIssues[phase]); return; }
+    goToPhase(phase + 1);
+  };
+  const scheduleEvent = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (phasedCreation && phase < phases.length - 1) { nextPhase(); return; }
+    if (!formValid || saving) return;
+    setSaving(true); setSaveError('');
+
+    const allWindows = isCeremony ? [...sortedWindows, ...Object.values(ceremony.classWindows).flat()] : sortedWindows;
+    const firstWindow = [...allWindows].sort((a, b) => a.timeIn.localeCompare(b.timeIn))[0];
+    const lastWindow = [...allWindows].sort((a, b) => b.timeOut.localeCompare(a.timeOut))[0];
+    const allStudents = selectedGroups.length === 1 && selectedGroups[0] === 'All Students';
+    const targetValue = recipientGroups.join(', ');
+
+    const selectedDates = [...ceremonyDates].sort();
+    const savedStart = isCeremony && !isEditing ? selectedDates[0] : startDate;
+    const savedEnd = isCeremony && !isEditing ? selectedDates[selectedDates.length - 1] : endDate;
+    const payload: Omit<AppEvent, 'id'> = {
+      kind: isCeremony ? 'flag_ceremony' : kind, meritHours: kind === 'merit' ? meritHours : undefined,
+      ceremony: isCeremony ? { ...ceremony, exemptStudentIdsByDate: isEditing ? undefined : Object.fromEntries(Object.entries(ceremony.exemptStudentIdsByDate || {}).filter(([day]) => ceremonyDates.includes(day))) } : null,
+      service: kind === 'service' ? { overflow: serviceOverflow } : null,
+      recurrence: kind === 'attendance' && !isEditing && occurrences > 1 ? { frequency: 'weekly' as const, occurrences } : undefined,
+      scopeNodeId: profile?.role === 'admin' ? undefined : profile?.official_data?.assignment_node_id,
+      title: title.trim(),
+      description: description.trim(),
+      status: editingEvent?.status || 'upcoming',
+      created_by: editingEvent?.created_by || profile!.uid,
+      startDate: savedStart,
+      endDate: savedEnd,
+      startTime: new Date(`${savedStart}T${firstWindow.timeIn}:00+08:00`).getTime(),
+      endTime: new Date(`${savedEnd}T${lastWindow.timeOut}:00+08:00`).getTime(),
+      attendanceWindows: sortedWindows.map((window, index) => ({ ...window, label: `Window ${index + 1}` })),
+      sanctionRules: ['service','merit'].includes(kind || '') ? { late: {value:0,unit:'hours'}, absent: {value:0,unit:'hours'} } : { late: lateSanction, absent: absentSanction },
+      penaltyValue: ['service','merit'].includes(kind || '') ? 0 : absentSanction.value,
+      penaltyUnit: absentSanction.unit,
+      recipientGroups,
+      participantsType: allStudents ? 'all' : 'specific',
+      targetValue,
+      audienceTarget: (allStudents
+        ? { mode: 'all' }
+        : { mode: 'group_list', groups: selectedGroups, snapshotLabel: targetValue }),
+      target: { all: allStudents },
+      geofenceEnabled,
+      location: geofenceEnabled
+        ? { lat: location.lat, lng: location.lng, radius_meters: location.radius }
+        : { lat: 0, lng: 0, radius_meters: 0 },
+      timestamp: Date.now(),
+    };
+    try {
+      if (profile && appData.isUserScopeFrozen(profile) && profile.role !== 'admin') throw new Error('Events are frozen for your scope.');
+      if (editingEvent) await appData.updateEvent(editingEvent.id, payload);
+      else if (isCeremony) await appData.createCeremonies(payload, ceremonyDates);
+      else await appData.createEvent(payload);
+    } catch (error) { setSaveError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to save event.'); return; }
+    finally { setSaving(false); }
+
+    navigate(returnPath);
+  };
+
+  return (
+    <Page>
+      <PageHeader
+        eyebrow={isCeremony ? "Ceremony management" : "Activity management"}
+        title={isCeremony ? isEditing ? 'Edit Ceremony' : 'Create Ceremony' : kind === 'service' ? isEditing ? 'Edit Service Activity' : 'Create Service Activity' : kind === 'merit' ? isEditing ? 'Edit Merit Activity' : 'Create Merit Activity' : isEditing ? 'Edit Event' : 'Create Event'}
+        description={isCeremony ? 'Plan flag raising or retreat dates, required attendance, exemptions, and class schedules.' : isEditing ? 'Review this activity and its attendance configuration.' : kind === 'service' ? 'Set the service duration, attendance windows, recipients, and excess-hours policy.' : kind === 'merit' ? 'Set a fixed award and the attendance sessions required to complete this activity.' : 'Configure recipients, attendance windows, geofencing, and sanction rules before scheduling.'}
+        actions={<Button variant="secondary" onClick={() => navigate(returnPath)}><ArrowLeft size={17} /> {isCeremony ? 'Back to Ceremonies' : 'Back to Events'}</Button>}
+      />
+
+      {phasedCreation && <Surface className="space-y-4 p-4 sm:p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 ref={phaseHeading} tabIndex={-1} className="scroll-mt-6 text-lg font-bold text-brand-900 outline-none dark:text-white">Phase {phase + 1} of {phases.length}: {phases[phase]}</h2>
+          <span className="shrink-0 text-sm text-slate-500">{Math.round(phase / (phases.length - 1) * 100)}%</span>
+        </div>
+        <div role="progressbar" aria-label="Form progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={phase / (phases.length - 1) * 100} aria-valuetext={`Phase ${phase + 1} of ${phases.length}: ${phases[phase]}`} className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+          <div className="h-full rounded-full bg-gold-500 transition-all motion-reduce:transition-none" style={{ width: `${phase / (phases.length - 1) * 100}%` }} />
+        </div>
+        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {phases.map((label, index) => <li key={label} aria-current={phase === index ? 'step' : undefined} className={`rounded-xl border p-2 text-sm ${phase === index ? 'border-gold-500 bg-gold-500/10 font-bold text-brand-900 dark:text-white' : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400'}`}>
+            <span className="block text-xs">Phase {index + 1}{index < phase ? ' · Complete' : ''}</span>{label}
+          </li>)}
+        </ol>
+      </Surface>}
+
+      {hasRecordedAttendance && <p role="status" className="text-sm">{kind === 'service' ? 'Attendance has already been recorded. Use the service extension action to add future days without changing credited hours.' : 'Attendance has already been recorded. Configuration is locked to protect attendance and credited hours.'}</p>}
+      {editingEvent?.kind === 'service' && eventInScope && editingEvent.status !== 'done' && <Surface className="space-y-3 p-4">
+        <h2 className="font-bold">Extend service duration</h2><p className="text-sm">Add future days with the same attendance windows. Existing attendance and credits are preserved.</p>
+        <label className="app-field-label block">New service end date<input type="date" className="input-field mt-2" min={endDate} value={extensionDate} onChange={e => setExtensionDate(e.target.value)} /></label>
+        <Button type="button" variant="secondary" disabled={extending || !extensionDate || extensionDate <= (editingEvent.endDate || datePart(editingEvent.endTime))} onClick={async () => { setExtending(true); setSaveError(''); try { await appData.extendService(editingEvent.id, extensionDate); navigate(returnPath); } catch (error) { setSaveError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to extend service.'); } finally { setExtending(false); } }}>Extend service days</Button>
+      </Surface>}
+      <form aria-label={isCeremony ? isEditing ? 'Edit ceremony' : 'Schedule ceremony' : isEditing ? 'Edit attendance event' : 'Schedule attendance event'} className="space-y-6" onSubmit={scheduleEvent}>
+        {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
+        {phaseError && <p role="alert" className="text-sm text-red-600">{phaseError}</p>}
+        {!eventInScope && <p role="alert" className="text-sm text-red-600">You can manage events only within your current assigned unit.</p>}
+        {eventId && !editingEvent && <p role="alert" className="text-sm text-red-600">This event was not found or you do not have access to it.</p>}
+        {(!phasedCreation || phase === 3) && !geofenceValid && <p role="alert" className="text-sm text-red-600">Enter valid coordinates and a radius between 10 and 5000 meters.</p>}
+        <fieldset hidden={phasedCreation && phase !== 0} disabled={saving || (phasedCreation && phase !== 0)} className="min-w-0 space-y-6">
+        <Surface className="space-y-4 p-4 sm:p-6">
+          <h2 className="text-lg font-bold text-brand-900 dark:text-white">{isCeremony ? 'Flag ceremony schedule' : 'Activity and service schedule'}</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-300">{isCeremony ? 'Plan individual ceremony dates, attendance requirements, class schedules, and exemptions. All times use Philippine time.' : kind === 'service' ? 'Each completed session counts its actual time toward sanction clearing. Separate windows keep breaks out of rendered hours.' : kind === 'merit' ? 'A fixed award is released only after every required attendance session is completed.' : 'Choose an activity type and configure its schedule and attendance rules.'}</p>
+          {!isCeremony && <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <CustomSelect label="Activity type" value={kind} onChange={value => setKind(value as AppEvent['kind'])} options={[{value:'attendance',label:'Attendance event'},{value:'service',label:'Sanction / Cleaning Service'},{value:'merit',label:'Merit activity'}]} />
+            {kind === 'merit' && <label className="app-field-label">Fixed merit hours<input type="number" min="0.01" max="24" step="0.01" required className="input-field mt-2" value={meritHours} onChange={event => setMeritHours(Number(event.target.value))}/></label>}
+            {!isEditing && kind === 'attendance' && <label className="app-field-label">Weekly occurrences<input type="number" min="1" max="52" required className="input-field mt-2" value={occurrences} onChange={event => setOccurrences(Number(event.target.value))}/><span className="mt-1 block text-xs font-normal normal-case">1 for a single activity; up to 52 weeks.</span></label>}
+          </div>}
+          {isCeremony && <FlagProtocolSettings value={ceremony} onChange={setCeremony} onWindowsChange={setAttendanceWindows} />}
+          {kind === 'service' && <div className="space-y-3"><label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={serviceOverflow === 'merit'} disabled={!canSetOverflow} onChange={e => setServiceOverflow(e.target.checked ? 'merit' : 'clear')} />Save excess service hours as earned merit</label><p className="text-sm text-slate-600 dark:text-slate-300">OSAS or an admin controls this setting. Completed service time clears sanctions first. When disabled, any excess is not credited. Breaks and unfinished sessions do not count.</p></div>}
+          {kind === 'merit' && <p className="text-sm text-slate-600 dark:text-slate-300">The fixed award is released once, after all attendance windows on every scheduled day have a scan-in and scan-out. It clears outstanding sanctions first; any remainder is saved as earned merit.</p>}
+        </Surface>
+        <Surface className="space-y-5 p-4 sm:p-6">
+          <div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><CalendarRange size={20} className="text-gold-500" /> {isCeremony ? 'Ceremony information' : 'Event information'}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{isCeremony ? 'Provide the ceremony title and attendance instructions.' : 'Provide the event title and instructions for attendees.'}</p></div>
+          <div className="space-y-2"><label htmlFor="event-title" className="app-field-label">{isCeremony ? 'Ceremony Title' : 'Event Title'}</label><input id="event-title" required disabled={editingActiveEvent} className="input-field min-h-12 text-sm disabled:cursor-not-allowed disabled:opacity-60" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={isCeremony ? 'e.g. Monday Flag Raising' : 'e.g. College General Assembly'} /></div>
+          <div className="space-y-2"><label htmlFor="event-details" className="app-field-label">{isCeremony ? 'Ceremony Details and Instructions' : 'Event Details and Information'}</label><textarea id="event-details" required disabled={editingActiveEvent} rows={6} className="input-field min-h-36 resize-y text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-60" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Objectives, attendance instructions, venue details, and reminders" /></div>
+        </Surface>
+        </fieldset>
+        <fieldset hidden={phasedCreation && phase !== 1} disabled={saving || (phasedCreation && phase !== 1)} className="min-w-0 space-y-6">
+        <Surface className="space-y-5 p-4 sm:p-6">
+          <h2 className="text-lg font-bold">Schedule dates</h2>
+          {isCeremony && !isEditing && <p className="text-sm text-slate-500">Optional prediction range: leave both dates empty to predict the full month shown in the calendar. Enter both only to preview a custom range. Your selected calendar dates determine which ceremonies are created.</p>}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2"><label htmlFor="event-start-date" className="app-field-label">Start Date</label><input id="event-start-date" required={!isCeremony || isEditing} disabled={editingActiveEvent} type="date" className="input-field min-h-12 text-sm disabled:cursor-not-allowed disabled:opacity-60" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></div>
+            <div className="space-y-2"><label htmlFor="event-end-date" className="app-field-label">End Date</label><input id="event-end-date" required={!isCeremony || isEditing} min={startDate || undefined} type="date" className="input-field min-h-12 text-sm" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></div>
+          </div>
+          {kind === 'service' && <label className="app-field-label block">Duration in days<input type="number" min="1" max="366" className="input-field mt-2" disabled={!startDate || hasRecordedAttendance} value={datesValid ? Math.round((dateStamp(endDate)-dateStamp(startDate))/86400000)+1 : ''} onChange={e => { const days=Number(e.target.value); if (startDate && Number.isInteger(days) && days>=1 && days<=366) setEndDate(new Date(dateStamp(startDate)+(days-1)*86400000).toISOString().slice(0,10)); }} /><span className="mt-2 block text-sm font-normal normal-case">Attendance windows repeat each day in this date range.</span></label>}
+          {startDate && endDate && !datesValid && <p role="alert" className="text-sm font-semibold text-red-600 dark:text-red-300">End date must be on or after the start date.</p>}
+        </Surface>
+
+        {isCeremony && !isEditing && <CeremonySchedulePicker start={startDate} end={endDate} dates={ceremonyDates} onChange={setCeremonyDates} standardWeekday={ceremony.useStandardSchedule ? ceremony.flagKind === 'retreat' ? 5 : 1 : undefined} />}
+        <Surface className="space-y-5 p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><Clock3 size={20} className="text-gold-500" /> Attendance windows</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Add each time-in/time-out session and its late threshold.</p></div><Button type="button" variant="secondary" onClick={() => setAttendanceWindows((windows) => [...windows, newWindow(windows.length + 1)])}><Plus size={17} /> Add Attendance Window</Button></div>
+          {windowsOverlap && <p role="alert" className="text-sm font-semibold text-red-600 dark:text-red-300">Attendance windows must not overlap.</p>}
+          {attendanceWindows.some((window) => window.timeIn && window.timeOut && window.timeOut <= window.timeIn) && <p role="alert" className="text-sm font-semibold text-red-600 dark:text-red-300">Each time out must be later than its time in.</p>}
+          <div className="space-y-4">
+            {attendanceWindows.map((window, index) => <fieldset key={window.id} className="min-w-0 rounded-2xl border border-slate-200 p-4 dark:border-slate-700"><legend className="px-2 text-sm font-bold text-brand-900 dark:text-white">Window {index + 1}</legend><div className="grid grid-cols-1 gap-4 sm:grid-cols-3"><div className="space-y-2"><label htmlFor={`time-in-${window.id}`} className="app-field-label">Time In {index + 1}</label><input id={`time-in-${window.id}`} required type="time" className="input-field min-h-12 text-sm" value={window.timeIn} onChange={(event) => updateWindow(window.id, { timeIn: event.target.value })} /></div><div className="space-y-2"><label htmlFor={`time-out-${window.id}`} className="app-field-label">Time Out {index + 1}</label><input id={`time-out-${window.id}`} required type="time" className="input-field min-h-12 text-sm" value={window.timeOut} onChange={(event) => updateWindow(window.id, { timeOut: event.target.value })} /></div><div className="space-y-2"><label htmlFor={`late-after-${window.id}`} className="app-field-label">Late After Minutes {index + 1}</label><input id={`late-after-${window.id}`} type="number" min="0" className="input-field min-h-12 text-sm" value={window.lateAfterMinutes} onChange={(event) => updateWindow(window.id, { lateAfterMinutes: Number(event.target.value) })} /></div></div>{attendanceWindows.length > 1 && <button type="button" aria-label={`Remove attendance window ${index + 1}`} onClick={() => setAttendanceWindows((windows) => windows.filter((item) => item.id !== window.id))} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-bold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"><Trash2 size={15} /> Remove window</button>}</fieldset>)}
+          </div>
+        </Surface>
+
+        </fieldset>
+        <fieldset hidden={phasedCreation && phase !== 2} disabled={saving || (phasedCreation && phase !== 2)} className="min-w-0 space-y-6">
+        <Surface className="space-y-5 p-4 sm:p-6">
+          <div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><Users2 size={20} className="text-gold-500" /> {isCeremony ? 'Required ceremony attendees' : 'Event recipients'}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Start with a general unit, then optionally choose a more specific group. Leave “All of” selected to include the whole unit. Add each recipient to include multiple groups.</p></div>
+          <EventRecipientPicker onChange={setSelectedGroups} roots={recipientRoots} selected={selectedGroups} />
+          {profile?.role !== 'admin' && (hasAssignedScope
+            ? <p className="text-sm text-slate-600 dark:text-slate-300">You can create and manage events only within <strong>{recipientRoots[0].name}</strong> and its sub-units. All recipient choices, including “All Students”, are limited to this assignment.</p>
+            : <p role="alert" className="text-sm text-red-600">An assigned school unit is required to create events. Contact your administrator.</p>)}
+          {!recipientsInScope && <p role="alert" className="text-sm text-red-600">Remove recipients outside your assigned unit before saving.</p>}
+        </Surface>
+
+        {isCeremony && <CeremonyAttendanceSettings value={ceremony} onChange={setCeremony} roots={recipientRoots} students={ceremonyStudents} defaultWindows={attendanceWindows} dates={isEditing ? [startDate] : ceremonyDates} editing={isEditing} canFilter={profile?.role === 'admin' || profile?.role === 'ossa'} />}
+        {isCeremony && !ceremonyValid && <p role="alert" className="text-sm text-amber-700">Choose allowed ceremony dates, valid class windows, and positive volunteer merit hours (up to 24).</p>}
+        </fieldset>
+        <fieldset hidden={phasedCreation && phase !== 3} disabled={saving || (phasedCreation && phase !== 3)} className="min-w-0 space-y-6">
+        <Surface className="space-y-5 p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><MapPin size={20} className="text-gold-500" /> Geofencing</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Require scans to occur inside a defined event perimeter.</p></div><button type="button" role="switch" aria-checked={geofenceEnabled} aria-label="Enable geofencing" onClick={() => setGeofenceEnabled((enabled) => !enabled)} className={`relative h-8 w-14 shrink-0 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 ${geofenceEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}><span aria-hidden="true" className={`absolute left-0 top-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${geofenceEnabled ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>
+          {geofenceEnabled ? (
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(16rem,0.65fr)]">
+              {(!phasedCreation || phase === 3) && <GeofenceMap value={location} onChange={(point) => setLocation((current) => ({ ...current, ...point }))} />}
+              <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60">
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+                  The blue circle is the valid attendance area. Click anywhere on the map or drag the center marker to reposition it.
+                </div>
+                <div className="space-y-2"><label htmlFor="event-geofence-radius" className="app-field-label">Geofence Radius (meters)</label><input id="event-geofence-radius" type="number" min="10" max="5000" className="input-field min-h-12 text-sm" value={location.radius || ''} onBlur={() => setLocation((current) => ({ ...current, radius: Math.min(5000, Math.max(10, current.radius || 10)) }))} onChange={(event) => setLocation({ ...location, radius: Number(event.target.value) })} /><input aria-label="Adjust geofence radius" type="range" min="10" max="1000" step="1" className="w-full accent-blue-600" value={Math.min(Math.max(location.radius || 10, 10), 1000)} onChange={(event) => setLocation({ ...location, radius: Number(event.target.value) })} /></div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2"><div className="space-y-2"><label htmlFor="event-latitude" className="app-field-label">Latitude</label><input id="event-latitude" type="number" step="any" className="input-field min-h-11 text-sm" value={location.lat} onChange={(event) => setLocation({ ...location, lat: Number(event.target.value) })} /></div><div className="space-y-2"><label htmlFor="event-longitude" className="app-field-label">Longitude</label><input id="event-longitude" type="number" step="any" className="input-field min-h-11 text-sm" value={location.lng} onChange={(event) => setLocation({ ...location, lng: Number(event.target.value) })} /></div></div>
+                <Button className="w-full" type="button" variant="secondary" onClick={captureLocation}><Crosshair size={17} className={location.isLocating ? 'animate-spin' : ''} /> Use Current Location</Button>
+              </div>
+            </div>
+          ) : null}
+        </Surface>
+
+        {!isCeremony && ['service','merit'].includes(kind || '') ? null : <Surface className="space-y-5 p-4 sm:p-6">
+          <div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><AlertTriangle size={20} className="text-red-500" /> Sanction rules</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Set independent sanctions for late and absent attendance.</p></div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <fieldset className="grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900 dark:bg-amber-950/20 sm:grid-cols-[1fr_10rem]"><legend className="px-2 text-sm font-bold text-amber-800 dark:text-amber-200">Late sanction</legend><div className="space-y-2"><label htmlFor="late-sanction-value" className="app-field-label">Late Sanction Value</label><input id="late-sanction-value" type="number" min="0" className="input-field min-h-12 text-sm" value={lateSanction.value} onChange={(event) => setLateSanction({ ...lateSanction, value: Number(event.target.value) })} /></div><CustomSelect label="Late sanction unit" options={[{ value: 'minutes', label: 'Minutes' }, { value: 'hours', label: 'Hours' }]} value={lateSanction.unit} onChange={(value) => setLateSanction({ ...lateSanction, unit: value as EventSanctionRule['unit'] })} /></fieldset>
+            <fieldset className="grid min-w-0 grid-cols-1 gap-3 rounded-2xl border border-red-200 bg-red-50/50 p-4 dark:border-red-900 dark:bg-red-950/20 sm:grid-cols-[1fr_10rem]"><legend className="px-2 text-sm font-bold text-red-800 dark:text-red-200">Absent sanction</legend><div className="space-y-2"><label htmlFor="absent-sanction-value" className="app-field-label">Absent Sanction Value</label><input id="absent-sanction-value" type="number" min="0" className="input-field min-h-12 text-sm" value={absentSanction.value} onChange={(event) => setAbsentSanction({ ...absentSanction, value: Number(event.target.value) })} /></div><CustomSelect label="Absent sanction unit" options={[{ value: 'hours', label: 'Hours' }, { value: 'minutes', label: 'Minutes' }]} value={absentSanction.unit} onChange={(value) => setAbsentSanction({ ...absentSanction, unit: value as EventSanctionRule['unit'] })} /></fieldset>
+          </div>
+        </Surface>}
+
+        </fieldset>
+        {phasedCreation && phase === 4 && <Surface className="space-y-5 p-4 sm:p-6">
+          <h2 className="text-lg font-bold text-brand-900 dark:text-white">Review before scheduling</h2>
+          <p className="text-sm text-slate-500">Check the details below. Use Back to make changes, then schedule when ready.</p>
+          <dl className="grid gap-5 text-sm sm:grid-cols-2">
+            <div><dt className="font-bold">Title</dt><dd className="mt-1 break-words">{title}</dd></div>
+            <div><dt className="font-bold">Activity</dt><dd className="mt-1">{isCeremony ? ceremony.flagKind === 'retreat' ? 'Flag retreat / lowering' : 'Flag raising' : kind === 'service' ? 'Sanction / Cleaning Service' : kind === 'merit' ? 'Merit activity' : 'Attendance event'}</dd></div>
+            <div className="sm:col-span-2"><dt className="font-bold">Instructions</dt><dd className="mt-1 whitespace-pre-wrap break-words">{description}</dd></div>
+            <div><dt className="font-bold">Dates</dt><dd className="mt-1">{isCeremony ? [...ceremonyDates].sort().join(', ') : `${startDate} to ${endDate}`}{kind === 'attendance' && occurrences > 1 ? ` · Repeats weekly, ${occurrences} occurrences` : ''}</dd></div>
+            <div><dt className="font-bold">Attendees</dt><dd className="mt-1">{recipientGroups.join(', ')}{profile?.role !== 'admin' && recipientRoots[0] ? ` (within ${recipientRoots[0].name})` : ''}</dd></div>
+            <div><dt className="font-bold">Attendance windows · Philippine time</dt><dd className="mt-1 space-y-1">{sortedWindows.map(window => <p key={window.id}>{window.timeIn}–{window.timeOut} · Late after {window.lateAfterMinutes} minutes</p>)}</dd></div>
+            <div><dt className="font-bold">Geofencing</dt><dd className="mt-1">{geofenceEnabled ? `${location.radius} m radius at ${location.lat}, ${location.lng}` : 'Disabled'}</dd></div>
+            {!['service', 'merit'].includes(kind || '') && <div><dt className="font-bold">Sanctions</dt><dd className="mt-1">Late: {lateSanction.value} {lateSanction.unit}; absent: {absentSanction.value} {absentSanction.unit}</dd></div>}
+            {kind === 'merit' && <div><dt className="font-bold">Merit award</dt><dd className="mt-1">{meritHours} hours</dd></div>}
+            {kind === 'service' && <div><dt className="font-bold">Excess service hours</dt><dd className="mt-1">{serviceOverflow === 'merit' ? 'Save as earned merit' : 'Not credited'}</dd></div>}
+            {isCeremony && <div><dt className="font-bold">Ceremony attendance settings</dt><dd className="mt-1">{ceremony.exemptStudentIds.length} general exemptions · {Object.keys(ceremony.classWindows).length} class schedule overrides · {Object.values(ceremony.exemptStudentIdsByDate || {}).reduce((total, ids) => total + ids.length, 0)} date-specific exemptions. Volunteer merit: {ceremony.allowVolunteerMerit ? `${ceremony.volunteerMeritHours} hours` : 'Disabled'}.</dd></div>}
+          </dl>
+          {!formValid && <p role="alert" className="text-sm text-red-600">The form is not ready to save. Go back to check the configuration and your assigned unit.</p>}
+        </Surface>}
+
+        <div className="sticky bottom-3 z-10 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div><p className="text-sm font-bold text-brand-900 dark:text-white">{isEditing ? isCeremony ? 'Ceremony actions' : 'Event actions' : phase < 4 ? `Phase ${phase + 1}: ${phases[phase]}` : 'Ready to schedule?'}</p><p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{isEditing ? 'Save your changes or update this event’s status.' : phase < 4 ? 'Complete this phase, then continue. Your entries are kept when you go back.' : isCeremony ? 'Review the selected dates and ceremony attendance requirements.' : 'Review the configuration before scheduling this event.'}</p></div>
+          <div aria-label={isCeremony ? 'Ceremony form actions' : 'Event form actions'} className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group">
+            {!isEditing && <Button className="sm:w-auto" type="button" variant="secondary" disabled={saving} onClick={() => navigate(returnPath)}>Cancel</Button>}
+            {phasedCreation && phase > 0 && <Button className="sm:w-auto" type="button" variant="secondary" disabled={saving} onClick={() => goToPhase(phase - 1)}>Back</Button>}
+            {phasedCreation && phase < phases.length - 1 && <Button className="sm:w-auto" type="submit" variant="gold">Next: {phases[phase + 1]}</Button>}
+            {eventInScope && editingEvent?.status === 'active' && <><Button className="sm:w-auto" size="sm" type="button" variant="secondary" disabled={hasRecordedAttendance} onClick={async () => { await appData.updateEvent(editingEvent.id, { endTime: editingEvent.endTime + 3600000 }); navigate(returnPath); }}><Clock3 size={15}/>Extend by 1 Hour</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath); }}><Archive size={15}/>Finish and Archive</Button></>}
+            {eventInScope && editingEvent?.status === 'upcoming' && <><Button className="sm:w-auto" size="sm" type="submit" variant="secondary"><Clock3 size={15}/>Reschedule</Button><Button className="sm:w-auto" size="sm" type="button" variant="warning" onClick={async () => { await appData.updateEvent(editingEvent.id, { status: 'done', cancellationStatus: 'dropped' }); navigate(returnPath); }}><CircleOff size={15}/>Drop</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.cancelEvent(editingEvent.id); navigate(returnPath); }}><XCircle size={15}/>Cancel</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath); }}><Archive size={15}/>Archive</Button><Button className="text-red-700 sm:w-auto" size="sm" type="button" variant="danger" onClick={async () => { await appData.deleteEvent(editingEvent.id); navigate(returnPath); }}><Trash2 size={15}/>Delete</Button></>}
+            {(!phasedCreation || phase === phases.length - 1) && <Button className="col-span-2 sm:ml-2 sm:w-auto sm:min-w-32" type="submit" variant="gold" loading={saving} disabled={!formValid || saving}><SaveIcon size={16}/>{isEditing ? 'Save' : isCeremony ? 'Schedule Ceremonies' : kind === 'service' ? 'Schedule Service' : kind === 'merit' ? 'Schedule Merit Activity' : 'Schedule Event'}</Button>}
+          </div>
+        </div>
+      </form>
+    </Page>
+  );
+};
+
+export default ActivityForm;

@@ -14,7 +14,7 @@ import { Collapsible } from '../components/ui/Collapsible';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { serializeAcademicAssignment, findNodePath } from '../lib/academicDirectory';
 import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
-import { createDriveImage, deleteDriveImage, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
+import { createDriveImage, driveFileIdFromUrl, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
 import { enrollmentUsername, validEmergencyPhone, validStudentId } from '../lib/enrollment';
 import { 
   ArrowRight, Shield, Target, Users, 
@@ -179,7 +179,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const selectEnrollmentPhoto = async (file?: File) => {
     if (!file) return;
     setReadingPhoto(true); setRegError('');
-    setPhotoFile(null); setPhotoPreview(''); setSavedPhotoUrl('');
     try {
       validateProfileImage(file);
       const preview = await fileAsDataUrl(file);
@@ -189,7 +188,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
         img.onerror = () => reject(new Error('This file is not a readable image. Choose another photo.'));
         img.src = preview;
       });
-      setPhotoFile(file); setPhotoPreview(preview);
+      setPhotoFile(file); setPhotoPreview(preview); setSavedPhotoUrl('');
     } catch (error) { setRegError(error instanceof Error ? error.message : 'Unable to read the photo.'); }
     finally { setReadingPhoto(false); }
   };
@@ -222,10 +221,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   }, [terminal?.id]);
 
   const handleRegisterSubmit = async () => {
-    if (isRegistering) return;
+    if (isRegistering || readingPhoto) return;
     setRegError('');
     const terminalNode = academicPath[academicPath.length - 1];
-    if (!terminalNode || !['section', 'block'].includes(terminalNode.type)) return;
+    if (!terminalNode || !['section', 'block'].includes(terminalNode.type)) {
+      setRegError('Please select a valid section to proceed.');
+      return;
+    }
     if (!user && regData.password !== regData.confirmPassword) {
       setRegError('Passwords do not match.');
       return;
@@ -252,33 +254,30 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       school_data: { ...serialized.schoolData, school_id: serialized.assignment.campusId, academic_assignment: serialized.assignment }
     };
 
-    let uploadedDriveId = '';
     try {
       if (!validStudentId(regData.student_id)) throw new Error('Use Student ID format YYYY-NNNNN, for example 2025-00046.');
       if (regData.guardianName.trim().length < 2 || !validEmergencyPhone(regData.guardianPhone)) throw new Error('Enter the emergency contact’s full name and a valid mobile number.');
       if (!photoFile && !savedPhotoUrl) throw new Error('Choose a profile picture before registering.');
+      await appData.validateEnrollment(profile, securityKey.trim(), 3);
       let photoUrl = savedPhotoUrl;
       if (!photoUrl && photoFile) {
         const uploaded = await createDriveImage(photoFile, profile.name, profile.student_id);
-        uploadedDriveId = uploaded.id;
         photoUrl = uploaded.url;
         setSavedPhotoUrl(photoUrl);
       }
+      const photoId = driveFileIdFromUrl(photoUrl);
+      if (photoId) photoUrl = `https://drive.google.com/thumbnail?id=${photoId}&sz=w1600`;
       profile.photo_url = photoUrl;
-      // Validate the exact payload that the signup trigger will receive. This
-      // turns a generic Auth "database error" into a useful field message and
-      // prevents uploading an image that can never be attached to an account.
-      await appData.validateEnrollment({ ...enrollmentPerson(), photo_url: photoUrl }, securityKey.trim(), 4);
+      // Validate the exact payload that the signup trigger will receive.
+      await appData.validateEnrollment(profile, securityKey.trim(), 4);
       const result = await appData.submitApplication(profile, regData.password, securityKey.trim());
       setNeedsEmailConfirmation(result.needsEmailConfirmation);
-      setIsRegistering(false);
       setRegSuccess(true);
     } catch (submissionError) {
-      if (uploadedDriveId) {
-        try { await deleteDriveImage(uploadedDriveId); } catch { /* keep the original error */ }
-      }
-      setIsRegistering(false);
-      setRegError(submissionError instanceof Error ? submissionError.message : 'Unable to submit the application.');
+      // Keep the uploaded photo for retries. A lost signup response can also
+      // mean an account already references it, so deleting it here is unsafe.
+      setRegError(submissionError instanceof Error ? submissionError.message : (submissionError as { message?: string })?.message || 'Unable to submit the application.');
+    } finally {
       setIsRegistering(false);
     }
   };
@@ -391,10 +390,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   ];
 
   return (
-    <div className={`min-h-dvh overflow-x-hidden font-inter transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
+    <div className={`min-h-dvh overflow-x-hidden font-inter transition-colors duration-base ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
       
       {/* NAVBAR */}
-      <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${scrolled ? 'bg-white/85 dark:bg-slate-900/85 backdrop-blur-md shadow-sm py-4 border-b border-slate-200/50 dark:border-slate-800/50' : 'bg-transparent py-6'}`}>
+      <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-base ${scrolled ? 'bg-white/85 dark:bg-slate-900/85 backdrop-blur-md shadow-sm py-4 border-b border-slate-200/50 dark:border-slate-800/50' : 'bg-transparent py-6'}`}>
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 sm:flex-nowrap sm:px-6">
           <div className="flex min-w-0 items-center gap-2 cursor-pointer sm:gap-3" onClick={() => scrollTo('home')}>
              <img 
@@ -472,7 +471,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                            required
                            value={identifier}
                            onChange={(e) => setIdentifier(e.target.value)}
-                           className="w-full py-3.5 pl-12 pr-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-base text-brand-900 dark:text-white"
+                           className="app-control w-full py-3.5 pl-12 pr-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-base text-brand-900 dark:text-white"
                            placeholder="Your submitted username"
                          />
                        </div>
@@ -489,7 +488,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                            required
                            value={password}
                            onChange={(e) => setPassword(e.target.value)}
-                           className="w-full py-3.5 pl-12 pr-12 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-base text-brand-900 dark:text-white"
+                           className="app-control w-full py-3.5 pl-12 pr-12 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-base text-brand-900 dark:text-white"
                            placeholder="••••••••"
                          />
                          <button 
@@ -620,17 +619,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
 
                     <div className="space-y-1">
                        <label htmlFor="landing-register-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Legal Full Name</label>
-                       <input id="landing-register-name" placeholder="Ex. Juan Dela Cruz" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} />
+                       <input id="landing-register-name" placeholder="Ex. Juan Dela Cruz" className="app-control w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} />
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                        <div className="space-y-1">
                           <label htmlFor="landing-register-username" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Username <span className="normal-case text-slate-400">(optional)</span></label>
-                          <input id="landing-register-username" placeholder="3+ letters, numbers, dots or underscores" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.username} onChange={e => setRegData({...regData, username: e.target.value})} />
+                          <input id="landing-register-username" placeholder="3+ letters, numbers, dots or underscores" className="app-control w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.username} onChange={e => setRegData({...regData, username: e.target.value})} />
                        </div>
                        <div className="space-y-1">
                           <label htmlFor="landing-register-email" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Email Address</label>
-                          <input id="landing-register-email" placeholder="name@email.com" type="email" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} />
+                          <input id="landing-register-email" placeholder="name@email.com" type="email" className="app-control w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} />
                        </div>
                     </div>
 
@@ -641,7 +640,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                            id="landing-register-password"
                            placeholder="••••••••"
                            type={showRegPassword ? "text" : "password"}
-                           className="w-full p-3.5 pr-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none"
+                           className="app-control w-full p-3.5 pr-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none"
                            value={regData.password}
                            onChange={e => setRegData({...regData, password: e.target.value})}
                          />
@@ -664,7 +663,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                            id="landing-register-confirm-password"
                            placeholder="••••••••"
                            type={showRegConfirmPassword ? "text" : "password"}
-                           className="w-full p-3.5 pr-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none"
+                           className="app-control w-full p-3.5 pr-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none"
                            value={regData.confirmPassword}
                            onChange={e => setRegData({...regData, confirmPassword: e.target.value})}
                          />
@@ -693,7 +692,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                     <div className="space-y-1">
                        <label htmlFor="landing-register-student-id" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Official Student ID #</label>
-                       <input id="landing-register-student-id" required placeholder="2024-XXXXX" className="w-full min-w-0 p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
+                       <input id="landing-register-student-id" required placeholder="2024-XXXXX" className="app-control w-full min-w-0 p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
                     </div>
 
                     <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
@@ -713,7 +712,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                         <input
                           id="landing-register-security-key"
                           placeholder="Enter Section Security Key (e.g. SEC-XXXXX)"
-                          className="w-full rounded-xl border border-amber-300 bg-white p-3.5 text-base font-bold text-brand-900 outline-none focus:border-amber-500 dark:border-amber-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
+                          className="app-control w-full rounded-xl border border-amber-300 bg-white p-3.5 text-base font-bold text-brand-900 outline-none focus:border-amber-500 dark:border-amber-700 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500"
                           value={securityKey}
                           onChange={(e) => setSecurityKey(e.target.value)}
                         />
@@ -737,11 +736,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                     </div>
                     <div className="space-y-1">
                        <label htmlFor="landing-register-guardian-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Guardian Name</label>
-                       <input id="landing-register-guardian-name" required placeholder="Legal Full Name" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianName} onChange={e => setRegData({...regData, guardianName: e.target.value})} />
+                       <input id="landing-register-guardian-name" required placeholder="Legal Full Name" className="app-control w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianName} onChange={e => setRegData({...regData, guardianName: e.target.value})} />
                     </div>
                     <div className="space-y-1">
                        <label htmlFor="landing-register-guardian-phone" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Emergency Contact #</label>
-                       <input id="landing-register-guardian-phone" required inputMode="tel" placeholder="+63 9XX XXX XXXX" className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianPhone} onChange={e => setRegData({...regData, guardianPhone: e.target.value})} />
+                       <input id="landing-register-guardian-phone" required inputMode="tel" placeholder="+63 9XX XXX XXXX" className="app-control w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.guardianPhone} onChange={e => setRegData({...regData, guardianPhone: e.target.value})} />
                     </div>
                  </div>
               )}
@@ -850,7 +849,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
         <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-gold-400/10 dark:bg-gold-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-brand-900/5 dark:bg-brand-500/10 rounded-full blur-3xl -z-10"></div>
         
-        <div className="max-w-4xl mx-auto text-center space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+        <div className="max-w-4xl mx-auto text-center space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-base">
            <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black text-brand-900 dark:text-white tracking-tighter leading-[1.1]">
               Automated Attendance & <br/>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 via-gold-500 to-amber-600">Student Records Portal</span>
@@ -876,7 +875,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
 
         {/* HERO FEATURE HIGHLIGHT CARDS */}
         <div className="max-w-6xl mx-auto mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
-           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-300">
+           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-base">
               <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 mb-4">
                  <QrCode size={24} />
               </div>
@@ -884,7 +883,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
               <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Encrypted student QR codes refreshed instantly for ultra-fast ceremony and assembly check-ins.</p>
            </div>
 
-           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-300 relative overflow-hidden">
+           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-base relative overflow-hidden">
               <div className="absolute top-0 right-0 w-24 h-24 bg-gold-400/10 rounded-bl-full"></div>
               <div className="w-12 h-12 bg-gold-50 dark:bg-gold-900/20 rounded-2xl flex items-center justify-center text-gold-600 dark:text-gold-400 mb-4">
                  <MapPin size={24} />
@@ -893,7 +892,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
               <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Scanner GPS is validated against the event boundary before attendance is saved.</p>
            </div>
 
-           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-300">
+           <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-base">
               <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4">
                  <ShieldCheck size={24} />
               </div>
@@ -908,7 +907,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
           <p className="text-sm text-slate-500 dark:text-slate-400">Enter your Student ID to see your latest application status.</p>
           <form className="space-y-3" onSubmit={handleEnrollmentLookup}>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500" htmlFor="enrollment-lookup-id">Student ID</label>
-            <input id="enrollment-lookup-id" value={lookupId} onChange={event => setLookupId(event.target.value)} placeholder="YYYY-NNNNN" autoFocus className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800" />
+            <input id="enrollment-lookup-id" value={lookupId} onChange={event => setLookupId(event.target.value)} placeholder="YYYY-NNNNN" autoFocus className="app-control w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800" />
             <Button type="submit" variant="gold" disabled={lookingUp} className="w-full">{lookingUp ? 'Checking…' : 'Check status'}</Button>
           </form>
           {lookupError && <p role="alert" className="text-xs font-semibold text-red-600">{lookupError}</p>}

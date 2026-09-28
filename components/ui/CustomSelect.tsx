@@ -1,5 +1,7 @@
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, ChevronDown, Search, X } from 'lucide-react';
+import { CheckCircle, ChevronDown } from 'lucide-react';
+import { DropdownPanel } from './DropdownPanel';
+import SearchInput from './SearchInput';
 
 export interface Option {
   value: string;
@@ -18,6 +20,8 @@ interface CustomSelectProps {
   disabled?: boolean;
   combobox?: boolean;
   ariaLabel?: string;
+  describedBy?: string;
+  invalid?: boolean;
 }
 
 const selectAllKey = '__select_all__';
@@ -34,6 +38,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   disabled = false,
   combobox = false,
   ariaLabel,
+  describedBy,
+  invalid,
 }) => {
   const labelId = useId();
   const valueId = useId();
@@ -59,14 +65,14 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
       : null;
 
   const focusOption = (key: string | undefined) => {
-    if (!key) return;
+    if (key === undefined) return;
     setActiveKey(key);
     const option = optionRefs.current.get(key);
     if (option) option.focus();
   };
 
   useLayoutEffect(() => {
-    if (isOpen && activeKey) optionRefs.current.get(activeKey)?.focus();
+    if (isOpen && activeKey !== null) optionRefs.current.get(activeKey)?.focus();
   }, [activeKey, isOpen]);
 
   const openListbox = (preferredKey?: string) => {
@@ -180,7 +186,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
       ref={containerRef}
     >
       {label ? (
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400" id={labelId}>
+        <span className="app-field-label" id={labelId}>
           {label}
         </span>
       ) : null}
@@ -190,8 +196,10 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-label={ariaLabel}
+        aria-describedby={describedBy}
+        aria-invalid={invalid || undefined}
         aria-labelledby={ariaLabel ? undefined : label ? `${labelId} ${valueId}` : valueId}
-        className={`group flex min-h-11 w-full min-w-0 cursor-pointer items-center justify-between gap-3 rounded-xl border bg-slate-50 px-3.5 py-2.5 text-left text-sm font-bold text-brand-900 shadow-sm transition-[border-color,box-shadow,background-color] duration-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-100 ${isOpen ? 'border-gold-400 bg-white ring-4 ring-gold-400/10 dark:bg-slate-900' : 'border-slate-200 hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:hover:bg-slate-900'}`}
+        className="app-select-trigger group flex min-w-0 cursor-pointer items-center justify-between gap-3 text-left"
         disabled={disabled}
         role={combobox ? 'combobox' : undefined}
         value={typeof value === 'string' ? value : undefined}
@@ -209,39 +217,15 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         type="button"
       >
         <span className="min-w-0 flex-1 select-none truncate" id={valueId}>{getDisplayValue()}</span>
-        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isOpen ? 'bg-gold-100 text-gold-700 dark:bg-gold-900/40 dark:text-gold-300' : 'bg-slate-100 text-slate-400 group-hover:text-brand-900 dark:bg-slate-700 dark:text-slate-300'}`}>
-          <ChevronDown className={`transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} size={15} strokeWidth={2.5} />
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center text-[var(--color-text-muted)]">
+          <ChevronDown className="app-disclosure-chevron" size={15} strokeWidth={2.5} />
         </span>
       </button>
 
-      {isOpen ? (
-        <div className="app-dropdown-menu absolute left-0 right-0 top-full z-50 mt-2 origin-top overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-xl backdrop-blur-xl dark:border-slate-700 dark:bg-slate-800/95">
+      <DropdownPanel open={isOpen && !disabled} className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden">
           {searchable || options.length > 10 ? (
-            <div className="border-b border-slate-100 p-2 dark:border-slate-700">
-              <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-900">
-                <Search className="text-slate-400 dark:text-slate-500" size={14} />
-                <input
-                  aria-controls={listboxId}
-                  aria-label={searchName}
-                  className="w-full bg-transparent text-xs font-bold text-brand-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
-                  onChange={(event) => setSearch(event.target.value)}
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={handleSearchKeyDown}
-                  placeholder="Search..."
-                  type="text"
-                  value={search}
-                />
-                {search ? (
-                  <button
-                    aria-label={`Clear ${label || 'selection'} options search`}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                    onClick={(event) => { event.stopPropagation(); setSearch(''); }}
-                    type="button"
-                  >
-                    <X size={12} />
-                  </button>
-                ) : null}
-              </div>
+            <div className="border-b border-[var(--color-border)] p-2">
+              <SearchInput ariaLabel={searchName} controls={listboxId} type="text" value={search} onChange={setSearch} onKeyDown={handleSearchKeyDown} />
             </div>
           ) : null}
 
@@ -256,7 +240,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               <button
                 aria-label="Select all"
                 aria-selected={Array.isArray(value) && value.length === options.length && options.length > 0}
-                className={`app-dropdown-option mb-1 flex min-h-10 w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${Array.isArray(value) && value.length === options.length && options.length > 0 ? 'bg-gold-50 text-brand-900 dark:bg-gold-950/60 dark:text-gold-400' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700/60'}`}
+                className="app-dropdown-option mb-1 flex items-center justify-between gap-2 font-semibold"
                 onClick={handleSelectAll}
                 onFocus={() => setActiveKey(selectAllKey)}
                 onKeyDown={handleOptionKeyDown}
@@ -274,7 +258,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               <div className="p-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500" role="status">
                 No options found
               </div>
-            ) : filteredOptions.map((option, optionIndex) => {
+            ) : filteredOptions.map((option) => {
               const isSelected = multi
                 ? Array.isArray(value) && value.includes(option.value)
                 : value === option.value;
@@ -282,19 +266,18 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               return (
                 <button
                   aria-selected={isSelected}
-                  className={`app-dropdown-option mb-1 flex min-h-10 w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${isSelected ? 'bg-brand-50 text-brand-900 dark:bg-slate-700 dark:text-gold-400' : 'text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700/50'}`}
+                  className="app-dropdown-option mb-1 flex items-center justify-between gap-2 font-semibold"
                   key={option.value}
                   onClick={() => handleSelect(option.value)}
                   onFocus={() => setActiveKey(option.value)}
                   onKeyDown={handleOptionKeyDown}
                   ref={(element) => { if (element) optionRefs.current.set(option.value, element); else optionRefs.current.delete(option.value); }}
                   role="option"
-                  style={{ '--option-index': optionIndex + (multi ? 1 : 0) } as React.CSSProperties}
                   tabIndex={activeKey === option.value ? 0 : -1}
                   type="button"
                 >
                   <span className="min-w-0 truncate">{option.label}</span>
-                  {isSelected ? <CheckCircle className="text-brand-900 dark:text-gold-400" size={14} /> : null}
+                  {isSelected ? <CheckCircle className="text-current" size={14} /> : null}
                 </button>
               );
             })}
@@ -310,8 +293,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               </button>
             </div>
           ) : null}
-        </div>
-      ) : null}
+      </DropdownPanel>
     </div>
   );
 };

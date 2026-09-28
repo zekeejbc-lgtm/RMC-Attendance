@@ -7,6 +7,7 @@ interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   iconOnly?: boolean;
+  fullWidth?: boolean;
   type?: 'button' | 'submit';
 }
 
@@ -16,6 +17,7 @@ export default function Button({
   size = 'md',
   loading = false,
   iconOnly = false,
+  fullWidth = true,
   disabled,
   type = 'button',
   className = '',
@@ -28,21 +30,21 @@ export default function Button({
     }
   }, [ariaLabel, iconOnly]);
 
-  const baseStyle = 'relative inline-flex items-center justify-center rounded-lg font-semibold transition-colors duration-150 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60';
+  const baseStyle = 'app-button relative inline-flex items-center justify-center font-semibold';
 
   const variants = {
-    primary: 'bg-brand-900 text-white shadow-sm hover:bg-brand-800',
-    secondary: 'border border-brand-900/70 bg-white text-brand-900 hover:bg-brand-50',
-    gold: 'bg-gold-gradient text-brand-900 shadow-sm hover:brightness-105',
-    danger: 'border border-red-300 bg-white text-red-700 shadow-sm hover:border-red-400 hover:bg-red-50 dark:border-red-800 dark:bg-slate-900 dark:text-red-300 dark:hover:bg-red-950/40',
-    warning: 'border border-amber-300 bg-amber-50 text-amber-800 shadow-sm hover:border-amber-400 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50',
+    primary: 'app-button--primary',
+    secondary: 'app-button--secondary',
+    gold: 'app-button--gold',
+    danger: 'app-button--danger',
+    warning: 'app-button--warning',
   };
   const sizes = {
-    sm: 'h-8 px-3 text-xs',
-    md: 'h-10 px-4 text-sm',
-    lg: 'h-11 px-5 text-base',
+    sm: 'app-button--sm px-3 text-xs',
+    md: 'app-button--md px-4 text-sm',
+    lg: 'app-button--lg px-5 text-base',
   };
-  const width = iconOnly ? 'w-auto aspect-square px-0' : 'w-full';
+  const width = iconOnly ? 'w-auto aspect-square px-0' : fullWidth ? 'w-full' : 'w-auto';
 
   return (
     <button

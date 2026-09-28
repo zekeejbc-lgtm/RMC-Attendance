@@ -62,6 +62,12 @@ it('preserves each attendance window and maps the event and sanction balance', a
   expect(appData.getAttendanceLogs('event').student.status).toBe('absent');
   expect(localStorage.length).toBe(0);
 });
+
+it('keeps earned merit separate from outstanding sanctions', async () => {
+  api.rpc.mockResolvedValue({ data: { ...snapshot(), merit_credits: [{student_id:'student',hours:1.25},{student_id:'student',hours:0.5},{student_id:'pending',hours:9}] }, error:null });
+  await refreshData();
+  expect(appData.getUserDetail('student')?.stats).toEqual(expect.objectContaining({merit_hours:1.75,sanction_hours:1.5}));
+});
 it('excludes pending admissions from active student registers', async () => {
   api.rpc.mockResolvedValue({ data: snapshot(), error: null });
   await refreshData();

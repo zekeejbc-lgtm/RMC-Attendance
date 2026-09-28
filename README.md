@@ -25,7 +25,7 @@ School data is loaded into an authorized in-memory snapshot and refreshed after 
 
 ## Checking accounts
 
-The five original test identities are retained in Supabase Auth: `admin`, `ossa`, `ssg`, `mayor`, and `student`. Their newly generated passwords are in the ignored local file `.demo-accounts.local`. Credentials are never included in the website or committed to Git.
+The five original test identities are retained in Supabase Auth: `admin`, `ossa`, `ssg`, `mayor`, and `student`. Their current demo passwords are in the ignored local file `.demo-accounts.local`. Credentials are never included in the website or committed to Git.
 
 The administrator can create the actual academic hierarchy and assign staff to the appropriate units. Other checking accounts initially have no academic assignment. There are no sample directory units, events, attendance records, admissions, or sanctions.
 

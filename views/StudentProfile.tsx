@@ -268,7 +268,7 @@ const StudentProfile: React.FC = () => {
           : 'Student';
 
   return (
-    <Page className="max-w-5xl animate-in fade-in duration-200">
+    <Page className="max-w-5xl animate-in fade-in duration-fast">
 
       {/* HEADER */}
       <PageHeader

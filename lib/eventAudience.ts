@@ -1,12 +1,33 @@
 import { AppEvent, SchoolNode, UserProfile } from '../types';
-import { findNodePath, flattenDirectory } from './academicDirectory';
+import { findNodePath, flattenDirectory, getDirectorySubtree } from './academicDirectory';
+
+export function eventRecipientRoots(profile: UserProfile | null, roots: SchoolNode[]): SchoolNode[] {
+  if (!profile) return [];
+  if (profile.role === 'admin') return roots;
+  const assignment = profile.official_data?.assignment_node_id || profile.school_data?.academic_assignment?.terminalGroupId;
+  return assignment ? getDirectorySubtree(roots, assignment) : [];
+}
+
+export function canManageEventInScope(profile: UserProfile | null, event: AppEvent, roots: SchoolNode[]): boolean {
+  if (!profile) return false;
+  if (profile.role === 'admin') return true;
+  return Boolean(event.scopeNodeId && findNodePath(eventRecipientRoots(profile, roots), event.scopeNodeId));
+}
+
+export function recipientGroupLabel(group: string, roots: SchoolNode[]): string {
+  if (!group.startsWith('node:')) return group;
+  const path = findNodePath(roots, group.slice(5));
+  return path?.map(node => node.name).join(' / ') || 'Unavailable school unit';
+}
 
 export function isEventRecipient(event: AppEvent, profile: UserProfile, roots: SchoolNode[]): boolean {
+  if (event.ceremony?.exemptStudentIds.includes(profile.uid)) return false;
   const assignment = profile.school_data.academic_assignment;
   const pathIds = new Set([
     ...(assignment?.nodePathIds || []),
     ...(findNodePath(roots, assignment?.terminalGroupId || '') || []).map(node => node.id),
     ...(profile.official_data?.assignment_node_path_ids || []),
+    ...(findNodePath(roots, profile.official_data?.assignment_node_id || '') || []).map(node => node.id),
   ]);
   if (event.scopeNodeId && !pathIds.has(event.scopeNodeId)) return false;
   const audience = event.audienceTarget;
@@ -30,4 +51,10 @@ export function isEventRecipient(event: AppEvent, profile: UserProfile, roots: S
   if (event.specificParticipants?.includes(profile.uid)) return true;
   const values = [event.targetValue, ...(event.target?.department || []), ...(event.target?.section || []), ...(event.target?.strand || [])].filter(Boolean);
   return values.some(value => Object.values(profile.school_data).includes(value));
+}
+
+export function isCeremonyVolunteer(event: AppEvent, profile: UserProfile, roots: SchoolNode[]): boolean {
+  if (event.kind !== 'flag_ceremony' || event.ceremony?.exemptStudentIds.includes(profile.uid) || !['student', 'mayor', 'ssg'].includes(profile.role)) return false;
+  const node = profile.official_data?.assignment_node_id || profile.school_data.academic_assignment?.terminalGroupId;
+  return !event.scopeNodeId || Boolean(findNodePath(roots, node || '')?.some(item => item.id === event.scopeNodeId));
 }

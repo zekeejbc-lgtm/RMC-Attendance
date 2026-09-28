@@ -47,7 +47,7 @@ export const PasswordStrengthMeter: React.FC<PasswordStrengthMeterProps> = ({ pa
   if (!password) return null;
 
   return (
-    <div className="mt-2 space-y-2 animate-in fade-in duration-300">
+    <div className="mt-2 space-y-2 animate-in fade-in duration-base">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
           Password Strength:
@@ -62,7 +62,7 @@ export const PasswordStrengthMeter: React.FC<PasswordStrengthMeterProps> = ({ pa
         {[1, 2, 3, 4].map((step) => (
           <div
             key={step}
-            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+            className={`h-1.5 flex-1 rounded-full transition-all duration-base ${
               step <= strength.score ? strength.color : 'bg-slate-200 dark:bg-slate-700'
             }`}
           />

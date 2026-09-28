@@ -278,7 +278,7 @@ const StudentQR: React.FC = () => {
     }
   };
   return (
-    <Page className="max-w-lg animate-in zoom-in duration-200">
+    <Page className="max-w-lg animate-in zoom-in duration-fast">
       <PageHeader
         className="justify-center text-center"
         eyebrow={<span className="inline-flex items-center gap-1.5"><Sparkles size={12} /> Digital Access Card</span>}

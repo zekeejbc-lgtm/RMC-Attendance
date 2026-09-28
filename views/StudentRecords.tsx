@@ -33,6 +33,7 @@ interface SanctionEntry {
 
 const StudentRecords: React.FC = () => {
   const { profile, revision, stats: userStats } = useAuth();
+  const activityCredits = useMemo(() => appData.getAttendanceRecords(profile?.uid || '').filter(r => ['service', 'merit'].includes(r.event?.kind || '')), [profile?.uid, revision]);
   const records: AttendanceRecord[] = useMemo(() => appData.getAttendanceRecords(profile?.uid || '').map(r => ({
     id: r.id, title: r.event?.title || 'Archived event', category: r.event?.kind === 'flag_ceremony' ? 'Ceremony' : 'Event',
     date: r.slot === 'default' ? new Date(r.event?.startTime || r.time_in).toLocaleDateString() : r.slot.split(':')[0],
@@ -176,7 +177,7 @@ const StudentRecords: React.FC = () => {
   };
 
   return (
-    <Page className="max-w-6xl animate-in fade-in duration-200">
+    <Page className="max-w-6xl animate-in fade-in duration-fast">
       
       {/* HEADER & PDF EXPORT */}
       <PageHeader
@@ -201,6 +202,12 @@ const StudentRecords: React.FC = () => {
       </div>
 
       {/* SEARCH AND FILTERS */}
+      <MetricCard icon={<Award size={20} />} label="Earned Merit" value={`${(userStats?.merit_hours || 0).toFixed(2)} Hours`} detail="Saved credit remaining after activity awards clear existing sanctions. This is separate from your sanction balance." />
+      {activityCredits.length > 0 && <Surface className="overflow-hidden p-4">
+        <h2 className="mb-3 text-lg font-bold">Service and merit credits</h2>
+        <p className="mb-3 text-sm text-slate-500">Completed sessions show actual rendered time, sanctions cleared, and any earned merit. Pending sessions earn no credit.</p>
+        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">Activity / session</th><th className="p-2">Rendered hours</th><th className="p-2">Sanctions cleared</th><th className="p-2">Merit earned</th></tr></thead><tbody>{activityCredits.map(r => <tr key={r.id} className="border-t"><td className="p-2">{r.event?.title}<span className="block text-xs text-slate-500">{r.slot}{!r.time_out ? ' - awaiting scan-out' : r.completion_pending ? ' - fixed merit pending completion' : ''}</span></td><td className="p-2">{Number(r.rendered_hours || 0).toFixed(2)}</td><td className="p-2">{Number(r.deducted_hours || 0).toFixed(2)}</td><td className="p-2">{Number(r.merit_earned_hours || 0).toFixed(2)}</td></tr>)}</tbody></table></div>
+      </Surface>}
       <Surface className="flex flex-col items-stretch justify-between gap-3 p-4 md:flex-row md:items-center">
         <SearchInput ariaLabel="Search attendance records" className="flex-1" onChange={setSearchTerm} placeholder="Search event/ceremony title..." value={searchTerm} />
 

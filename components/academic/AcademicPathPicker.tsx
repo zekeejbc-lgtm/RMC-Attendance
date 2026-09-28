@@ -9,6 +9,7 @@ interface AcademicPathPickerProps {
   purpose?: 'registration' | 'events' | 'any';
   includeArchived?: boolean;
   className?: string;
+  allowParentSelection?: boolean;
 }
 
 const visibleNodes = (nodes: SchoolNode[], purpose: AcademicPathPickerProps['purpose'], includeArchived: boolean) =>
@@ -19,7 +20,7 @@ const visibleNodes = (nodes: SchoolNode[], purpose: AcademicPathPickerProps['pur
     return true;
   });
 
-export function AcademicPathPicker({ roots, value, onChange, purpose = 'any', includeArchived = false, className = '' }: AcademicPathPickerProps) {
+export function AcademicPathPicker({ roots, value, onChange, purpose = 'any', includeArchived = false, className = '', allowParentSelection = false }: AcademicPathPickerProps) {
   const levels: Array<{ options: SchoolNode[]; selected?: SchoolNode }> = [];
   let options = visibleNodes(roots, purpose, includeArchived);
   let depth = 0;
@@ -39,21 +40,23 @@ export function AcademicPathPicker({ roots, value, onChange, purpose = 'any', in
   };
 
   return <div className={`space-y-3 ${className}`}>
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {levels.map(({ options: levelOptions, selected }, index) => {
         const label = getAcademicNodeLabel(levelOptions[0]?.type || 'custom');
+        const parent = selectedPath[index - 1];
+        const parentOption = allowParentSelection && parent ? [{ value: parent.id, label: `All of ${parent.name}` }] : [];
         return (
           <CustomSelect
             key={`${index}-${selectedPath[index - 1]?.id || 'root'}`}
             label={label}
             onChange={(id) => selectAt(index, id as string)}
-            options={levelOptions.map((node) => ({
+            options={[...parentOption, ...levelOptions.map((node) => ({
               value: node.id,
               label: `${node.name}${node.metadata?.shortCode ? ` (${node.metadata.shortCode})` : ''}`,
-            }))}
+            }))]}
             placeholder={`Select ${label}`}
             searchable={levelOptions.length > 10}
-            value={selected?.id || ''}
+            value={selected?.id || (parentOption.length ? parent.id : '')}
           />
         );
       })}

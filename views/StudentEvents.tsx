@@ -80,7 +80,7 @@ const StudentEvents: React.FC = () => {
   };
 
   return (
-    <Page className="max-w-6xl animate-in fade-in duration-200">
+    <Page className="max-w-6xl animate-in fade-in duration-fast">
       
       {/* HEADER & FILTERS */}
       <PageHeader

@@ -1,3 +1,4 @@
+import { SelectField } from '../ui/SelectField';
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Plus, Edit2, Trash2, CheckCircle2, Lock, UserCheck, Shield, Key, Sparkles, AlertCircle } from 'lucide-react';
 import { appData } from '../../lib/backend';
@@ -104,7 +105,7 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
   const categories = Array.from(new Set(ALL_PERMISSIONS.map(p => p.category)));
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-6 animate-in fade-in duration-fast">
       {/* HERO HEADER */}
       <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl" />
@@ -287,20 +288,20 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
                     placeholder="e.g. Guidance Officer, Vice Mayor..."
                     value={roleForm.name}
                     onChange={(e) => setRoleForm(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+                    className="app-control w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
                   />
                 </div>
 
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Role Nature Type</label>
-                  <select
+                  <SelectField aria-label="Role Nature Type"
                     value={roleForm.isPositionOnly ? 'position' : 'functional'}
-                    onChange={(e) => setRoleForm(prev => ({ ...prev, isPositionOnly: e.target.value === 'position' }))}
-                    className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-purple-600 dark:text-purple-400"
+                    onChange={(e) => setRoleForm(prev => ({ ...prev, isPositionOnly: e === 'position' }))}
+                    className="mt-1 min-w-0"
                   >
                     <option value="functional">Functional Role (Grants Permissions)</option>
                     <option value="position">Position Title Only (No Permissions)</option>
-                  </select>
+                  </SelectField>
                 </div>
               </div>
 
@@ -311,7 +312,7 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
                   placeholder="Describe the duties and responsibilities of this role..."
                   value={roleForm.description}
                   onChange={(e) => setRoleForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full p-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+                  className="app-control w-full p-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
                 />
               </div>
               {!roleForm.isPositionOnly && (

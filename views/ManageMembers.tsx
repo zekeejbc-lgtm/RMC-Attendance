@@ -494,7 +494,7 @@ const ManageMembers: React.FC = () => {
                   <input 
                     id="new-unit-name"
                     type="text" 
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
+                    className="app-control w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
                     placeholder={`Enter ${newItemType || childType} name...`}
                     value={newItemName}
                     onChange={(e) => setNewItemName(e.target.value)}
@@ -523,7 +523,7 @@ const ManageMembers: React.FC = () => {
                         aria-label="Officer name"
                         type="text" 
                         placeholder="Officer Name" 
-                        className="w-full p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
+                        className="app-control w-full p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
                         value={officerData.name}
                         onChange={(e) => setOfficerData({...officerData, name: e.target.value})}
                       />
@@ -531,7 +531,7 @@ const ManageMembers: React.FC = () => {
                         aria-label="Officer email address"
                         type="email" 
                         placeholder="Email Address" 
-                        className="w-full p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
+                        className="app-control w-full p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
                         value={officerData.email}
                         onChange={(e) => setOfficerData({...officerData, email: e.target.value})}
                       />
@@ -539,7 +539,7 @@ const ManageMembers: React.FC = () => {
                         aria-label="Officer username"
                         type="text" 
                         placeholder="Username" 
-                        className="w-full p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
+                        className="app-control w-full p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-brand-900 dark:text-slate-100 outline-none focus:border-gold-400"
                         value={officerData.username}
                         onChange={(e) => setOfficerData({...officerData, username: e.target.value})}
                       />
@@ -582,7 +582,7 @@ const ManageMembers: React.FC = () => {
             <label className="space-y-1.5" htmlFor={id} key={id}>
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
               <input
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                className="app-control h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 id={id}
                 aria-describedby={memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors] ? `${id}-error` : undefined}
                 aria-invalid={Boolean(memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors])}
@@ -611,7 +611,7 @@ const ManageMembers: React.FC = () => {
             <label className="space-y-1.5" htmlFor={id} key={id}>
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
               <input
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                className="app-control h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 id={id}
                 aria-describedby={key === 'guardianEmail' && memberErrors.guardian_email ? `${id}-error` : undefined}
                 aria-invalid={key === 'guardianEmail' ? Boolean(memberErrors.guardian_email) : undefined}

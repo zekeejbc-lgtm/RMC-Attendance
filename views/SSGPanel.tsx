@@ -1,3 +1,4 @@
+import { ClassScheduleEditor } from '../components/academic/ClassScheduleEditor';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 
 import React, { useState, useEffect } from 'react';
@@ -359,6 +360,7 @@ const SSGPanel: React.FC = () => {
 
             {restoreError && <p role="alert" className="text-sm text-red-600">{restoreError}</p>}
             {path.some(node => node.metadata?.archived) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">You are viewing an archived hierarchy. Restore its archived parent units to make it available for enrollment again.</p>}
+            {isAtSection && currentNode && (profile?.role === 'admin' || profile?.role === 'ossa') && <ClassScheduleEditor key={`schedule-${currentNode.id}`} node={currentNode} onSaved={refresh} />}
             {currentNode && <NodeOfficerManager actor={profile!} canManage={canManageOfficers} key={currentNode.id} node={currentNode} onChanged={refresh} />}
 
             {!isAtSection ? (
@@ -551,7 +553,7 @@ const SSGPanel: React.FC = () => {
                        <input 
                          id="deployment-title"
                          placeholder="e.g. 2nd Semester Institutional Assembly" 
-                         className="w-full p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-sm shadow-sm focus:border-gold-400 outline-none" 
+                         className="app-control w-full p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-sm shadow-sm focus:border-gold-400 outline-none" 
                          value={eventData.title}
                          onChange={e => setEventData({...eventData, title: e.target.value})}
                        />
@@ -565,7 +567,7 @@ const SSGPanel: React.FC = () => {
                          id="deployment-description"
                          placeholder="Detail the full instructional parameters, objectives, and any prerequisites for this event here..." 
                          rows={5}
-                         className="w-full p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl font-bold text-brand-900 dark:text-slate-100 text-sm shadow-sm focus:border-gold-400 outline-none resize-none whitespace-pre-wrap leading-relaxed" 
+                         className="app-control w-full p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl font-bold text-brand-900 dark:text-slate-100 text-sm shadow-sm focus:border-gold-400 outline-none resize-none whitespace-pre-wrap leading-relaxed" 
                          value={eventData.description}
                          onChange={e => setEventData({...eventData, description: e.target.value})}
                        />
@@ -574,11 +576,11 @@ const SSGPanel: React.FC = () => {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                        <div className="space-y-2">
                           <label htmlFor="deployment-start" className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Window Open</label>
-                          <input id="deployment-start" type="datetime-local" className="w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.startTime} onChange={e => setEventData({...eventData, startTime: e.target.value})} />
+                          <input id="deployment-start" type="datetime-local" className="app-control w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.startTime} onChange={e => setEventData({...eventData, startTime: e.target.value})} />
                        </div>
                        <div className="space-y-2">
                           <label htmlFor="deployment-end" className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Window Close</label>
-                          <input id="deployment-end" type="datetime-local" className="w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.endTime} onChange={e => setEventData({...eventData, endTime: e.target.value})} />
+                          <input id="deployment-end" type="datetime-local" className="app-control w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.endTime} onChange={e => setEventData({...eventData, endTime: e.target.value})} />
                        </div>
                     </div>
                  </div>
@@ -628,7 +630,7 @@ const SSGPanel: React.FC = () => {
                                 <input 
                                   id="asset-identifier"
                                   placeholder="Enter Student ID or UID..." 
-                                  className="flex-1 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-xs focus:border-gold-400 outline-none" 
+                                  className="app-control flex-1 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-xs focus:border-gold-400 outline-none" 
                                   value={assetInput}
                                   onChange={e => setAssetInput(e.target.value)}
                                   onKeyDown={e => e.key === 'Enter' && handleAddAsset()}
@@ -656,7 +658,7 @@ const SSGPanel: React.FC = () => {
                     <div className="flex h-full flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-end sm:p-8">
                        <div className="flex-1 space-y-1.5">
                           <label htmlFor="service-value" className="text-[9px] font-black uppercase text-slate-400 tracking-widest ml-1">Service Value</label>
-                          <input id="service-value" type="number" min="1" className="w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-sm outline-none" value={eventData.penaltyValue} onChange={e => setEventData({...eventData, penaltyValue: parseInt(e.target.value)})} />
+                          <input id="service-value" type="number" min="1" className="app-control w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-700 rounded-xl font-bold text-brand-900 dark:text-slate-100 text-sm outline-none" value={eventData.penaltyValue} onChange={e => setEventData({...eventData, penaltyValue: parseInt(e.target.value)})} />
                        </div>
                        <div className="w-full space-y-1.5 sm:w-28">
                           <CustomSelect 
@@ -682,11 +684,11 @@ const SSGPanel: React.FC = () => {
         footer={<><Button onClick={() => setShowMemberModal(false)} variant="secondary">Cancel</Button><Button onClick={createMember}><Plus size={16} /> Create member</Button></>}
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm font-semibold">Full name<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, name: event.target.value })} required value={memberData.name} /></label>
-          <label className="text-sm font-semibold">Student ID<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, studentId: event.target.value })} required value={memberData.studentId} /></label>
-          <label className="text-sm font-semibold">Email<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, email: event.target.value })} required type="email" value={memberData.email} /></label>
-          <label className="text-sm font-semibold">Username<input className={memberFieldClass} onChange={(event) => setMemberData({ ...memberData, username: event.target.value })} required value={memberData.username} /></label>
-          <label className="text-sm font-semibold sm:col-span-2">Temporary password<div className="relative"><input className={`${memberFieldClass} pr-11`} minLength={8} onChange={(event) => setMemberData({ ...memberData, password: event.target.value })} required type={showMemberPassword ? 'text' : 'password'} value={memberData.password} /><button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setShowMemberPassword((visible) => !visible)} aria-label={showMemberPassword ? 'Hide temporary password' : 'Show temporary password'} aria-pressed={showMemberPassword} className="absolute inset-y-0 right-1 flex w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700">{showMemberPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
+          <label className="text-sm font-semibold">Full name<input className={`app-control ${memberFieldClass}`} onChange={(event) => setMemberData({ ...memberData, name: event.target.value })} required value={memberData.name} /></label>
+          <label className="text-sm font-semibold">Student ID<input className={`app-control ${memberFieldClass}`} onChange={(event) => setMemberData({ ...memberData, studentId: event.target.value })} required value={memberData.studentId} /></label>
+          <label className="text-sm font-semibold">Email<input className={`app-control ${memberFieldClass}`} onChange={(event) => setMemberData({ ...memberData, email: event.target.value })} required type="email" value={memberData.email} /></label>
+          <label className="text-sm font-semibold">Username<input className={`app-control ${memberFieldClass}`} onChange={(event) => setMemberData({ ...memberData, username: event.target.value })} required value={memberData.username} /></label>
+          <label className="text-sm font-semibold sm:col-span-2">Temporary password<div className="relative"><input className={`app-control ${`${memberFieldClass} pr-11`}`} minLength={8} onChange={(event) => setMemberData({ ...memberData, password: event.target.value })} required type={showMemberPassword ? 'text' : 'password'} value={memberData.password} /><button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setShowMemberPassword((visible) => !visible)} aria-label={showMemberPassword ? 'Hide temporary password' : 'Show temporary password'} aria-pressed={showMemberPassword} className="absolute inset-y-0 right-1 flex w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700">{showMemberPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
           {memberError ? <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 sm:col-span-2 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200" role="alert">{memberError}</p> : null}
         </div>
       </Modal>
@@ -792,7 +794,7 @@ const SSGPanel: React.FC = () => {
       >
         {admissionDecision && <div className="space-y-4">
           <label className="block text-sm font-semibold">Reason shown to the enrollee
-            <textarea rows={4} value={admissionReason} onChange={event => setAdmissionReason(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900" placeholder="Explain the decision clearly." />
+            <textarea rows={4} value={admissionReason} onChange={event => setAdmissionReason(event.target.value)} className="app-control mt-2 w-full rounded-xl border border-slate-300 bg-white p-3 dark:border-slate-700 dark:bg-slate-900" placeholder="Explain the decision clearly." />
           </label>
           {admissionDecision.decision === 'bounced' && <fieldset className="space-y-2">
             <legend className="text-sm font-bold">Information requiring clarification</legend>

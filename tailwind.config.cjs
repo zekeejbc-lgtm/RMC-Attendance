@@ -10,6 +10,8 @@ module.exports = {
   ],
   theme: {
     extend: {
+      transitionDuration: { DEFAULT: 'var(--motion-fast)', fast: 'var(--motion-fast)', base: 'var(--motion-base)' },
+      transitionTimingFunction: { DEFAULT: 'var(--motion-snappy)', standard: 'var(--motion-standard)' },
       fontFamily: {
         sans: ['Nunito', 'Outfit', 'system-ui', '-apple-system', 'sans-serif'],
         display: ['Outfit', 'Nunito', 'sans-serif'],

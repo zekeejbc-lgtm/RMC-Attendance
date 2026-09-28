@@ -29,7 +29,7 @@ export const FreezeBanner: React.FC = () => {
   if (!systemFreeze.isFrozen && !isScopeFrozen) return null;
 
   return (
-    <div className="w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white px-4 py-3 shadow-lg border-b border-red-700/50 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+    <div className="w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white px-4 py-3 shadow-lg border-b border-red-700/50 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in slide-in-from-top duration-base">
       <div className="flex items-center gap-3">
         <div className="p-2 bg-white/10 backdrop-blur-md rounded-xl shrink-0">
           {systemFreeze.isFrozen ? <Snowflake className="w-6 h-6 text-white animate-spin-slow" /> : <Lock className="w-6 h-6 text-amber-200" />}

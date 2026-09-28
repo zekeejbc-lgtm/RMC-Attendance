@@ -98,7 +98,7 @@ export default function RegisterStatus() {
       {application && ['bounced', 'rejected'].includes(application.status) && <section className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
         <div><h2 className="font-bold">Update your application</h2><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Review your details, make corrections, and submit the application again.</p></div>
         {(application.status === 'rejected' ? Object.keys(corrections) : clarificationFields.filter(field => field in corrections)).map(field => <label className="block text-sm font-semibold" key={field}>{fieldLabels[field]}
-          <input className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 dark:border-slate-700 dark:bg-slate-900" value={corrections[field as keyof typeof corrections]} onChange={event => setCorrections(current => ({ ...current, [field]: event.target.value }))} />
+          <input className="app-control mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 dark:border-slate-700 dark:bg-slate-900" value={corrections[field as keyof typeof corrections]} onChange={event => setCorrections(current => ({ ...current, [field]: event.target.value }))} />
         </label>)}
       </section>}
 

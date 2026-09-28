@@ -36,7 +36,7 @@ export const AdminSystemHealthView: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-6 animate-in fade-in duration-fast">
       {/* HERO HEALTH STATUS BANNER */}
       <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl" />
@@ -174,7 +174,7 @@ export const AdminSystemHealthView: React.FC = () => {
             value={logFilter}
             onChange={(e) => setLogFilter(e.target.value)}
             placeholder="Filter logs by actor, action..."
-            className="h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs"
+            className="app-control h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs"
           />
         </div>
 

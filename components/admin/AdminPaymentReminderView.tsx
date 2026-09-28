@@ -1,3 +1,4 @@
+import { SelectField } from '../ui/SelectField';
 import React, { useState, useEffect } from 'react';
 import { CreditCard, BellRing, Calendar, Send, CheckCircle2, Clock, AlertTriangle, ShieldCheck, Mail, DollarSign, History } from 'lucide-react';
 import { appData } from '../../lib/backend';
@@ -66,7 +67,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
   const StatusIcon = statusBadge.icon;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-6 animate-in fade-in duration-fast">
       {/* HERO BANNER */}
       <div className="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl" />
@@ -226,22 +227,22 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
               required
               value={reminderData.recipientEmail}
               onChange={(e) => setReminderData(prev => ({ ...prev, recipientEmail: e.target.value }))}
-              className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+              className="app-control w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Urgency Level</label>
-              <select
+              <SelectField aria-label="Target Role"
                 value={reminderData.urgency}
-                onChange={(e) => setReminderData(prev => ({ ...prev, urgency: e.target.value as any }))}
-                className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold"
+                onChange={(e) => setReminderData(prev => ({ ...prev, urgency: e as any }))}
+                className="mt-1 min-w-0"
               >
                 <option value="normal">Normal Reminder</option>
                 <option value="urgent">Urgent Notice</option>
                 <option value="critical">Critical - Freeze Warning</option>
-              </select>
+              </SelectField>
             </div>
 
             <div>
@@ -250,7 +251,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
                 type="text"
                 disabled
                 value={`${paymentInfo.currency} ${paymentInfo.amountDue.toLocaleString()}`}
-                className="w-full h-10 px-3 mt-1 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-amber-600 dark:text-amber-400"
+                className="app-control w-full h-10 px-3 mt-1 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-amber-600 dark:text-amber-400"
               />
             </div>
           </div>
@@ -262,7 +263,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
               required
               value={reminderData.subject}
               onChange={(e) => setReminderData(prev => ({ ...prev, subject: e.target.value }))}
-              className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+              className="app-control w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
             />
           </div>
 
@@ -273,7 +274,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
               rows={5}
               value={reminderData.message}
               onChange={(e) => setReminderData(prev => ({ ...prev, message: e.target.value }))}
-              className="w-full p-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
+              className="app-control w-full p-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
             />
           </div>
         </form>
@@ -307,16 +308,16 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
         <form id="status-form" onSubmit={handleUpdateStatus} className="space-y-3">
           <div>
             <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Payment Status</label>
-            <select
+            <SelectField aria-label="Target Role"
               value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value as any)}
-              className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold"
+              onChange={(e) => setNewStatus(e as any)}
+              className="mt-1 min-w-0"
             >
               <option value="paid">Paid & Fully Cleared</option>
               <option value="due_soon">Payment Due Soon</option>
               <option value="overdue">Payment Overdue</option>
               <option value="unpaid">Unpaid (Frozen)</option>
-            </select>
+            </SelectField>
           </div>
 
           <div>
@@ -325,7 +326,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
               type="number"
               value={newAmount}
               onChange={(e) => setNewAmount(Number(e.target.value))}
-              className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
+              className="app-control w-full h-10 px-3 mt-1 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono"
             />
           </div>
         </form>

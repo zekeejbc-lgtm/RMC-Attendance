@@ -1,5 +1,6 @@
 import React, { useId, useMemo, useState } from 'react';
 import { Check, Search, X } from 'lucide-react';
+import { DropdownPanel } from '../ui/DropdownPanel';
 
 interface RecipientComboboxProps {
   options: string[];
@@ -90,11 +91,10 @@ export const RecipientCombobox: React.FC<RecipientComboboxProps> = ({ options, s
           />
         </div>
 
-        {open && suggestions.length > 0 ? (
-          <div className="absolute z-40 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-800" id={listboxId} role="listbox" aria-label="Recipient suggestions">
+        <DropdownPanel open={open && suggestions.length > 0} className="absolute z-50 mt-2 w-full overflow-hidden p-1" id={listboxId} role="listbox" aria-label="Recipient suggestions">
             {suggestions.map((suggestion) => (
               <button
-                className="flex min-h-11 w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-gold-50 hover:text-brand-900 dark:text-slate-200 dark:hover:bg-slate-700"
+                className="app-dropdown-option flex items-center justify-between gap-2 font-semibold"
                 key={suggestion}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectSuggestion(suggestion)}
@@ -104,8 +104,7 @@ export const RecipientCombobox: React.FC<RecipientComboboxProps> = ({ options, s
                 <span>{suggestion}</span><Check aria-hidden="true" className="text-gold-500" size={16} />
               </button>
             ))}
-          </div>
-        ) : null}
+        </DropdownPanel>
       </div>
 
       <div aria-label="Added event recipients" className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/70" role="status">

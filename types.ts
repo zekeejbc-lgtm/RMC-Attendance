@@ -180,6 +180,7 @@ export interface UserProfile {
 }
 
 export interface UserStats {
+  merit_hours?: number;
   attendance_rate: number;
   sanction_hours: number; 
   events_attended: number;
@@ -200,6 +201,17 @@ export interface EventSanctionRule {
 }
 
 export interface AppEvent {
+  ceremony?: {
+    flagKind?: 'raising' | 'retreat';
+    useStandardSchedule?: boolean;
+    exemptStudentIds: string[];
+    /** Creation-only date-specific exemptions, materialized per ceremony on save. */
+    exemptStudentIdsByDate?: Record<string, string[]>;
+    allowVolunteerMerit: boolean;
+    volunteerMeritHours: number;
+    classWindows: Record<string, EventAttendanceWindow[]>;
+  } | null;
+  service?: { overflow: 'clear' | 'merit' } | null;
   kind?: 'attendance' | 'service' | 'merit' | 'flag_ceremony';
   meritHours?: number;
   recurrence?: { frequency: 'weekly'; occurrences: number };
@@ -249,6 +261,9 @@ export interface AppEvent {
   };
 }
 
+export type ClassDaySchedule = { status: 'no_class' } | { status: 'classes'; timeIn: string; timeOut: string };
+export type ClassWeekSchedule = Partial<Record<string, ClassDaySchedule>>;
+
 export interface SchoolNode {
   enrollmentKeyRequired?: boolean;
   id: string;
@@ -258,6 +273,7 @@ export interface SchoolNode {
   logo_url?: string;
   children?: SchoolNode[];
   metadata?: {
+    classSchedule?: ClassWeekSchedule;
     schemaVersion?: number;
     educationLevel?: 'elementary' | 'jhs' | 'shs' | 'higher_ed' | 'graduate' | 'other';
     curriculumCode?: string;

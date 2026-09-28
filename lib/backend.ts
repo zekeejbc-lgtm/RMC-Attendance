@@ -66,7 +66,7 @@ export async function refreshData() {
     const attendance = data.attendance.filter((a: any) => a.student_id === p.uid);
     const attended = new Set(attendance.filter((a: any) => ['present', 'late', 'excused'].includes(a.data.status)).map((a: any) => a.event_id)).size;
     const missed = new Set(attendance.filter((a: any) => a.data.status === 'absent').map((a: any) => a.event_id)).size;
-    next.users[p.uid] = { profile: p, stats: { events_attended: attended, events_missed: missed, attendance_rate: attendance.length ? Math.round(attendance.filter((a: any) => a.data.status !== 'absent').length / attendance.length * 100) : 0, sanction_hours: Math.max(0, (next.sanction_logs[p.uid] || []).reduce((sum, s) => sum + Number(s.change), 0)) } };
+    next.users[p.uid] = { profile: p, stats: { merit_hours: (data.merit_credits || []).filter((credit: any) => credit.student_id === p.uid).reduce((sum: number, credit: any) => sum + Number(credit.hours), 0), events_attended: attended, events_missed: missed, attendance_rate: attendance.length ? Math.round(attendance.filter((a: any) => a.data.status !== 'absent').length / attendance.length * 100) : 0, sanction_hours: Math.max(0, (next.sanction_logs[p.uid] || []).reduce((sum, s) => sum + Number(s.change), 0)) } };
   }
   for (const item of data.events) next.events[item.id] = item;
   for (const item of data.applications) next.applications[item.id] = item;
@@ -389,6 +389,10 @@ isUserScopeFrozen: (profile?: UserProfile | null) => {
     return false;
   },
   addSchoolNode: (...args: any[]) => command('addSchoolNode', args),
+  setClassSchedule: (nodeId: string, schedule: import('../types').ClassWeekSchedule) => toast.track(async () => {
+    await rpc('rmc_set_class_schedule', { node_id: nodeId, schedule });
+    await refreshAfterWrite();
+  }, 'Save class schedule'),
   updateSchoolNode: (...args: any[]) => command('updateSchoolNode', args),
   archiveSchoolNode: (...args: any[]) => command('archiveSchoolNode', args),
   restoreSchoolNode: async (id: string, confirmation?: unknown) => { const node = findNodeById(getDB().school_structure, id); if (!node) throw new Error('Unit not found.'); return appData.updateSchoolNode(id, { metadata: { ...(node.metadata || {}), archived: false } }); },
@@ -414,6 +418,16 @@ isUserScopeFrozen: (profile?: UserProfile | null) => {
   assignAccountRole: (...args: any[]) => command('assignAccountRole', args),
   assignOfficialToNode: (...args: any[]) => command('assignOfficialToNode', args),
   createEvent: (...args: any[]) => command('createEvent', args),
+  extendService: (eventId: string, endDate: string) => toast.track(async () => {
+    const result = await rpc('rmc_extend_service', { event_id: eventId, new_end_date: endDate });
+    await refreshAfterWrite();
+    return result;
+  }, 'Extend service duration'),
+  createCeremonies: (event: Omit<AppEvent, 'id'>, dates: string[]) => toast.track(async () => {
+    const result = await rpc('rmc_create_ceremonies', { configuration: event, dates });
+    await refreshAfterWrite();
+    return result;
+  }, 'Schedule ceremonies'),
   updateEvent: (...args: any[]) => command('updateEvent', args),
   archiveEvent: (...args: any[]) => command('archiveEvent', args),
   cancelEvent: (...args: any[]) => command('cancelEvent', args),

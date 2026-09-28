@@ -1,5 +1,11 @@
 import { appData, uploadDocument } from '../lib/backend';
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Button from '../components/ui/Button';
+import { hasPermission } from '../lib/accessControl';
+import { canManageEventInScope, isCeremonyVolunteer } from '../lib/eventAudience';
+import { CeremonyCalendar } from '../components/events/CeremonyCalendar';
+import { manilaDate } from '../lib/ceremonySchedule';
 import { useAuth } from '../components/AuthContext';
 import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
@@ -15,10 +21,15 @@ import {
 interface SchoolCeremony {
   id: string;
   title: string;
-  type: 'flag_ceremony' | 'convocation' | 'commencement' | 'institutional';
+  type: 'flag_raising' | 'flag_retreat';
   scheduleDay: string;
   timeFrame: string;
   locationName: string;
+  geofenceEnabled: boolean;
+  date: string;
+  canEdit: boolean;
+  required: boolean;
+  volunteerMerit: number;
   geofenceRadius: number; // in meters
   attire: string;
   description: string;
@@ -28,6 +39,8 @@ interface SchoolCeremony {
 
 const StudentCeremonies: React.FC = () => {
   const { profile, revision } = useAuth();
+  const navigate = useNavigate();
+  const canManage = Boolean(profile && hasPermission(profile.role, 'events.manage'));
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,9 +63,12 @@ const StudentCeremonies: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const filteredCeremonies = useMemo(() => {
-    const ceremonies: SchoolCeremony[] = (profile ? appData.getRecipientEvents(profile.uid) : []).filter(event => event.kind === 'flag_ceremony' && !event.cancellationStatus).map(event => ({
-      id: event.id, title: event.title, type: 'flag_ceremony', scheduleDay: new Date(event.startTime).toLocaleDateString(),
-      timeFrame: `${new Date(event.startTime).toLocaleTimeString()} - ${new Date(event.endTime).toLocaleTimeString()}`,
+    const events = profile
+      ? canManage || ['ossa', 'ossa_staff'].includes(profile.role) ? appData.getVisibleEvents(profile.uid) : appData.getEvents().filter(event => appData.isEventRecipient(event, profile) || isCeremonyVolunteer(event, profile, appData.getSchoolStructure()))
+      : [];
+    const ceremonies: SchoolCeremony[] = events.filter(event => event.kind === 'flag_ceremony' && !event.cancellationStatus).map(event => ({
+      id: event.id, title: event.title, required: Boolean(profile && appData.isEventRecipient(event, profile)), volunteerMerit: event.ceremony?.allowVolunteerMerit ? event.ceremony.volunteerMeritHours : 0, date: manilaDate(event.startTime), geofenceEnabled: event.geofenceEnabled !== false, canEdit: canManage && canManageEventInScope(profile, event, appData.getSchoolStructure()) && event.status !== 'done', type: event.ceremony?.flagKind === 'retreat' ? 'flag_retreat' : 'flag_raising', scheduleDay: new Date(event.startTime).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
+      timeFrame: `${new Date(event.startTime).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })} - ${new Date(event.endTime).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })}`,
       locationName: event.geofenceEnabled ? 'Designated event area' : 'See event instructions', geofenceRadius: event.location.radius_meters,
       attire: 'See event instructions', description: event.description || '', penaltyValue: event.penaltyUnit === 'minutes' ? event.penaltyValue / 60 : event.penaltyValue,
       status: event.status === 'upcoming' ? 'scheduled' : event.status === 'done' ? 'archived' : 'active',
@@ -78,7 +94,7 @@ const StudentCeremonies: React.FC = () => {
     [filteredCeremonies]
   );
 
-  const canFileExcuse = (_ceremony: SchoolCeremony) => true;
+  const canFileExcuse = (ceremony: SchoolCeremony) => Boolean(ceremony.required && profile && ['student', 'mayor', 'ssg'].includes(profile.role));
 
   const renderCeremonyCard = (ceremony: SchoolCeremony) => (
     <button
@@ -105,7 +121,7 @@ const StudentCeremonies: React.FC = () => {
               : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
         }`}>
           {ceremony.status === 'active'
-            ? `Geofence Active (${ceremony.geofenceRadius}m)`
+            ? ceremony.geofenceEnabled ? `Geofence Active (${ceremony.geofenceRadius}m)` : 'Active - No geofence'
             : ceremony.status === 'scheduled'
               ? 'Scheduled'
               : 'Archived'}
@@ -113,6 +129,7 @@ const StudentCeremonies: React.FC = () => {
       </div>
 
       <div>
+        {!ceremony.required && !canManage && <p className="mb-2 text-xs font-bold text-blue-700 dark:text-blue-300">{ceremony.volunteerMerit > 0 ? `Optional attendance - Up to ${ceremony.volunteerMerit} merit hours after scan-out` : 'Optional attendance - No merit award'}</p>}
         <h3 className="text-sm font-bold uppercase tracking-tight text-brand-900 [overflow-wrap:anywhere] transition-colors group-hover:text-gold-600 dark:text-slate-100 dark:group-hover:text-gold-400">
           {ceremony.title}
         </h3>
@@ -154,13 +171,14 @@ const StudentCeremonies: React.FC = () => {
   };
 
   return (
-    <Page className="max-w-6xl animate-in fade-in duration-200">
+    <Page className="max-w-6xl animate-in fade-in duration-fast">
       
       {/* HEADER & FILTERS */}
       <PageHeader
         eyebrow={<span className="flex items-center gap-1.5"><Award size={14} /> Official Protocol</span>}
         title="Institutional Ceremonies"
-        description="Flag ceremonies, convocations, and formal school protocols with mandatory geofenced attendance."
+        description="Flag ceremony schedules, attendance requirements, and optional geofenced check-in."
+        actions={canManage ? <Button onClick={() => navigate('/ssg/ceremonies/create')}>Create Ceremony</Button> : undefined}
       />
 
       {/* SEARCH & FILTER */}
@@ -169,9 +187,11 @@ const StudentCeremonies: React.FC = () => {
 
           <div className="flex min-w-0 items-center gap-1.5 sm:w-56">
             <Filter className="text-slate-400 shrink-0" size={14} />
-            <CustomSelect className="min-w-0 flex-1" label="Ceremony type" onChange={(value) => setTypeFilter(value as string)} options={[{ value: 'all', label: 'All Ceremonies' }, { value: 'flag_ceremony', label: 'Flag Ceremonies' }, { value: 'convocation', label: 'Convocations' }, { value: 'commencement', label: 'Commencements' }]} value={typeFilter} />
+            <CustomSelect className="min-w-0 flex-1" label="Ceremony type" onChange={(value) => setTypeFilter(value as string)} options={[{ value: 'all', label: 'All Ceremonies' }, { value: 'flag_raising', label: 'Flag Raising' }, { value: 'flag_retreat', label: 'Flag Retreat' }]} value={typeFilter} />
           </div>
       </Surface>
+
+      <CeremonyCalendar dates={filteredCeremonies.map(ceremony => ceremony.date)} />
 
       {/* 1. ACTIVE / ONGOING CEREMONIES */}
       <Surface className="space-y-3 p-4 sm:p-5">
@@ -232,9 +252,9 @@ const StudentCeremonies: React.FC = () => {
           open
           onClose={() => setSelectedCeremony(null)}
           title={selectedCeremony.title}
-          description="Review the official protocol, schedule, attire, and geofenced check-in perimeter."
+          description="Review the ceremony schedule, instructions, and check-in requirements."
           size="lg"
-          footer={canFileExcuse(selectedCeremony) ? (
+          footer={selectedCeremony.canEdit ? <Button onClick={() => navigate(`/ssg/ceremonies/${selectedCeremony.id}/edit`)}>Edit Ceremony</Button> : canFileExcuse(selectedCeremony) ? (
             <>
               <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 sm:mr-auto sm:self-center">
                 Cannot participate in this official ceremony?
@@ -279,25 +299,14 @@ const StudentCeremonies: React.FC = () => {
               <div>
                 <div className="mb-2 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h4 className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-400">
-                    <MapPin size={12} className="text-gold-600 dark:text-gold-400" /> Geofenced Check-In Perimeter
+                    <MapPin size={12} className="text-gold-600 dark:text-gold-400" /> Check-in location
                   </h4>
                   <span className="max-w-full rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 [overflow-wrap:anywhere] dark:border-emerald-800/60 dark:bg-emerald-950/50 dark:text-emerald-300">
-                    Perimeter Radius: {selectedCeremony.geofenceRadius}m
+                    {selectedCeremony.geofenceEnabled ? `Perimeter Radius: ${selectedCeremony.geofenceRadius}m` : 'Geofencing is disabled for this ceremony.'}
                   </span>
                 </div>
 
-                <div className="relative flex h-44 items-center justify-center overflow-hidden rounded-2xl border border-slate-300 bg-slate-100 shadow-inner dark:border-slate-700 dark:bg-slate-900">
-                  <div className="absolute inset-0 bg-[radial-gradient(#CBD5E1_1px,transparent_1px)] [background-size:16px_16px] opacity-70 dark:bg-[radial-gradient(#334155_1px,transparent_1px)]"></div>
-                  <div className="relative z-10 flex flex-col items-center">
-                    <div className="w-8 h-8 rounded-full bg-brand-900 border-2 border-gold-400 shadow-xl flex items-center justify-center text-gold-400 animate-bounce">
-                      <Building2 size={18} />
-                    </div>
-                    <span className="mt-1 max-w-[min(15rem,80vw)] rounded-full bg-brand-900 px-2.5 py-0.5 text-center text-[10px] font-black uppercase text-white [overflow-wrap:anywhere] shadow-md">
-                      {selectedCeremony.locationName}
-                    </span>
-                  </div>
-                  <div className="absolute w-32 h-32 rounded-full border-2 border-dashed border-emerald-500 bg-emerald-500/10 flex items-center justify-center animate-pulse"></div>
-                </div>
+                <p className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-900">{selectedCeremony.geofenceEnabled ? 'Attendance must be scanned within the configured perimeter. See the ceremony instructions for the venue.' : 'See the ceremony instructions for the venue. GPS verification is not required.'}</p>
               </div>
           </div>
         </Modal>
