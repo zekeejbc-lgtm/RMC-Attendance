@@ -302,7 +302,7 @@ const StaffHome = ({ name, role, navigate }: { name: string; role: 'admin' | 'ss
             <h2 className="mt-1 text-2xl font-bold text-white">Your administration command center</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Review pending work, oversee active attendance events, and manage the school community from one place.</p>
           </div>
-          <button onClick={() => navigate('/ssg/panel')} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gold-gradient px-5 py-3 text-sm font-bold text-brand-900 shadow-md transition hover:brightness-105">
+          <button onClick={() => navigate('/ssg/panel')} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl app-button--gold px-5 py-3 text-sm font-bold text-brand-900 shadow-md transition hover:brightness-105">
             Open {workspaceName} Control Panel <ArrowRight size={16} />
           </button>
         </div>

@@ -246,7 +246,7 @@ const ManageMembers: React.FC = () => {
 
   const childType = getChildType(currentNode.type, currentNode.name);
   const isSection = currentNode.type === 'section' || currentNode.type === 'block';
-  const canManageStructure = profile?.role === 'admin' || profile?.role === 'ossa';
+  const canManageStructure = hasPermission(profile?.role, 'directory.manage_structure') && hasPermission(profile?.role, 'directory.create_units');
   const canAddMembersManually = hasPermission(profile?.role, 'directory.add_members_manually', appData.getCustomRoles(), appData.getCoreRoles());
   const canChangeDesignation = hasPermission(profile?.role, 'directory.change_member_designation', appData.getCustomRoles(), appData.getCoreRoles());
 

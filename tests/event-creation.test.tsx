@@ -90,7 +90,7 @@ it('reviews the full event and requires final confirmation before saving', async
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
   expect(screen.getByText('Late: 45 minutes; absent: 1 hours')).toBeVisible();
   expect(state.create).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: 'Schedule Event' }));
+  await user.click(screen.getByRole('button', { name: 'Submit for OSSA Approval' }));
   await screen.findByText('Event registry');
   expect(state.create).toHaveBeenCalledTimes(1);
 });
@@ -191,7 +191,7 @@ it('waits for the backend before navigating and prevents a second submission', a
   state.create.mockImplementation(() => new Promise(r => { resolve = r; }));
   mount(); fill(); review();
   fireEvent.submit(screen.getByRole('form'));
-  expect(screen.getByRole('button', { name: /schedule event/i })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /submit for ossa approval/i })).toBeDisabled();
   fireEvent.submit(screen.getByRole('form'));
   expect(state.create).toHaveBeenCalledTimes(1);
   expect(screen.queryByText('Event registry')).not.toBeInTheDocument();
@@ -206,7 +206,7 @@ it('keeps entered data and displays plain Supabase error objects for a retry', a
   mount(); fill(); review(); fireEvent.submit(screen.getByRole('form'));
   expect(await screen.findByRole('alert')).toHaveTextContent('Your school is frozen.');
   expect(screen.getByLabelText(/(?:event|ceremony) title/i)).toHaveValue('Assembly');
-  await waitFor(() => expect(screen.getByRole('button', { name: /schedule event/i })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: /submit for ossa approval/i })).toBeEnabled());
   fireEvent.submit(screen.getByRole('form'));
   await screen.findByText('Event registry');
 });

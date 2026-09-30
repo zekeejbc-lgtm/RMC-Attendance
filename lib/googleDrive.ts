@@ -41,11 +41,11 @@ function responseError(payload: DriveResponse, status: number) {
 function readableResponseError(text: string, status: number) {
   // Apps Script can return Google's full HTML error page when an old or
   // unpublished deployment is hit. Never show that page inside the form.
-  const plain = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  if (/page not found|unable to open the file/i.test(plain)) {
+  const plain = text.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (/<(?:!doctype|html|head|body)\b/i.test(text) || /page not found|unable to open the file/i.test(plain)) {
     return 'Google Drive image service is unavailable. Redeploy the Apps Script web app and update VITE_GOOGLE_DRIVE_GAS_URL.';
   }
-  return plain || responseError({}, status);
+  return plain.slice(0, 300) || responseError({}, status);
 }
 
 async function request<T = DriveResponse>(body: Record<string, unknown>): Promise<T> {

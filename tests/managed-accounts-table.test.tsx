@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import ManagedAccountsTable from '../components/admin/ManagedAccountsTable';
 import { UserProfile } from '../types';
+import { changeField as change } from './ui-select';
 
 afterEach(cleanup);
 const accounts = Array.from({ length: 23 }, (_, index) => ({ uid: `id-${index}`, name: `Person ${index + 1}`, username: `user${index}`, email: `user${index}@school.test`, student_id: `RMC-${index}`, role: index % 2 ? 'ssg' : 'ossa', school_data: { department: 'Engineering' } } as UserProfile));
 const access = Object.fromEntries(accounts.map((account, index) => [account.uid, { last_sign_in_at: index % 3 ? '2026-09-28T10:00:00Z' : null }]));
 const setup = (props = {}) => render(<ManagedAccountsTable accounts={accounts} access={access} loading={false} accessError="" onRefresh={vi.fn()} onSelect={vi.fn()} {...props} />);
-const change = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name), { target: { value } });
 
 describe('Managed accounts table', () => {
   it('paginates without losing or duplicating accounts, and resets when page size changes', () => {

@@ -1,13 +1,16 @@
 ﻿import { toast } from './toast';
 import { supabase, requireConfiguration, verifyPassword, executeSensitiveAction, type SensitiveConfirmation } from './supabase';
-import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, CoreRole, CustomRole, PaymentInfo, SystemFreezeState, NodeFreezeState } from '../types';
-import { DEFAULT_CORE_ROLES, setMockDataRef } from './accessControl';
+import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, CoreRole, CustomRole, PaymentInfo, SystemFreezeState, NodeFreezeState, Organization, OrganizationMembership, OrganizationSanctionRequest } from '../types';
+import { DEFAULT_CORE_ROLES, setMockDataRef, hasPermission } from './accessControl';
 import { findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNodeInSubtree, profileMatchesDirectorySection } from './academicDirectory';
-import { isEventRecipient } from './eventAudience';
+import { isEventRecipient, canManageEventInScope } from './eventAudience';
 import { publicDriveImageUrl } from './googleDrive';
 
 type Student = UserProfile & { stats: UserStats; sanction_logs: any[] };
 type Snapshot = {
+  organizations?: Organization[];
+  organization_members?: OrganizationMembership[];
+  organization_sanctions?: OrganizationSanctionRequest[];
   users: Record<string, { profile: UserProfile; stats: UserStats }>;
   applications: Record<string, Application>; excuse_applications: Record<string, ExcuseApplication>;
   events: Record<string, AppEvent>; attendance_logs: Record<string, Record<string, any>>;
@@ -51,6 +54,9 @@ export async function refreshData() {
   if (error) { console.error('[Supabase] snapshot refresh failed', error); throw error; }
   if (requestGeneration !== generation || request !== snapshotRequest) return false;
   const next = empty();
+  next.organizations = data.organizations || [];
+  next.organization_members = data.organization_members || [];
+  next.organization_sanctions = data.organization_sanctions || [];
   next.school_structure = tree(data.nodes);
   for (const [id, role] of Object.entries(data.roles)) (role as CoreRole).isBuiltIn ? next.core_roles[id] = role as CoreRole : next.custom_roles[id] = role as CustomRole;
   for (const s of data.sanctions) (next.sanction_logs[s.student_id] ||= []).push(s.data);
@@ -63,6 +69,7 @@ export async function refreshData() {
     if (!previous || rank[a.data.status as keyof typeof rank] > rank[previous.status as keyof typeof rank]) logs[a.student_id] = a.data;
   }
   for (const p of data.profiles as UserProfile[]) {
+    p.organizationIds = next.organization_members.filter(m => m.student_id === p.uid && m.status === 'approved').map(m => m.organization_id);
     const attendance = data.attendance.filter((a: any) => a.student_id === p.uid);
     const attended = new Set(attendance.filter((a: any) => ['present', 'late', 'excused'].includes(a.data.status)).map((a: any) => a.event_id)).size;
     const missed = new Set(attendance.filter((a: any) => a.data.status === 'absent').map((a: any) => a.event_id)).size;
@@ -84,9 +91,12 @@ async function rpc<T = any>(name: string, args: Record<string, unknown> = {}): P
   const { data, error } = await supabase.rpc(name, args);
   if (error) {
     const rpcError = error as typeof error & { status?: number };
+    const loggedArgs = name === 'rmc_organization_command' ? {
+      ...args, payload: { ...(args.payload as Record<string, unknown>), key: '[redacted]' },
+    } : args;
     console.error('[Supabase] RPC failed', {
       name,
-      args,
+      args: loggedArgs,
       errorName: error.name,
       errorMessage: error.message,
       errorCode: error.code,
@@ -186,6 +196,16 @@ export async function documentUrl(path: string) {
 }
 
 export const appData = {
+  getOrganizations: () => snapshot.organizations || [],
+  getOrganizationMemberships: () => snapshot.organization_members || [],
+  getOrganizationSanctions: () => snapshot.organization_sanctions || [],
+  getPublicOrganizations: () => rpc<Organization[]>('rmc_public_organizations'),
+  getOrganizationPeople: (organizationId: string | null, scopeNode: string | null = null) => rpc<Array<{ uid: string; name: string; student_id: string; role: string; can_add: boolean }>>('rmc_organization_people', { org: organizationId, scope_node: scopeNode }),
+  organizationCommand: (action: string, payload: Record<string, unknown>) => toast.track(async () => {
+    const result = await rpc('rmc_organization_command', { action, payload });
+    await refreshAfterWrite();
+    return result;
+  }, 'Update organization'),
   performSensitiveAction: (action: string, target: string, confirmation: SensitiveConfirmation) => toast.track(async () => {
     const result = await executeSensitiveAction(action, target, confirmation);
     await refreshAfterWrite();
@@ -320,7 +340,7 @@ getVisibleEvents: (actorUid: string) => {
     const scopeNodeId = actor ? getAssignmentNodeId(actor) : undefined;
     if (!scopeNodeId) return [];
     const students = appData.getVisibleStudents(actorUid);
-    return appData.getEvents().filter(event => event.created_by === actorUid || students.some(student => isEventRecipient(event, student, db.school_structure)) || isEventRecipient(event, actor!, db.school_structure));
+    return appData.getEvents().filter(event => event.created_by === actorUid || (actor && (hasPermission(actor.role, 'events.manage') || hasPermission(actor.role, 'events.approve')) && canManageEventInScope(actor, event, db.school_structure)) || students.some(student => isEventRecipient(event, student, db.school_structure)) || isEventRecipient(event, actor!, db.school_structure));
   },
 getRecipientEvents: (uid: string) => {
     const db = getDB();
@@ -417,6 +437,11 @@ isUserScopeFrozen: (profile?: UserProfile | null) => {
   assignRole: (...args: any[]) => command('assignRole', args),
   assignAccountRole: (...args: any[]) => command('assignAccountRole', args),
   assignOfficialToNode: (...args: any[]) => command('assignOfficialToNode', args),
+  reviewEvent: (eventId: string, decision: 'approved' | 'rejected', notes: string) => toast.track(async () => {
+    const result = await rpc('rmc_review_event', { event_id: eventId, decision, notes });
+    await refreshAfterWrite();
+    return result;
+  }, 'Saving OSSA decision', 'Review saved.'),
   createEvent: (...args: any[]) => command('createEvent', args),
   extendService: (eventId: string, endDate: string) => toast.track(async () => {
     const result = await rpc('rmc_extend_service', { event_id: eventId, new_end_date: endDate });

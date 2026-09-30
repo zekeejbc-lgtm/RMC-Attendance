@@ -7,8 +7,8 @@
 :root {
   --toast-width: 22rem;
   --toast-gap: 0.5rem;
-  --toast-radius: 0.875rem;
-  --toast-shadow: 0 8px 32px -12px rgb(15 23 42 / 0.25);
+  --toast-radius: var(--radius-surface);
+  --toast-shadow: var(--shadow-dropdown);
 }
 .app-toast-viewport {
   position: fixed;
@@ -46,21 +46,62 @@
 
 /* --- CUSTOM UTILITIES & DESIGN TOKENS --- */
 :root {
+  /* Palette channels also back Tailwind colors, including opacity variants. */
+  --palette-brand-50: 230 244 252;
+  --palette-brand-100: 204 233 249;
+  --palette-brand-200: 153 211 243;
+  --palette-brand-300: 102 189 237;
+  --palette-brand-400: 0 163 224;
+  --palette-brand-500: 0 129 200;
+  --palette-brand-600: 0 107 176;
+  --palette-brand-700: 0 85 183;
+  --palette-brand-800: 0 61 133;
+  --palette-brand-900: 0 40 89;
+  --palette-brand-950: 17 24 39;
+  --palette-gold-50: 255 251 240;
+  --palette-gold-100: 255 244 214;
+  --palette-gold-200: 255 227 173;
+  --palette-gold-300: 255 208 133;
+  --palette-gold-400: 255 215 0;
+  --palette-gold-500: 255 140 0;
+  --palette-gold-600: 224 120 0;
+  --palette-gold-700: 184 95 0;
+  --palette-emerald-50: 240 253 244;
+  --palette-emerald-100: 220 252 231;
+  --palette-emerald-200: 187 247 208;
+  --palette-emerald-300: 134 239 172;
+  --palette-emerald-400: 74 222 128;
+  --palette-emerald-500: 0 168 89;
+  --palette-emerald-600: 0 142 74;
+  --palette-emerald-700: 0 112 58;
+  --palette-slate-50: 248 250 252;
+  --palette-slate-100: 241 245 249;
+  --palette-slate-200: 226 232 240;
+  --palette-slate-300: 203 213 225;
+  --palette-slate-400: 148 163 184;
+  --palette-slate-500: 100 116 139;
+  --palette-slate-600: 71 85 105;
+  --palette-slate-700: 51 65 85;
+  --palette-slate-800: 30 41 59;
+  --palette-slate-850: 21 31 50;
+  --palette-slate-900: 17 24 39;
+  --palette-slate-950: 11 15 25;
+
   /* Semantic tokens shared by every surface and control. */
-  --color-brand: #0081C8;
-  --color-brand-strong: #002859;
-  --color-brand-soft: #e6f4fc;
-  --color-accent: #FFD700;
-  --color-accent-strong: #FF8C00;
-  --color-success: #00A859;
+  --color-brand: rgb(var(--palette-brand-500));
+  --color-brand-strong: rgb(var(--palette-brand-900));
+  --color-brand-soft: rgb(var(--palette-brand-50));
+  --color-accent: rgb(var(--palette-gold-400));
+  --color-accent-strong: rgb(var(--palette-gold-500));
+  --color-success: rgb(var(--palette-emerald-500));
   --color-danger: #BE123C;
-  --color-warning: #B85F00;
-  --color-text: #111827;
-  --color-text-muted: #64748B;
-  --color-text-subtle: #94A3B8;
+  --color-warning: rgb(var(--palette-gold-700));
+  --color-text: rgb(var(--palette-slate-900));
+  --color-text-muted: rgb(var(--palette-slate-500));
+  --color-text-subtle: rgb(var(--palette-slate-400));
   --color-surface: #FFFFFF;
-  --color-surface-muted: #F8FAFC;
-  --color-border: #E2E8F0;
+  --color-surface-muted: rgb(var(--palette-slate-50));
+  --color-border: rgb(var(--palette-slate-200));
   --color-on-brand: #FFFFFF;
   --color-focus: var(--color-accent-strong);
   --color-control: var(--color-surface-muted);
@@ -83,14 +124,14 @@
   --radius-surface: 1rem;
   --space-page: clamp(1rem, 2vw, 1.5rem);
   --shadow-surface: 0 1px 2px rgba(15, 23, 42, 0.05), 0 12px 30px -24px rgba(14, 27, 66, 0.35);
-  --primary-blue: #0081C8;
-  --primary-blue-dark: #0055B7;
-  --secondary-green: #00A859;
-  --accent-flame: #FF8C00;
-  --neutral-dark: #111827;
-  --neutral-bg: #F8FAFC;
+  --primary-blue: rgb(var(--palette-brand-500));
+  --primary-blue-dark: rgb(var(--palette-brand-700));
+  --secondary-green: rgb(var(--palette-emerald-500));
+  --accent-flame: rgb(var(--palette-gold-500));
+  --neutral-dark: rgb(var(--palette-slate-900));
+  --neutral-bg: rgb(var(--palette-slate-50));
   --surface-card: #FFFFFF;
-  --border-subtle: #E2E8F0;
+  --border-subtle: rgb(var(--palette-slate-200));
   --motion-standard: cubic-bezier(0.22, 1, 0.36, 1);
   --motion-snappy: cubic-bezier(0.2, 0, 0, 1);
   --motion-fast: 160ms;
@@ -104,15 +145,15 @@
   --color-selected-text: #bae6fd;
   --color-danger-text: #FDA4AF;
   --color-warning-text: #FCD34D;
-  --color-text: #F8FAFC;
-  --color-text-muted: #CBD5E1;
-  --color-surface: #1E293B;
+  --color-text: rgb(var(--palette-slate-50));
+  --color-text-muted: rgb(var(--palette-slate-300));
+  --color-surface: rgb(var(--palette-slate-800));
   --color-surface-muted: #0F172A;
-  --color-border: #334155;
-  --neutral-dark: #F8FAFC;
+  --color-border: rgb(var(--palette-slate-700));
+  --neutral-dark: rgb(var(--palette-slate-50));
   --neutral-bg: #0F172A;
-  --surface-card: #1E293B;
-  --border-subtle: #475569;
+  --surface-card: rgb(var(--palette-slate-800));
+  --border-subtle: rgb(var(--palette-slate-600));
   color-scheme: dark;
 }
 
@@ -280,11 +321,15 @@ a {
 }
 
 .app-modal-backdrop {
-  animation: backdropEnter var(--motion-fast) var(--motion-snappy)-out both;
+  animation: backdropEnter var(--motion-fast) var(--motion-snappy) both;
 }
 
 .app-modal-panel {
   animation: modalEnter var(--motion-base) var(--motion-standard) both;
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  border-radius: var(--radius-surface);
+  color: var(--color-text);
 }
 
 .app-dropdown-menu {
@@ -294,15 +339,21 @@ a {
   color: var(--color-text);
   box-shadow: var(--shadow-dropdown);
   transform-origin: top;
-  animation: dropdownEnter var(--motion-base) var(--motion-standard) both;
-  transition: opacity var(--motion-fast) var(--motion-standard), transform var(--motion-fast) var(--motion-standard);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity var(--motion-base) var(--motion-standard), transform var(--motion-base) var(--motion-standard);
 }
 .app-dropdown-menu[data-state='closed'] {
-  animation: none;
   opacity: 0;
   transform: translateY(-8px) scale(0.975);
+  transition-duration: var(--motion-fast);
   pointer-events: none;
 }
+@starting-style {
+  .app-dropdown-menu[data-state='open'] { opacity: 0; transform: translateY(-8px) scale(0.975); }
+}
+.app-dropdown-menu[popover] { position: fixed; margin: 0; right: auto; overflow-y: auto; }
+.app-dropdown-menu::backdrop { background: transparent; pointer-events: none; }
 .app-dropdown-option {
   min-height: var(--control-height);
   width: 100%;
@@ -370,13 +421,18 @@ a {
 
 /* --- FORM CONTROLS & DROPDOWNS --- */
 /* Shared by legacy form fields, search, and custom select triggers. */
+/* Keep default padding overridable by utilities that reserve space for icons. */
+@layer components {
+  .input-field, .app-search-input, .app-select-trigger, .app-control {
+    padding: var(--control-padding-y) var(--control-padding-x);
+  }
+}
 .input-field, .app-search-input, .app-select-trigger, .app-control {
   width: 100%;
   min-height: var(--control-height);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background-color: var(--color-control);
-  padding: var(--control-padding-y) var(--control-padding-x);
   color: var(--color-text);
   font-size: var(--control-font-size);
   font-weight: 600;
@@ -406,8 +462,10 @@ a {
 .app-button--primary:hover:not(:disabled) { background: var(--color-brand); }
 .app-button--secondary { border-color: var(--color-border); background: var(--color-surface); color: var(--color-text); }
 .app-button--secondary:hover:not(:disabled) { border-color: var(--color-brand); background: var(--color-selected); color: var(--color-selected-text); }
-.app-button--gold { background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong)); color: var(--color-brand-strong); }
-.app-button--gold:hover:not(:disabled) { filter: brightness(1.05); }
+/* Action controls use solid fills; gradients are reserved for decorative surfaces. */
+:is(button, [role='button'], .app-button) { background-image: none; }
+.app-button--gold { background: var(--color-accent); color: var(--color-brand-strong); }
+.app-button--gold:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 85%, var(--color-accent-strong)); }
 .app-button--danger { --button-tone: var(--color-danger-text); }
 .app-button--warning { --button-tone: var(--color-warning-text); }
 .app-button--danger, .app-button--warning { color: var(--button-tone); border-color: color-mix(in srgb, var(--button-tone) 45%, var(--color-border)); background: color-mix(in srgb, var(--button-tone) 7%, var(--color-surface)); }
@@ -416,9 +474,14 @@ a {
 .app-button:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
 .app-icon-button { border-radius: var(--radius-control); color: var(--color-text-muted); }
 .app-icon-button:hover:not(:disabled) { background: var(--color-selected); color: var(--color-selected-text); }
+/* Local action buttons share the control geometry without changing their layout. */
+button:is(.rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl) { border-radius: var(--radius-control); }
+button:disabled { cursor: not-allowed; }
+:where(button, a) { transition-property: color, background-color, border-color, box-shadow, transform; transition-duration: var(--motion-fast); }
+:is(.app-control, .input-field, .app-select-trigger)[aria-invalid='true'] { border-color: var(--color-danger-text); }
 
 .leaflet-container {
-  background: #E2E8F0;
+  background: rgb(var(--palette-slate-200));
   font-family: 'Nunito', 'Outfit', system-ui, sans-serif;
 }
 
@@ -431,7 +494,7 @@ a {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(51, 65, 85, 0.8);
-  color: #F8FAFC;
+  color: rgb(var(--palette-slate-50));
 }
 
 /* Native controls retain platform keyboard/validation behavior. */
@@ -486,11 +549,11 @@ input:is([type='checkbox'], [type='radio'], [type='range']) { accent-color: var(
 /* --- CUSTOM SCROLLBAR --- */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #CBD5E1 transparent;
+  scrollbar-color: rgb(var(--palette-slate-300)) transparent;
   -webkit-overflow-scrolling: touch;
 }
 .dark .custom-scrollbar {
-  scrollbar-color: #475569 transparent;
+  scrollbar-color: rgb(var(--palette-slate-600)) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -503,10 +566,10 @@ input:is([type='checkbox'], [type='radio'], [type='range']) { accent-color: var(
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
+  background: rgb(var(--palette-slate-300));
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+  background: rgb(var(--palette-slate-400));
 }

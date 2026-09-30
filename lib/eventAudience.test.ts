@@ -6,6 +6,14 @@ const roots: SchoolNode[] = [
   { id: 'a', name: 'General A', type: 'education_unit', children: [{ id: 'a1', name: 'Section 1', type: 'section' }, { id: 'a2', name: 'Section 2', type: 'section' }] },
   { id: 'b', name: 'General B', type: 'education_unit', children: [{ id: 'b1', name: 'Section 1', type: 'section' }, { id: 'b2', name: 'Section 2', type: 'section' }] },
 ];
+it('requires approved organization membership and approved event rules', () => {
+  const profile = { uid: 'student', role: 'student', organizationIds: ['club'], school_data: {} } as UserProfile;
+  const event = { organizationId: 'club', approvalStatus: 'pending', target: { all: true } } as AppEvent;
+  expect(isEventRecipient(event, profile, roots)).toBe(false);
+  expect(isEventRecipient({ ...event, approvalStatus: 'approved' }, profile, roots)).toBe(true);
+  expect(isEventRecipient({ ...event, approvalStatus: 'approved' }, { ...profile, organizationIds: [] }, roots)).toBe(false);
+  expect(isEventRecipient({ ...event, approvalStatus: 'rejected' }, profile, roots)).toBe(false);
+});
 it('exempts selected students and allows optional attendance independently of merit', () => {
   const profile = { uid: 'student-a', role: 'student', school_data: { academic_assignment: { terminalGroupId: 'a1' } } } as UserProfile;
   const event = { kind: 'flag_ceremony', scopeNodeId: 'a', audienceTarget: { mode: 'directory_node', nodeId: 'a2' }, ceremony: { exemptStudentIds: [], allowVolunteerMerit: false, volunteerMeritHours: 1, classWindows: {} } } as AppEvent;

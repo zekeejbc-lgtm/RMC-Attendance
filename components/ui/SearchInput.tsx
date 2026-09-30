@@ -12,9 +12,10 @@ interface SearchInputProps {
   onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
   controls?: string;
   type?: 'text' | 'search';
+  clearLabel?: string;
 }
 
-const SearchInput = ({ ariaLabel, value, onChange, placeholder = 'Search...', label, className = '', disabled = false, onKeyDown, controls, type = 'search' }: SearchInputProps) => {
+const SearchInput = ({ ariaLabel, value, onChange, placeholder = 'Search...', label, className = '', disabled = false, onKeyDown, controls, type = 'search', clearLabel }: SearchInputProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -24,7 +25,7 @@ const SearchInput = ({ ariaLabel, value, onChange, placeholder = 'Search...', la
         <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-gold-600 dark:text-slate-500 dark:group-focus-within:text-gold-400" size={17} strokeWidth={2.25} />
         <input aria-label={ariaLabel} aria-controls={controls} className="app-search-input" disabled={disabled} onChange={(event) => onChange(event.target.value)} onKeyDown={onKeyDown} placeholder={placeholder} ref={inputRef} type={type} value={value} />
         {value && !disabled ? (
-          <button aria-label={`Clear ${ariaLabel.toLowerCase()}`} className="app-icon-button absolute right-2.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center" onClick={() => { onChange(''); inputRef.current?.focus(); }} type="button">
+          <button aria-label={clearLabel || `Clear ${ariaLabel.toLowerCase()}`} className="app-icon-button absolute right-2.5 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center" onClick={() => { onChange(''); inputRef.current?.focus(); }} type="button">
             <X aria-hidden="true" size={14} strokeWidth={2.5} />
           </button>
         ) : null}

@@ -12,8 +12,10 @@ import { Modal } from '../components/ui/Modal';
 import { Collapsible } from '../components/ui/Collapsible';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { DirectoryNodeModal } from '../components/academic/DirectoryNodeModal';
+import OrganizationForm from '../components/academic/OrganizationForm';
+import HierarchyOrganizations from '../components/academic/HierarchyOrganizations';
 import { PresetPickerModal } from '../components/academic/PresetPickerModal';
-import { profileMatchesDirectorySection, getAcademicNodeLabel } from '../lib/academicDirectory';
+import { profileMatchesDirectorySection, getAcademicNodeLabel, findNodePath } from '../lib/academicDirectory';
 import { createEventAudienceTarget, serializeAcademicAssignment } from '../lib/academicDirectory';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { NodeOfficerManager, NodeOfficerSummary } from '../components/academic/NodeOfficerManager';
@@ -53,6 +55,7 @@ const SSGPanel: React.FC = () => {
   const [clarificationFields, setClarificationFields] = useState<string[]>([]);
   const [admissionError, setAdmissionError] = useState('');
 
+  const [organizationEditor, setOrganizationEditor] = useState<{ nodeId: string | null; name: string } | null>(null);
   const [nodeEditor, setNodeEditor] = useState<{ parentId: string | null; node?: SchoolNode } | null>(null);
   const [showPresetModal, setShowPresetModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
@@ -85,6 +88,7 @@ const SSGPanel: React.FC = () => {
 
   const isPresident = profile?.role === 'ssg' || profile?.role === 'admin' || profile?.role === 'ossa';
   const canManageStructure = hasPermission(profile?.role, 'directory.manage_structure');
+  const canCreateUnits = canManageStructure && hasPermission(profile?.role, 'directory.create_units');
   const canDeleteStructure = hasPermission(profile?.role, 'directory.delete_structure');
   const canManageMembers = hasPermission(profile?.role, 'directory.manage_members');
   const canAddMembersManually = hasPermission(profile?.role, 'directory.add_members_manually', appData.getCustomRoles(), appData.getCoreRoles());
@@ -165,6 +169,18 @@ const SSGPanel: React.FC = () => {
     refresh();
   }, [revision, profile?.uid]);
 
+  useEffect(() => {
+    const restoreUnit = () => {
+      const unitId = new URLSearchParams(window.location.hash.split('?')[1] || '').get('unit');
+      const visibleStructure = profile && typeof appData.getVisibleSchoolStructure === 'function'
+        ? appData.getVisibleSchoolStructure(profile.uid) : appData.getSchoolStructure();
+      setPath(unitId ? findNodePath(visibleStructure, unitId) || [] : []);
+    };
+    restoreUnit();
+    window.addEventListener('hashchange', restoreUnit);
+    return () => window.removeEventListener('hashchange', restoreUnit);
+  }, [profile?.uid]);
+
   const handleAddAsset = () => {
     if (assetInput.trim() && !eventData.specificPeople.includes(assetInput.trim())) {
       setEventData(prev => ({ ...prev, specificPeople: [...prev.specificPeople, assetInput.trim()] }));
@@ -222,8 +238,16 @@ const SSGPanel: React.FC = () => {
     refresh();
   };
 
-  const navigateTo = (node: SchoolNode) => setPath([...path, node]);
-  const goBackTo = (index: number) => setPath(index === -1 ? [] : path.slice(0, index + 1));
+  const changePath = (next: SchoolNode[]) => {
+    setPath(next);
+    if (window.location.hash.startsWith('#/ssg/panel')) {
+      const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      if (next.length) params.set('unit', next[next.length - 1].id); else params.delete('unit');
+      window.history.replaceState(window.history.state, '', `#/ssg/panel${params.size ? `?${params}` : ''}`);
+    }
+  };
+  const navigateTo = (node: SchoolNode) => changePath([...path, node]);
+  const goBackTo = (index: number) => changePath(index === -1 ? [] : path.slice(0, index + 1));
 
   const handleSaveNode = async (savedNode: SchoolNode) => {
     if (!nodeEditor) return;
@@ -254,6 +278,14 @@ const SSGPanel: React.FC = () => {
   };
 
   const currentNode = path.length > 0 ? path[path.length - 1] : null;
+  const organizations = appData.getOrganizations?.() || [];
+  const organizationUnit = currentNode || (profile?.role !== 'admin'
+    ? appData.getSchoolNodePath(profile?.official_data?.assignment_node_id || profile?.school_data?.academic_assignment?.terminalGroupId || '').at(-1) || null : null);
+  const canCreateOrganizationHere = canManageStructure && Boolean(profile?.role === 'admin' || organizationUnit) && !path.some(node => node.metadata?.archived) && !organizationUnit?.metadata?.archived;
+  const openAdd = () => {
+    if (canCreateUnits && !isAtSection) setNodeEditor({ parentId: currentNode?.id || null });
+    else setOrganizationEditor({ nodeId: organizationUnit?.id || null, name: '' });
+  };
   const subUnits = currentNode ? (currentNode.children || []) : structure;
   const isAtSection = currentNode?.type === 'section' || currentNode?.type === 'block';
   const students = isAtSection ? appData.getStudentsBySection(currentNode.name, currentNode.id) : [];
@@ -301,7 +333,7 @@ const SSGPanel: React.FC = () => {
         description={isOSSA
           ? 'Manage student services and everything inside your assigned school scope.'
           : profile?.role === 'admin'
-            ? 'Manage campuses, departments, classrooms, members, and officer accounts from one hierarchy.'
+            ? 'Manage academic units, their organizations, members, and officer accounts from one hierarchy.'
             : profile?.role === 'mayor'
               ? 'View only your assigned classroom and its member registry.'
               : 'Manage only the departments, classrooms, members, and events inside your assigned scope.'}
@@ -323,7 +355,7 @@ const SSGPanel: React.FC = () => {
           </div>
           <div role="tablist" aria-label={`${workspaceName} panel sections`} className={`grid w-full ${tabs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5 rounded-xl border border-white/10 bg-brand-950/40 p-1.5 lg:w-auto`}>
             {tabs.map(({ id, label, icon: Icon, count }) => (
-              <button key={id} aria-label={label} aria-pressed={tab === id} onClick={() => setTab(id)} className={`flex min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2.5 text-xs font-bold transition-all sm:px-4 ${tab === id ? 'bg-gold-gradient text-brand-900 shadow-md' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
+              <button key={id} aria-label={label} aria-pressed={tab === id} onClick={() => setTab(id)} className={`flex min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2.5 text-xs font-bold transition-all sm:px-4 ${tab === id ? 'app-button--gold text-brand-900 shadow-md' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
                 <Icon size={15} className="hidden sm:block" />
                 <span className="truncate">{label}</span>
                 <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${tab === id ? 'bg-brand-900/10' : 'bg-white/10'}`}>{count}</span>
@@ -355,14 +387,17 @@ const SSGPanel: React.FC = () => {
                 <button onClick={() => goBackTo(-1)} className={`flex items-center gap-1.5 whitespace-nowrap text-[9px] font-bold uppercase tracking-widest ${path.length === 0 ? 'text-brand-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-400'}`}><Home size={14} /> {profile?.role === 'admin' ? 'Campus' : 'My scope'}</button>
                 {path.map((node, i) => <React.Fragment key={node.id}><ChevronRight size={12} className="shrink-0 text-slate-200 dark:text-slate-600" /><button onClick={() => goBackTo(i)} className={`whitespace-nowrap text-[9px] font-bold uppercase tracking-widest ${i === path.length - 1 ? 'text-brand-900 dark:text-slate-100 font-black' : 'text-slate-400 dark:text-slate-400'}`}>{node.name}</button></React.Fragment>)}
               </div>
-              {canManageStructure && currentNode && ['campus', 'school'].includes(currentNode.type) && <button onClick={() => setShowPresetModal(true)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-50 px-3 text-xs font-bold text-brand-900 hover:bg-gold-50 dark:bg-brand-900/40 dark:text-brand-200"><WandSparkles size={15} /> Add template</button>}
+              {canCreateUnits && currentNode && ['campus', 'school'].includes(currentNode.type) && <button onClick={() => setShowPresetModal(true)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-50 px-3 text-xs font-bold text-brand-900 hover:bg-gold-50 dark:bg-brand-900/40 dark:text-brand-200"><WandSparkles size={15} /> Add template</button>}
             </div>
 
             {restoreError && <p role="alert" className="text-sm text-red-600">{restoreError}</p>}
             {path.some(node => node.metadata?.archived) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">You are viewing an archived hierarchy. Restore its archived parent units to make it available for enrollment again.</p>}
+            {profile && (profile.role === 'admin' || organizationUnit) && <HierarchyOrganizations key={organizationUnit?.id || 'school-wide'} unit={organizationUnit} profile={profile} onChanged={refresh} />}
             {isAtSection && currentNode && (profile?.role === 'admin' || profile?.role === 'ossa') && <ClassScheduleEditor key={`schedule-${currentNode.id}`} node={currentNode} onSaved={refresh} />}
             {currentNode && <NodeOfficerManager actor={profile!} canManage={canManageOfficers} key={currentNode.id} node={currentNode} onChanged={refresh} />}
 
+            {isAtSection && canCreateOrganizationHere && <Button aria-label="Add unit" onClick={openAdd}><Plus size={16} /> Add</Button>}
+            {!isAtSection && <h2 className="flex items-center gap-2 pt-2 text-base font-bold text-brand-900 dark:text-white"><Building2 size={20} /> Academic units</h2>}
             {!isAtSection ? (
               <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
                 {subUnits.filter((node) => !node.metadata?.archived).map(node => (
@@ -381,6 +416,7 @@ const SSGPanel: React.FC = () => {
                       <h4 className="flex min-h-8 items-center text-[11px] font-bold uppercase tracking-tight text-brand-900 dark:text-slate-100">{node.name}</h4>
                       <p className="mt-1 text-[8px] font-black uppercase tracking-widest text-slate-400">{getAcademicNodeLabel(node.type)}</p>
                       <NodeOfficerSummary node={node} />
+                      {organizations.some(org => org.node_id === node.id) && <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><Users2 size={12} /> {organizations.filter(org => org.node_id === node.id).length} organizations</span>}
                     </button>
                   </article>
                 ))}
@@ -396,7 +432,7 @@ const SSGPanel: React.FC = () => {
                     </article>)}</div>
                   </Collapsible>
                 </section>}
-                {canManageStructure && <button aria-label="Add unit" onClick={() => setNodeEditor({ parentId: currentNode?.id || null })} className="group flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-5 transition-all hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800">
+                {(canCreateUnits || canCreateOrganizationHere) && <button aria-label="Add unit" onClick={openAdd} className="group flex min-h-44 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/60 p-5 transition-all hover:border-gold-400 hover:bg-white dark:border-slate-700 dark:bg-slate-900/40 dark:hover:bg-slate-800">
                    <Plus size={20} className="text-slate-300 dark:text-slate-500 mb-1" />
                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Add</p>
                 </button>}
@@ -496,7 +532,7 @@ const SSGPanel: React.FC = () => {
                <h3 className="text-[10px] font-black text-brand-900 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
                  <Target size={14} className="text-gold-500" /> Operational Log
                </h3>
-               <button aria-label="Create event" onClick={() => setShowEventModal(true)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-gold-gradient px-4 py-3 text-[9px] font-black uppercase tracking-widest text-brand-900 shadow-md transition-all hover:brightness-110 active:scale-95 sm:w-auto sm:py-2">
+               <button aria-label="Create event" onClick={() => setShowEventModal(true)} className="flex w-full items-center justify-center gap-2 rounded-lg app-button--gold px-4 py-3 text-[9px] font-black uppercase tracking-widest text-brand-900 shadow-md transition-all hover:brightness-110 active:scale-95 sm:w-auto sm:py-2">
                  <CalendarPlus size={14} /> Create
                </button>
             </div>
@@ -693,7 +729,8 @@ const SSGPanel: React.FC = () => {
         </div>
       </Modal>
 
-      <DirectoryNodeModal open={Boolean(nodeEditor)} parent={currentNode} node={nodeEditor?.node} onClose={() => setNodeEditor(null)} onSave={handleSaveNode} />
+      <DirectoryNodeModal open={Boolean(nodeEditor)} parent={currentNode} node={nodeEditor?.node} onClose={() => setNodeEditor(null)} onSave={handleSaveNode} onCreateOrganization={canCreateOrganizationHere ? (name) => { setNodeEditor(null); setOrganizationEditor({ nodeId: organizationUnit?.id || null, name }); } : undefined} />
+      {organizationEditor && profile && <OrganizationForm profile={profile} initialNodeId={organizationEditor.nodeId} initialName={organizationEditor.name} lockScope onClose={() => { setOrganizationEditor(null); refresh(); }} />}
       <PresetPickerModal open={showPresetModal} campusName={currentNode?.name || 'Campus'} onClose={() => setShowPresetModal(false)} onApply={handleApplyPreset} />
 
       {/* REGAL USER DETAIL MODAL */}
@@ -754,7 +791,7 @@ const SSGPanel: React.FC = () => {
                   </h4>
                   <div className="flex bg-slate-50 dark:bg-slate-900 p-1.5 rounded-xl gap-1.5 border border-slate-100 dark:border-slate-700 shadow-inner">
                      <button onClick={() => handleAssignRole(selectedStudent.uid, 'student')} className={`flex-1 py-3 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${selectedStudent.role === 'student' ? 'bg-brand-900 text-white shadow-md' : 'text-slate-400'}`}>Regular</button>
-                     <button onClick={() => handleAssignRole(selectedStudent.uid, 'mayor')} className={`flex-1 py-3 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${selectedStudent.role === 'mayor' ? 'bg-gold-gradient text-brand-900 shadow-md' : 'text-slate-400'}`}>Mayor</button>
+                     <button onClick={() => handleAssignRole(selectedStudent.uid, 'mayor')} className={`flex-1 py-3 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${selectedStudent.role === 'mayor' ? 'app-button--gold text-brand-900 shadow-md' : 'text-slate-400'}`}>Mayor</button>
                   </div>
                </div>}
             </div>

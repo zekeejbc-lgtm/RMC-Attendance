@@ -43,7 +43,7 @@ export function SearchSuggest({ label, placeholder, options, onSelect }: { label
       {query && <button type="button" aria-label={`Clear ${label.toLowerCase()}`} className="app-icon-button absolute right-0 top-0 flex h-full w-11 items-center justify-center rounded-lg" onClick={() => {setQuery('');setActive(0);input.current?.focus();}}><X size={17} /></button>}
     </div>
     <p id={`${id}-hint`} className="mt-1 text-xs text-slate-500">Type to search. Select a suggestion to add it; use arrow keys and Enter with a keyboard.</p>
-    <DropdownPanel open={expanded} className="absolute z-50 mt-2 w-full p-1">
+    <DropdownPanel open={expanded} anchorRef={input} className="absolute z-50 mt-2 w-full p-1">
       <ul ref={list} id={`${id}-suggestions`} role="listbox" aria-label={`${label} suggestions`} className="custom-scrollbar max-h-72 overflow-auto">{visible.map((option,i) => <li id={`${id}-option-${i}`} key={option.id} role="option" aria-selected={i === index} className="app-dropdown-option" onMouseDown={e => e.preventDefault()} onMouseEnter={() => setActive(i)} onClick={() => select(option)}>
         <span className="block break-words font-semibold">{option.label}</span><span className="app-dropdown-meta mt-1 block break-words">{option.detail}</span>
       </li>)}</ul>

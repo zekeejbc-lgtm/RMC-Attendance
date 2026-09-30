@@ -6,6 +6,8 @@ import SearchInput from './SearchInput';
 export interface Option {
   value: string;
   label: string;
+  searchText?: string;
+  content?: React.ReactNode;
 }
 
 interface CustomSelectProps {
@@ -22,6 +24,7 @@ interface CustomSelectProps {
   ariaLabel?: string;
   describedBy?: string;
   invalid?: boolean;
+  searchPlaceholder?: string;
 }
 
 const selectAllKey = '__select_all__';
@@ -40,6 +43,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   ariaLabel,
   describedBy,
   invalid,
+  searchPlaceholder,
 }) => {
   const labelId = useId();
   const valueId = useId();
@@ -52,7 +56,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   const optionRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const filteredOptions = useMemo(() => options.filter((option) =>
-    option.label.toLowerCase().includes(search.toLowerCase())), [options, search]);
+    `${option.label} ${option.searchText || ''}`.toLowerCase().includes(search.trim().toLowerCase())), [options, search]);
   const optionKeys = useMemo(
     () => [...(multi ? [selectAllKey] : []), ...filteredOptions.map((option) => option.value)],
     [filteredOptions, multi],
@@ -72,13 +76,13 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   };
 
   useLayoutEffect(() => {
-    if (isOpen && activeKey !== null) optionRefs.current.get(activeKey)?.focus();
+    if (isOpen && activeKey !== null && !(document.activeElement instanceof HTMLInputElement && containerRef.current?.contains(document.activeElement))) optionRefs.current.get(activeKey)?.focus();
   }, [activeKey, isOpen]);
 
   const openListbox = (preferredKey?: string) => {
-    const nextKey = preferredKey && optionKeys.includes(preferredKey)
+    const nextKey = preferredKey !== undefined && optionKeys.includes(preferredKey)
       ? preferredKey
-      : selectedKey && optionKeys.includes(selectedKey)
+      : selectedKey !== null && optionKeys.includes(selectedKey)
         ? selectedKey
         : optionKeys[0];
     setIsOpen(true);
@@ -103,7 +107,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!isOpen || optionKeys.length === 0 || (activeKey && optionKeys.includes(activeKey))) return;
+    if (!isOpen || optionKeys.length === 0 || (activeKey !== null && optionKeys.includes(activeKey))) return;
     setActiveKey(optionKeys[0]);
   }, [activeKey, isOpen, optionKeys]);
 
@@ -128,6 +132,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   const handleOptionKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       closeListbox(true);
       return;
     }
@@ -136,7 +141,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
     event.preventDefault();
     if (optionKeys.length === 0) return;
 
-    const currentIndex = Math.max(0, optionKeys.indexOf(activeKey || optionKeys[0]));
+    const currentIndex = Math.max(0, optionKeys.indexOf(activeKey ?? optionKeys[0]));
     const nextIndex = event.key === 'Home'
       ? 0
       : event.key === 'End'
@@ -150,6 +155,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       closeListbox(true);
     } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
@@ -193,7 +199,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 
       <button
         aria-controls={isOpen ? listboxId : undefined}
-        aria-expanded={isOpen}
+        aria-expanded={isOpen && !disabled}
         aria-haspopup="listbox"
         aria-label={ariaLabel}
         aria-describedby={describedBy}
@@ -210,6 +216,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
             openListbox(event.key === 'ArrowUp' ? optionKeys.at(-1) : undefined);
           } else if (event.key === 'Escape' && isOpen) {
             event.preventDefault();
+            event.stopPropagation();
             closeListbox(true);
           }
         }}
@@ -222,10 +229,10 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         </span>
       </button>
 
-      <DropdownPanel open={isOpen && !disabled} className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden">
+      <DropdownPanel open={isOpen && !disabled} anchorRef={triggerRef} className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden">
           {searchable || options.length > 10 ? (
             <div className="border-b border-[var(--color-border)] p-2">
-              <SearchInput ariaLabel={searchName} controls={listboxId} type="text" value={search} onChange={setSearch} onKeyDown={handleSearchKeyDown} />
+              <SearchInput placeholder={searchPlaceholder} ariaLabel={searchName} clearLabel={`Clear ${label || 'selection'} options search`} controls={listboxId} type="text" value={search} onChange={setSearch} onKeyDown={handleSearchKeyDown} />
             </div>
           ) : null}
 
@@ -266,6 +273,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
               return (
                 <button
                   aria-selected={isSelected}
+                  value={option.value}
                   className="app-dropdown-option mb-1 flex items-center justify-between gap-2 font-semibold"
                   key={option.value}
                   onClick={() => handleSelect(option.value)}
@@ -276,7 +284,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
                   tabIndex={activeKey === option.value ? 0 : -1}
                   type="button"
                 >
-                  <span className="min-w-0 truncate">{option.label}</span>
+                  <span className="min-w-0 truncate">{option.content ?? option.label}</span>
                   {isSelected ? <CheckCircle className="text-current" size={14} /> : null}
                 </button>
               );

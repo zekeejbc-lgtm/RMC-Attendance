@@ -426,6 +426,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
           </div>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+             <a href="#/organizations/public" className="text-xs font-bold text-brand-900 dark:text-white">Organizations</a>
              <ThemeToggle />
              <button onClick={() => setShowLoginModal(true)} className="px-3 py-2.5 bg-brand-900 dark:bg-gold-500 text-white dark:text-brand-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-800 dark:hover:bg-gold-400 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 sm:px-6">
                 Log In

@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import React from 'react';
 import { mockData } from './fixtures/demoBackend';
 import { hasPermission } from '../lib/accessControl';
@@ -9,6 +9,7 @@ vi.mock('../lib/backend', async () => { const m = await import('./fixtures/demoB
 
 describe('Admin RBAC Role Editing and Permission Enforcement', () => {
   beforeEach(() => {
+    cleanup();
     localStorage.clear();
     localStorage.setItem('rmc_mock_session', 'mock_uid_admin');
   });
@@ -48,5 +49,21 @@ describe('Admin RBAC Role Editing and Permission Enforcement', () => {
 
     // Permission check should now return false for ssg
     expect(hasPermission('ssg', 'events.manage')).toBe(false);
+  });
+
+  it('shows the SSG workflow defaults and lets ADMIN toggle both rules', () => {
+    render(<AdminRBACRoleView actorName="System Admin" />);
+    fireEvent.click(screen.getByRole('button', { name: /Edit role SSG Officer/i }));
+    const units = screen.getByRole('checkbox', { name: 'Create Directory Units' });
+    const approval = screen.getByRole('checkbox', { name: 'Require OSSA Approval' });
+    expect(units).not.toBeChecked();
+    expect(approval).toBeChecked();
+    fireEvent.click(units);
+    fireEvent.click(approval);
+    expect(units).toBeChecked();
+    expect(approval).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: /Save Changes/i }));
+    expect(mockData.getCoreRoles().ssg.permissions).toContain('directory.create_units');
+    expect(mockData.getCoreRoles().ssg.permissions).not.toContain('events.require_ossa_approval');
   });
 });

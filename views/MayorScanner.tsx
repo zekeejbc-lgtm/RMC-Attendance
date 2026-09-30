@@ -73,7 +73,7 @@ const MayorScanner: React.FC = () => {
     {
       const now = Date.now();
       const visibleEvents = profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents();
-      setEvents(visibleEvents.map((event) => ({
+      setEvents(visibleEvents.filter(event => event.approvalStatus !== 'pending' && event.approvalStatus !== 'rejected').map((event) => ({
         ...event,
         startTime: eventTime(event.startTime, now - 60000),
         endTime: eventTime(event.endTime, now + 3600000),

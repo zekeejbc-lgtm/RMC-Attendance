@@ -1,3 +1,4 @@
+import ActivityApprovalQueue from '../components/events/ActivityApprovalQueue';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import { downloadCsv } from '../lib/export';
 import React, { useEffect, useState } from 'react';
@@ -180,6 +181,8 @@ const OSSADashboard: React.FC = () => {
     setTimeout(() => setExcuseActionSuccess(null), 3500);
   };
 
+  if (!hasPermission(profile?.role, 'ossa.manage_cases')) return <Page><PageHeader title="OSSA Activity Review" description="Review submitted events and ceremonies." /><ActivityApprovalQueue /></Page>;
+
   return (
     <Page className="max-w-7xl animate-in fade-in duration-base">
       <Surface className="dark relative overflow-hidden border-gold-400/30 bg-gradient-to-r from-brand-950 via-brand-900 to-brand-950 p-5 shadow-xl sm:p-6">
@@ -187,6 +190,7 @@ const OSSADashboard: React.FC = () => {
         <PageHeader
           actions={(
             <>
+              <a href="#/organizations" className="inline-flex items-center rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-bold text-white">Organization approvals</a>
               <Button aria-label="Refresh records" className="border-white/20 bg-white/10 text-white hover:bg-white/20 sm:w-auto" onClick={loadData} size="sm" variant="secondary"><RotateCcw size={14} /> Refresh</Button>
               <Button aria-label="Export roster CSV" className="sm:w-auto" onClick={() => downloadCsv('sanction-roster.csv', [['Student ID', 'Name', 'Section', 'Sanction hours'], ...students.map(s => [s.student_id, s.name, s.school_data.section, s.stats?.sanction_hours || 0])])} size="sm" variant="gold"><Download size={14} /> Export</Button>
             </>
@@ -206,6 +210,7 @@ const OSSADashboard: React.FC = () => {
         <MetricCard detail="Medical / absence letters" icon={<FileCheck2 size={20} />} label="Excuse Applications" value={pendingExcuseCount} />
       </div>
 
+      <ActivityApprovalQueue />
       <Surface aria-labelledby="ossa-analytics-heading" className="p-4 sm:p-6">
         <h2 id="ossa-analytics-heading" className="text-sm font-black uppercase tracking-widest text-brand-900 dark:text-white">Sanction Analytics</h2>
         <div className="mt-4 grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">

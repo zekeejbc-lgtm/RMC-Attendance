@@ -338,9 +338,8 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
                             {catPerms.map(perm => {
                               const checked = roleForm.permissions.includes(perm.id);
                               return (
-                                <div
+                                <label
                                   key={perm.id}
-                                  onClick={() => togglePermission(perm.id)}
                                   className={`p-2.5 rounded-xl border transition cursor-pointer flex items-start gap-2.5 ${
                                     checked
                                       ? 'bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800/60 text-purple-950 dark:text-purple-100'
@@ -349,15 +348,16 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
                                 >
                                   <input
                                     type="checkbox"
+                                    aria-label={perm.name}
                                     checked={checked}
-                                    onChange={() => {}}
+                                    onChange={() => togglePermission(perm.id)}
                                     className="mt-0.5 rounded text-purple-600"
                                   />
                                   <div className="min-w-0 flex-1">
                                     <div className="text-xs font-bold">{perm.name}</div>
                                     <p className="text-[10px] opacity-75">{perm.description}</p>
                                   </div>
-                                </div>
+                                </label>
                               );
                             })}
                           </div>

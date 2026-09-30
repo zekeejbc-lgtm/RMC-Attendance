@@ -5,6 +5,7 @@ import { NodeOfficerManager } from '../components/academic/NodeOfficerManager';
 import { AdminAccountView } from '../components/admin/AdminAccountView';
 import { appData } from '../lib/backend';
 import { SchoolNode, UserProfile } from '../types';
+import { changeField as fill } from './ui-select';
 
 vi.mock('../lib/backend', () => ({ appData: {
   getCoreRoles: () => ({}), getCustomRoles: () => ({}), getOfficialsForNode: () => [],
@@ -16,7 +17,6 @@ const campus: SchoolNode = { id: 'campus', name: 'Campus', type: 'education_unit
   { id: 'archived', name: 'Archived', type: 'department', metadata: { archived: true } },
 ] };
 const actor = { uid: 'admin', role: 'admin' } as UserProfile;
-const fill = (label: string | RegExp, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 const chooseUnit = (label: RegExp, option: string) => {
   fireEvent.click(screen.getByRole('button', { name: label }));
   fireEvent.click(screen.getByRole('option', { name: option }));

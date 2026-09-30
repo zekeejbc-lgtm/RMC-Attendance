@@ -11,9 +11,10 @@ interface DirectoryNodeModalProps {
   node?: SchoolNode | null;
   onClose: () => void;
   onSave: (node: SchoolNode) => void | Promise<void>;
+  onCreateOrganization?: (name: string) => void;
 }
 
-export function DirectoryNodeModal({ open, parent, node, onClose, onSave }: DirectoryNodeModalProps) {
+export function DirectoryNodeModal({ open, parent, node, onClose, onSave, onCreateOrganization }: DirectoryNodeModalProps) {
   const suggestedTypes = useMemo(() => parent ? getAllowedChildTypes(parent) : academicNodeTypeOptions, [parent]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -60,11 +61,11 @@ export function DirectoryNodeModal({ open, parent, node, onClose, onSave }: Dire
         <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Unit name<input aria-label="Unit designation" value={name} onChange={(event) => setName(event.target.value)} className="app-control mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="e.g. STEM-12-Newton or College of Computing" /></label>
         <CustomSelect
           label="Semantic type"
-          onChange={(value) => setType(value as AcademicNodeType)}
-          options={academicNodeTypeOptions.map((option) => ({
+          onChange={(value) => value === 'organization' ? onCreateOrganization?.(name) : setType(value as AcademicNodeType)}
+          options={[...academicNodeTypeOptions.map((option) => ({
             value: option,
             label: `${getAcademicNodeLabel(option)}${suggestedTypes.includes(option) ? ' — suggested' : ''}`,
-          }))}
+          })), ...(!node && onCreateOrganization ? [{ value: 'organization', label: 'Organization' }] : [])]}
           searchable
           value={type}
         />

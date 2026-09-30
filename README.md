@@ -18,6 +18,27 @@ The local environment is already configured. For another workstation, copy `.env
 - Expiring QR passes, officer identity checks, manual attendance with a reason, scan-in/out, service hours, and merit credits.
 - Scheduled absence finalization, sanction adjustments, excuse documents/review, reports, and audit records.
 - System/unit freezes, role administration, and stored in-app payment notices.
+- Organizations at school-wide or any academic-unit scope, multiple student memberships, organization heads, public visibility, optional join keys, and reviewed applications.
+- Organization attendance and merit events, with OSAS approval before sanction-bearing events open and before individual organization sanctions affect balances.
+
+## Organizations
+
+Open **School Hierarchy** (or your role's hierarchy page), select an academic unit, and use the same **Add** tile as educational units, then choose **Organization** from **Semantic type**. Existing organizations remain separately labeled; empty organization panels are hidden. The form automatically locks the selected unit. The administrator's hierarchy root contains school-wide organizations. Accounts with directory-structure permission can establish organizations within their assigned scope. Students retain the Organizations directory for discovery and joining. Assign organization heads without changing their existing account roles. Heads can change the logo, public visibility, and joining policy, review applications, remove members, and manually add students from their own academic unit. Organization scope is fixed after creation.
+
+Joining can be closed, immediate, or subject to head approval, with an optional hashed join key. Students can join multiple organizations while retaining their academic enrollment. Hidden organizations remain accessible to their members, heads, and authorized reviewers, and are omitted from the public directory at `/#/organizations/public`.
+
+Heads submit individual sanctions to OSAS. Attendance events with penalties also remain pending until OSAS approves them; changing their configuration requires another review. Only scoped OSAS accounts can approve sanctions, including submissions made by administrators. Merit events use the existing attendance completion rules: complete all required sessions, deduct outstanding sanction hours first, then credit excess hours as merit. Admin, OSAS, and SSG retain their existing merit-event creation tools; organization heads create them from the organization page.
+
+Logos use the existing Google Apps Script image uploader and Google Drive display mechanism. The configured web-app URL must be deployed and accessible. Failed uploads leave the organization form open with a readable error.
+
+The organization schema is in `20260930160615_organizations_membership_approval.sql`. Verification commands create uniquely named temporary records and clean them up:
+
+```sh
+npm run test:organizations
+npm run test:organizations:browser
+```
+
+The browser check expects a local server at `http://127.0.0.1:4173` (override with `AUDIT_BASE_URL`) and tests a real logo upload. Set `MOCK_ORGANIZATION_UPLOAD=1` only to verify the remaining UI when the image service is unavailable; that mode does not verify the live uploader.
 
 Attendance uses database time and database authorization. Concurrent duplicate scans do not award credits or penalties twice. Geofenced saves require a new GPS reading; offline scans are not accepted. The displayed student identity must still be verified by the officer. A browser's GPS can be spoofed, so it is not a guarantee of physical presence.
 

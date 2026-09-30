@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { CeremonyExemptionFilters } from '../components/events/CeremonyExemptionFilters';
 import { ClassScheduleEditor } from '../components/academic/ClassScheduleEditor';
 import { SchoolNode, UserProfile } from '../types';
+import { changeField } from './ui-select';
 const save = vi.hoisted(()=>vi.fn());
 vi.mock('../lib/backend',()=>({appData:{setClassSchedule:save}}));
 afterEach(()=>{cleanup();vi.resetAllMocks();});
@@ -14,7 +15,7 @@ it('previews and applies exemptions per date while preserving manual and prior d
  const onChange=vi.fn();
  render(<CeremonyExemptionFilters value={{...settings,exemptStudentIdsByDate:{'2026-10-05':['prior']}}} onChange={onChange} roots={[node]} students={students} dates={['2026-10-05','2026-10-09']} editing={false}/>);
  fireEvent.click(screen.getByRole('button',{name:'Filter exempt students by class or schedule'}));
- fireEvent.change(screen.getByLabelText('Exemption filter'),{target:{value:'timeIn'}});
+ changeField('Exemption filter', 'timeIn');
  expect(within(screen.getByLabelText('Exemption preview')).getByText('2026-10-05: 1 matching students in 1 classes')).toBeInTheDocument();
  expect(screen.getByText('2026-10-09: 0 matching students in 0 classes')).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Apply matching exemptions'}));
@@ -24,10 +25,11 @@ it('applies filters to an existing single ceremony and supports removing date ex
  const onChange=vi.fn();
  const view=render(<CeremonyExemptionFilters value={settings} onChange={onChange} roots={[node]} students={students} dates={['2026-10-09']} editing/>);
  fireEvent.click(screen.getByRole('button',{name:'Filter exempt students by class or schedule'}));
- fireEvent.change(screen.getByLabelText('Exemption filter'),{target:{value:'no_class'}});
+ changeField('Exemption filter', 'no_class');
  fireEvent.click(screen.getByRole('button',{name:'Apply matching exemptions'}));
  expect(onChange).toHaveBeenCalledWith({...settings,exemptStudentIds:['manual','alice']});
  view.rerender(<CeremonyExemptionFilters value={{...settings,exemptStudentIdsByDate:{'2026-10-09':['alice']}}} onChange={onChange} roots={[node]} students={students} dates={['2026-10-09']} editing={false}/>);
+ fireEvent.click(screen.getByRole('button',{name:'2026-10-09: 1 date-specific exemptions'}));
  fireEvent.click(screen.getByRole('button',{name:'Remove exemption alice on 2026-10-09'}));
  expect(onChange).toHaveBeenLastCalledWith({...settings,exemptStudentIdsByDate:{'2026-10-09':[]}});
 });
@@ -38,7 +40,7 @@ it('saves weekly class schedules, validates end times, and preserves errors for 
  fireEvent.change(screen.getByLabelText('Monday timeOut'),{target:{value:'09:00'}});
  expect(screen.getByRole('button',{name:'Save class schedule'})).toBeDisabled();
  fireEvent.change(screen.getByLabelText('Monday timeOut'),{target:{value:'12:00'}});
- fireEvent.change(screen.getByLabelText('Tuesday class status'),{target:{value:'no_class'}});
+ changeField('Tuesday class status', 'no_class');
  fireEvent.click(screen.getByRole('button',{name:'Save class schedule'}));
  expect(await screen.findByText('Schedule is outside your scope.')).toBeInTheDocument();
  expect(refreshed).not.toHaveBeenCalled();

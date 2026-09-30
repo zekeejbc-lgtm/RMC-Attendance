@@ -18,26 +18,26 @@ module.exports = {
       },
       colors: {
         rmc: {
-          blue: '#0081C8', 'blue-dark': '#0055B7', green: '#00A859',
-          orange: '#FF8C00', dark: '#111827', light: '#F8FAFC',
+          blue: 'rgb(var(--palette-brand-500))', 'blue-dark': 'rgb(var(--palette-brand-700))', green: 'rgb(var(--palette-emerald-500))',
+          orange: 'rgb(var(--palette-gold-500))', dark: 'rgb(var(--palette-slate-900))', light: 'rgb(var(--palette-slate-50))',
         },
         brand: {
-          50: '#e6f4fc', 100: '#cce9f9', 200: '#99d3f3', 300: '#66bded',
-          400: '#00A3E0', 500: '#0081C8', 600: '#006bb0', 700: '#0055B7',
-          800: '#003d85', 900: '#002859', 950: '#111827',
+          50: 'rgb(var(--palette-brand-50) / <alpha-value>)', 100: 'rgb(var(--palette-brand-100) / <alpha-value>)', 200: 'rgb(var(--palette-brand-200) / <alpha-value>)', 300: 'rgb(var(--palette-brand-300) / <alpha-value>)',
+          400: 'rgb(var(--palette-brand-400) / <alpha-value>)', 500: 'rgb(var(--palette-brand-500) / <alpha-value>)', 600: 'rgb(var(--palette-brand-600) / <alpha-value>)', 700: 'rgb(var(--palette-brand-700) / <alpha-value>)',
+          800: 'rgb(var(--palette-brand-800) / <alpha-value>)', 900: 'rgb(var(--palette-brand-900) / <alpha-value>)', 950: 'rgb(var(--palette-brand-950) / <alpha-value>)',
         },
         gold: {
-          50: '#fffbf0', 100: '#fff4d6', 200: '#ffe3ad', 300: '#ffd085',
-          400: '#FFD700', 500: '#FF8C00', 600: '#e07800', 700: '#b85f00',
+          50: 'rgb(var(--palette-gold-50) / <alpha-value>)', 100: 'rgb(var(--palette-gold-100) / <alpha-value>)', 200: 'rgb(var(--palette-gold-200) / <alpha-value>)', 300: 'rgb(var(--palette-gold-300) / <alpha-value>)',
+          400: 'rgb(var(--palette-gold-400) / <alpha-value>)', 500: 'rgb(var(--palette-gold-500) / <alpha-value>)', 600: 'rgb(var(--palette-gold-600) / <alpha-value>)', 700: 'rgb(var(--palette-gold-700) / <alpha-value>)',
         },
         emerald: {
-          50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac',
-          400: '#4ade80', 500: '#00A859', 600: '#008e4a', 700: '#00703a',
+          50: 'rgb(var(--palette-emerald-50) / <alpha-value>)', 100: 'rgb(var(--palette-emerald-100) / <alpha-value>)', 200: 'rgb(var(--palette-emerald-200) / <alpha-value>)', 300: 'rgb(var(--palette-emerald-300) / <alpha-value>)',
+          400: 'rgb(var(--palette-emerald-400) / <alpha-value>)', 500: 'rgb(var(--palette-emerald-500) / <alpha-value>)', 600: 'rgb(var(--palette-emerald-600) / <alpha-value>)', 700: 'rgb(var(--palette-emerald-700) / <alpha-value>)',
         },
         slate: {
-          50: '#F8FAFC', 100: '#F1F5F9', 200: '#E2E8F0', 300: '#CBD5E1',
-          400: '#94A3B8', 500: '#64748B', 600: '#475569', 700: '#334155',
-          800: '#1E293B', 850: '#151F32', 900: '#111827', 950: '#0B0F19',
+          50: 'rgb(var(--palette-slate-50) / <alpha-value>)', 100: 'rgb(var(--palette-slate-100) / <alpha-value>)', 200: 'rgb(var(--palette-slate-200) / <alpha-value>)', 300: 'rgb(var(--palette-slate-300) / <alpha-value>)',
+          400: 'rgb(var(--palette-slate-400) / <alpha-value>)', 500: 'rgb(var(--palette-slate-500) / <alpha-value>)', 600: 'rgb(var(--palette-slate-600) / <alpha-value>)', 700: 'rgb(var(--palette-slate-700) / <alpha-value>)',
+          800: 'rgb(var(--palette-slate-800) / <alpha-value>)', 850: 'rgb(var(--palette-slate-850) / <alpha-value>)', 900: 'rgb(var(--palette-slate-900) / <alpha-value>)', 950: 'rgb(var(--palette-slate-950) / <alpha-value>)',
         },
       },
       boxShadow: {
@@ -47,10 +47,10 @@ module.exports = {
         modal: '0 25px 60px -15px rgba(17, 24, 39, 0.35)',
       },
       backgroundImage: {
-        'gold-gradient': 'linear-gradient(135deg, #FFD700 0%, #FF8C00 100%)',
-        'brand-gradient': 'linear-gradient(135deg, #00A3E0 0%, #0055B7 100%)',
-        'brand-dark-gradient': 'linear-gradient(135deg, #002859 0%, #111827 100%)',
-        'green-gradient': 'linear-gradient(135deg, #00A859 0%, #00703a 100%)',
+        'gold-gradient': 'linear-gradient(135deg, rgb(var(--palette-gold-400)) 0%, rgb(var(--palette-gold-500)) 100%)',
+        'brand-gradient': 'linear-gradient(135deg, rgb(var(--palette-brand-400)) 0%, rgb(var(--palette-brand-700)) 100%)',
+        'brand-dark-gradient': 'linear-gradient(135deg, rgb(var(--palette-brand-900)) 0%, rgb(var(--palette-slate-900)) 100%)',
+        'green-gradient': 'linear-gradient(135deg, rgb(var(--palette-emerald-500)) 0%, rgb(var(--palette-emerald-700)) 100%)',
         'glass-gradient': 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%)',
       },
     },

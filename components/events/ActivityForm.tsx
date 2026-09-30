@@ -16,7 +16,7 @@ import { Page, PageHeader, Surface } from '../../components/ui/Page';
 import { canManageEventInScope, eventRecipientRoots, recipientGroupLabel } from '../../lib/eventAudience';
 import { findNodePath } from '../../lib/academicDirectory';
 import { appData } from '../../lib/backend';
-import { AppEvent, EventAttendanceWindow, EventSanctionRule } from '../../types';
+import { AppEvent, EventAttendanceWindow, EventSanctionRule, Organization } from '../../types';
 
 const newWindow = (index: number): EventAttendanceWindow => ({
   id: `window-${Date.now()}-${index}`,
@@ -27,13 +27,14 @@ const newWindow = (index: number): EventAttendanceWindow => ({
 });
 
 // The page fixes the purpose; changing activity types cannot turn an event into a ceremony.
-const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) => {
+const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Organization }> = ({ purpose, organization }) => {
   const navigate = useNavigate();
   const { eventId } = useParams();
   const isCeremony = purpose === 'ceremony';
   const { profile, revision, loading } = useAuth();
   const editingEvent = useMemo(() => eventId ? appData.getEvents().find((event) => event.id === eventId) : undefined, [eventId]);
   const isEditing = Boolean(editingEvent);
+  const requiresApproval = Boolean(editingEvent?.requiresOssaApproval || hasPermission(profile?.role, 'events.require_ossa_approval'));
   const phasedCreation = !eventId;
   const phases = ['Details', 'Schedule', 'Attendees', 'Rules & Location', 'Review'];
   const [phase, setPhase] = useState(0);
@@ -51,7 +52,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) 
   const datePart = (value: number) => new Date(value + 8 * 3600000).toISOString().slice(0, 10);
   const timePart = (value: number) => new Date(value + 8 * 3600000).toISOString().slice(11, 16);
   const [kind, setKind] = useState<AppEvent['kind']>(isCeremony ? 'flag_ceremony' : editingEvent?.kind || 'attendance');
-  const returnPath = isCeremony ? '/student/ceremonies' : '/ssg/events';
+  const returnPath = organization ? `/organizations/${organization.id}` : isCeremony ? '/student/ceremonies' : '/ssg/events';
   const [ceremonyDates, setCeremonyDates] = useState<string[]>([]);
   const [ceremony, setCeremony] = useState<NonNullable<AppEvent['ceremony']>>(editingEvent?.ceremony || { exemptStudentIds: [], allowVolunteerMerit: false, volunteerMeritHours: 1, classWindows: {} });
   const [meritHours, setMeritHours] = useState(editingEvent?.meritHours || 1);
@@ -77,10 +78,10 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) 
 
   const directory = useMemo(() => appData.getSchoolStructure(), [revision]);
   const recipientRoots = useMemo(() => eventRecipientRoots(profile, directory), [profile, directory]);
-  const hasAssignedScope = profile?.role === 'admin' || recipientRoots.length > 0;
-  const eventInScope = !editingEvent || canManageEventInScope(profile, editingEvent, directory);
-  const recipientGroups = selectedGroups.map(group => recipientGroupLabel(group, directory));
-  const recipientsInScope = selectedGroups.every(group => !group.startsWith('node:')
+  const hasAssignedScope = Boolean(organization) || profile?.role === 'admin' || recipientRoots.length > 0;
+  const eventInScope = organization ? !editingEvent || editingEvent.organizationId === organization.id : !editingEvent || canManageEventInScope(profile, editingEvent, directory);
+  const recipientGroups = organization ? [`${organization.name} members`] : selectedGroups.map(group => recipientGroupLabel(group, directory));
+  const recipientsInScope = Boolean(organization) || selectedGroups.every(group => !group.startsWith('node:')
     || Boolean(findNodePath(recipientRoots, group.slice(5))));
 
   const ceremonyStudents = useMemo(() => isCeremony && profile ? appData.getVisibleStudents(profile.uid) : [], [isCeremony, profile, revision]);
@@ -129,7 +130,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) 
   const phaseIssues = [
     !title.trim() || !description.trim() ? 'Enter a title and instructions before continuing.' : !activityNumbersValid ? 'Check the activity hours and weekly occurrences before continuing.' : '',
     (isCeremony ? !ceremonyDatesValid : !datesValid)
-      ? isCeremony ? 'Choose 1?62 allowed ceremony dates. Remove preview-only dates and follow the selected ceremony weekday.' : 'Choose a start and end date. The end date must be on or after the start date.'
+      ? isCeremony ? 'Choose 1 to 62 allowed ceremony dates. Remove preview-only dates and follow the selected ceremony weekday.' : 'Choose a start and end date. The end date must be on or after the start date.'
       : !windowsValid || windowsOverlap ? 'Enter valid, non-overlapping attendance windows and non-negative late thresholds.' : '',
     !hasAssignedScope || !recipientsInScope || !recipientGroups.length ? 'Choose at least one recipient within your assigned school unit.'
       : isCeremony && !ceremonyValid ? 'Check class attendance windows and volunteer merit hours (greater than 0 and up to 24).' : '',
@@ -158,7 +159,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) 
       kind: isCeremony ? 'flag_ceremony' : kind, meritHours: kind === 'merit' ? meritHours : undefined,
       ceremony: isCeremony ? { ...ceremony, exemptStudentIdsByDate: isEditing ? undefined : Object.fromEntries(Object.entries(ceremony.exemptStudentIdsByDate || {}).filter(([day]) => ceremonyDates.includes(day))) } : null,
       service: kind === 'service' ? { overflow: serviceOverflow } : null,
-      recurrence: kind === 'attendance' && !isEditing && occurrences > 1 ? { frequency: 'weekly' as const, occurrences } : undefined,
+      recurrence: !organization && kind === 'attendance' && !isEditing && occurrences > 1 ? { frequency: 'weekly' as const, occurrences } : undefined,
       scopeNodeId: profile?.role === 'admin' ? undefined : profile?.official_data?.assignment_node_id,
       title: title.trim(),
       description: description.trim(),
@@ -187,7 +188,8 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) 
     };
     try {
       if (profile && appData.isUserScopeFrozen(profile) && profile.role !== 'admin') throw new Error('Events are frozen for your scope.');
-      if (editingEvent) await appData.updateEvent(editingEvent.id, payload);
+      if (organization) await appData.organizationCommand('saveEvent', { organizationId: organization.id, eventId: editingEvent?.id, event: { ...payload, scopeNodeId: organization.node_id || undefined } });
+      else if (editingEvent) await appData.updateEvent(editingEvent.id, payload);
       else if (isCeremony) await appData.createCeremonies(payload, ceremonyDates);
       else await appData.createEvent(payload);
     } catch (error) { setSaveError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to save event.'); return; }
@@ -205,6 +207,8 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) 
         actions={<Button variant="secondary" onClick={() => navigate(returnPath)}><ArrowLeft size={17} /> {isCeremony ? 'Back to Ceremonies' : 'Back to Events'}</Button>}
       />
 
+      {requiresApproval && <Surface className="p-4 text-sm" aria-label="OSSA approval requirement"><strong>OSSA approval required</strong><p>Submit ? Pending OSSA review ? Approved ? Active at the scheduled time. Changes to an approved activity require a new review. Attendance and sanctions remain disabled while pending or rejected.</p>{editingEvent?.approvalStatus && <p className="mt-2 font-bold">Current decision: {editingEvent.approvalStatus}. {editingEvent.reviewNotes}</p>}</Surface>}
+      {organization && <Surface className="p-4 text-sm">Organization: <strong>{organization.name}</strong>. Events with sanctions are submitted to OSAS for approval. Editing an approved event sends its sanction rules for review again.</Surface>}
       {phasedCreation && <Surface className="space-y-4 p-4 sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <h2 ref={phaseHeading} tabIndex={-1} className="scroll-mt-6 text-lg font-bold text-brand-900 outline-none dark:text-white">Phase {phase + 1} of {phases.length}: {phases[phase]}</h2>
@@ -237,9 +241,9 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) 
           <h2 className="text-lg font-bold text-brand-900 dark:text-white">{isCeremony ? 'Flag ceremony schedule' : 'Activity and service schedule'}</h2>
           <p className="text-sm text-slate-600 dark:text-slate-300">{isCeremony ? 'Plan individual ceremony dates, attendance requirements, class schedules, and exemptions. All times use Philippine time.' : kind === 'service' ? 'Each completed session counts its actual time toward sanction clearing. Separate windows keep breaks out of rendered hours.' : kind === 'merit' ? 'A fixed award is released only after every required attendance session is completed.' : 'Choose an activity type and configure its schedule and attendance rules.'}</p>
           {!isCeremony && <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <CustomSelect label="Activity type" value={kind} onChange={value => setKind(value as AppEvent['kind'])} options={[{value:'attendance',label:'Attendance event'},{value:'service',label:'Sanction / Cleaning Service'},{value:'merit',label:'Merit activity'}]} />
+            <CustomSelect label="Activity type" value={kind} onChange={value => setKind(value as AppEvent['kind'])} options={[{value:'attendance',label:'Attendance event'},...(!organization ? [{value:'service',label:'Sanction / Cleaning Service'}] : []),{value:'merit',label:'Merit activity'}]} />
             {kind === 'merit' && <label className="app-field-label">Fixed merit hours<input type="number" min="0.01" max="24" step="0.01" required className="input-field mt-2" value={meritHours} onChange={event => setMeritHours(Number(event.target.value))}/></label>}
-            {!isEditing && kind === 'attendance' && <label className="app-field-label">Weekly occurrences<input type="number" min="1" max="52" required className="input-field mt-2" value={occurrences} onChange={event => setOccurrences(Number(event.target.value))}/><span className="mt-1 block text-xs font-normal normal-case">1 for a single activity; up to 52 weeks.</span></label>}
+            {!organization && !isEditing && kind === 'attendance' && <label className="app-field-label">Weekly occurrences<input type="number" min="1" max="52" required className="input-field mt-2" value={occurrences} onChange={event => setOccurrences(Number(event.target.value))}/><span className="mt-1 block text-xs font-normal normal-case">1 for a single activity; up to 52 weeks.</span></label>}
           </div>}
           {isCeremony && <FlagProtocolSettings value={ceremony} onChange={setCeremony} onWindowsChange={setAttendanceWindows} />}
           {kind === 'service' && <div className="space-y-3"><label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={serviceOverflow === 'merit'} disabled={!canSetOverflow} onChange={e => setServiceOverflow(e.target.checked ? 'merit' : 'clear')} />Save excess service hours as earned merit</label><p className="text-sm text-slate-600 dark:text-slate-300">OSAS or an admin controls this setting. Completed service time clears sanctions first. When disabled, any excess is not credited. Breaks and unfinished sessions do not count.</p></div>}
@@ -277,8 +281,8 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) 
         <fieldset hidden={phasedCreation && phase !== 2} disabled={saving || (phasedCreation && phase !== 2)} className="min-w-0 space-y-6">
         <Surface className="space-y-5 p-4 sm:p-6">
           <div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><Users2 size={20} className="text-gold-500" /> {isCeremony ? 'Required ceremony attendees' : 'Event recipients'}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Start with a general unit, then optionally choose a more specific group. Leave “All of” selected to include the whole unit. Add each recipient to include multiple groups.</p></div>
-          <EventRecipientPicker onChange={setSelectedGroups} roots={recipientRoots} selected={selectedGroups} />
-          {profile?.role !== 'admin' && (hasAssignedScope
+          {organization ? <p className="text-sm">Current approved members of <strong>{organization.name}</strong> are eligible. Membership and unit eligibility are checked when attendance is recorded.</p> : <EventRecipientPicker onChange={setSelectedGroups} roots={recipientRoots} selected={selectedGroups} />}
+          {!organization && profile?.role !== 'admin' && (hasAssignedScope
             ? <p className="text-sm text-slate-600 dark:text-slate-300">You can create and manage events only within <strong>{recipientRoots[0].name}</strong> and its sub-units. All recipient choices, including “All Students”, are limited to this assignment.</p>
             : <p role="alert" className="text-sm text-red-600">An assigned school unit is required to create events. Contact your administrator.</p>)}
           {!recipientsInScope && <p role="alert" className="text-sm text-red-600">Remove recipients outside your assigned unit before saving.</p>}
@@ -339,9 +343,9 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony' }> = ({ purpose }) 
             {!isEditing && <Button className="sm:w-auto" type="button" variant="secondary" disabled={saving} onClick={() => navigate(returnPath)}>Cancel</Button>}
             {phasedCreation && phase > 0 && <Button className="sm:w-auto" type="button" variant="secondary" disabled={saving} onClick={() => goToPhase(phase - 1)}>Back</Button>}
             {phasedCreation && phase < phases.length - 1 && <Button className="sm:w-auto" type="submit" variant="gold">Next: {phases[phase + 1]}</Button>}
-            {eventInScope && editingEvent?.status === 'active' && <><Button className="sm:w-auto" size="sm" type="button" variant="secondary" disabled={hasRecordedAttendance} onClick={async () => { await appData.updateEvent(editingEvent.id, { endTime: editingEvent.endTime + 3600000 }); navigate(returnPath); }}><Clock3 size={15}/>Extend by 1 Hour</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath); }}><Archive size={15}/>Finish and Archive</Button></>}
-            {eventInScope && editingEvent?.status === 'upcoming' && <><Button className="sm:w-auto" size="sm" type="submit" variant="secondary"><Clock3 size={15}/>Reschedule</Button><Button className="sm:w-auto" size="sm" type="button" variant="warning" onClick={async () => { await appData.updateEvent(editingEvent.id, { status: 'done', cancellationStatus: 'dropped' }); navigate(returnPath); }}><CircleOff size={15}/>Drop</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.cancelEvent(editingEvent.id); navigate(returnPath); }}><XCircle size={15}/>Cancel</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath); }}><Archive size={15}/>Archive</Button><Button className="text-red-700 sm:w-auto" size="sm" type="button" variant="danger" onClick={async () => { await appData.deleteEvent(editingEvent.id); navigate(returnPath); }}><Trash2 size={15}/>Delete</Button></>}
-            {(!phasedCreation || phase === phases.length - 1) && <Button className="col-span-2 sm:ml-2 sm:w-auto sm:min-w-32" type="submit" variant="gold" loading={saving} disabled={!formValid || saving}><SaveIcon size={16}/>{isEditing ? 'Save' : isCeremony ? 'Schedule Ceremonies' : kind === 'service' ? 'Schedule Service' : kind === 'merit' ? 'Schedule Merit Activity' : 'Schedule Event'}</Button>}
+            {!organization && eventInScope && editingEvent?.status === 'active' && <><Button className="sm:w-auto" size="sm" type="button" variant="secondary" disabled={hasRecordedAttendance} onClick={async () => { await appData.updateEvent(editingEvent.id, { endTime: editingEvent.endTime + 3600000 }); navigate(returnPath); }}><Clock3 size={15}/>Extend by 1 Hour</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath); }}><Archive size={15}/>Finish and Archive</Button></>}
+            {!organization && eventInScope && editingEvent?.status === 'upcoming' && <><Button className="sm:w-auto" size="sm" type="submit" variant="secondary"><Clock3 size={15}/>Reschedule</Button><Button className="sm:w-auto" size="sm" type="button" variant="warning" onClick={async () => { await appData.updateEvent(editingEvent.id, { status: 'done', cancellationStatus: 'dropped' }); navigate(returnPath); }}><CircleOff size={15}/>Drop</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.cancelEvent(editingEvent.id); navigate(returnPath); }}><XCircle size={15}/>Cancel</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath); }}><Archive size={15}/>Archive</Button><Button className="text-red-700 sm:w-auto" size="sm" type="button" variant="danger" onClick={async () => { await appData.deleteEvent(editingEvent.id); navigate(returnPath); }}><Trash2 size={15}/>Delete</Button></>}
+            {(!phasedCreation || phase === phases.length - 1) && <Button className="col-span-2 sm:ml-2 sm:w-auto sm:min-w-32" type="submit" variant="gold" loading={saving} disabled={!formValid || saving}><SaveIcon size={16}/>{requiresApproval ? isEditing ? 'Submit Changes for Approval' : 'Submit for OSSA Approval' : isEditing ? 'Save' : isCeremony ? 'Schedule Ceremonies' : kind === 'service' ? 'Schedule Service' : kind === 'merit' ? 'Schedule Merit Activity' : 'Schedule Event'}</Button>}
           </div>
         </div>
       </form>

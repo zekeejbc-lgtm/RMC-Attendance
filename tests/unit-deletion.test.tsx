@@ -29,6 +29,14 @@ afterEach(cleanup);
 vi.mock('../lib/backend', async () => { const m = await import('./fixtures/demoBackend'); return { appData: m.mockData, appAuth: m.mockAuth, documentUrl: async (p: string) => p }; });
 
 describe('Unit Deletion & Security Confirmation', () => {
+  it('hides unit creation and directory templates from SSG', () => {
+    localStorage.clear();
+    ensureMockReferenceData();
+    currentRole = 'ssg';
+    render(<SSGPanel />);
+    expect(screen.queryByRole('button', { name: /add unit/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /add template/i })).not.toBeInTheDocument();
+  });
   it('hides delete unit buttons for roles without directory.delete_structure permission', () => {
     ensureMockReferenceData();
     currentRole = 'student';

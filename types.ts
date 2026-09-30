@@ -10,6 +10,7 @@ export type AppPermission =
   | 'system.payment_reminders'
   | 'system.manage_rbac'
   | 'directory.manage_structure'
+  | 'directory.create_units'
   | 'directory.delete_structure'
   | 'directory.manage_members'
   | 'directory.add_members_manually'
@@ -18,6 +19,8 @@ export type AppPermission =
   | 'attendance.scan'
   | 'attendance.manage'
   | 'events.manage'
+  | 'events.require_ossa_approval'
+  | 'events.approve'
   | 'ossa.manage_cases';
 
 export interface SystemFreezeState {
@@ -143,6 +146,8 @@ export interface ExcuseApplication {
 }
 
 export interface UserProfile {
+  /** Authorized snapshot membership; not editable profile data. */
+  organizationIds?: string[];
   positionRoleIds?: string[];
   uid: string;
   name: string;
@@ -201,6 +206,12 @@ export interface EventSanctionRule {
 }
 
 export interface AppEvent {
+  requiresOssaApproval?: boolean;
+  reviewedAt?: number;
+  organizationId?: string;
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
+  reviewNotes?: string;
+  reviewedBy?: string;
   ceremony?: {
     flagKind?: 'raising' | 'retreat';
     useStandardSchedule?: boolean;
@@ -221,7 +232,7 @@ export interface AppEvent {
   title: string;
   description?: string;
   created_by: string;
-  status: 'upcoming' | 'active' | 'done';
+  status: 'upcoming' | 'active' | 'done' | 'pending' | 'rejected';
   cancellationStatus?: 'cancelled' | 'dropped';
   startTime: number;
   endTime: number;
@@ -259,6 +270,44 @@ export interface AppEvent {
     snapshotLabel?: string;
     groups?: string[];
   };
+}
+
+export interface Organization {
+  can_manage?: boolean;
+  can_review?: boolean;
+  can_assign_heads?: boolean;
+  id: string;
+  name: string;
+  description: string;
+  logo_url: string;
+  node_id: string | null;
+  visible: boolean;
+  joining: 'closed' | 'open' | 'approval';
+  key_required: boolean;
+  head_ids: string[];
+  created_at: string;
+}
+
+export interface OrganizationMembership {
+  organization_id: string;
+  student_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  reviewed_at?: string;
+  name?: string;
+  student_number?: string;
+}
+
+export interface OrganizationSanctionRequest {
+  id: string;
+  organization_id: string;
+  student_id: string;
+  hours: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  review_notes?: string;
+  student_name?: string;
 }
 
 export type ClassDaySchedule = { status: 'no_class' } | { status: 'classes'; timeIn: string; timeOut: string };

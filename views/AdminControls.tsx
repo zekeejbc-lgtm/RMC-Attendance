@@ -89,7 +89,7 @@ const AdminControls: React.FC = () => {
                 onClick={() => handleTabChange(id)}
                 className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-bold transition-all sm:text-xs ${
                   selectedTab === id
-                    ? 'bg-gold-gradient text-brand-900 shadow-md'
+                    ? 'app-button--gold text-brand-900 shadow-md'
                     : 'text-white/70 hover:bg-white/10 hover:text-white'
                 }`}
               >

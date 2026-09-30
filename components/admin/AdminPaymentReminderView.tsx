@@ -234,7 +234,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Urgency Level</label>
-              <SelectField aria-label="Target Role"
+              <SelectField aria-label="Urgency Level"
                 value={reminderData.urgency}
                 onChange={(e) => setReminderData(prev => ({ ...prev, urgency: e as any }))}
                 className="mt-1 min-w-0"
@@ -308,7 +308,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
         <form id="status-form" onSubmit={handleUpdateStatus} className="space-y-3">
           <div>
             <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Payment Status</label>
-            <SelectField aria-label="Target Role"
+            <SelectField aria-label="Payment Status"
               value={newStatus}
               onChange={(e) => setNewStatus(e as any)}
               className="mt-1 min-w-0"

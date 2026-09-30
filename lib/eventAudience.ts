@@ -21,6 +21,8 @@ export function recipientGroupLabel(group: string, roots: SchoolNode[]): string 
 }
 
 export function isEventRecipient(event: AppEvent, profile: UserProfile, roots: SchoolNode[]): boolean {
+  if (event.approvalStatus === 'pending' || event.approvalStatus === 'rejected') return false;
+  if (event.organizationId) return event.approvalStatus === 'approved' && Boolean(profile.organizationIds?.includes(event.organizationId));
   if (event.ceremony?.exemptStudentIds.includes(profile.uid)) return false;
   const assignment = profile.school_data.academic_assignment;
   const pathIds = new Set([
@@ -54,6 +56,7 @@ export function isEventRecipient(event: AppEvent, profile: UserProfile, roots: S
 }
 
 export function isCeremonyVolunteer(event: AppEvent, profile: UserProfile, roots: SchoolNode[]): boolean {
+  if (event.approvalStatus === 'pending' || event.approvalStatus === 'rejected') return false;
   if (event.kind !== 'flag_ceremony' || event.ceremony?.exemptStudentIds.includes(profile.uid) || !['student', 'mayor', 'ssg'].includes(profile.role)) return false;
   const node = profile.official_data?.assignment_node_id || profile.school_data.academic_assignment?.terminalGroupId;
   return !event.scopeNodeId || Boolean(findNodePath(roots, node || '')?.some(item => item.id === event.scopeNodeId));

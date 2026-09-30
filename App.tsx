@@ -18,6 +18,8 @@ const SSGEventCreation = lazy(() => import('./views/SSGEventCreation'));
 const SSGCreateCeremony = lazy(() => import('./views/SSGCreateCeremony'));
 const SSGCreateEvent = lazy(() => import('./views/SSGCreateEvent'));
 const LandingPage = lazy(() => import('./views/LandingPage'));
+const Organizations = lazy(() => import('./views/Organizations'));
+const OrganizationEvent = lazy(() => import('./views/OrganizationEvent'));
 
 const AttendanceDashboard = lazy(() => import('./views/AttendanceDashboard'));
 const OSSADashboard = lazy(() => import('./views/OSSADashboard'));
@@ -71,6 +73,11 @@ const App: React.FC = () => {
           <Suspense fallback={<AppLoading label="Loading page"><PageSkeleton /></AppLoading>}><Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LandingPage defaultOpenLogin={true} />} />
+          <Route path="/organizations/public" element={<Organizations publicDirectory />} />
+          <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
+          <Route path="/organizations/:organizationId" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
+          <Route path="/organizations/:organizationId/events/create" element={<ProtectedRoute><OrganizationEvent /></ProtectedRoute>} />
+          <Route path="/organizations/:organizationId/events/:eventId/edit" element={<ProtectedRoute><OrganizationEvent /></ProtectedRoute>} />
           <Route path="/register" element={<LandingPage defaultOpenRegister={true} />} />
           <Route path="/register/status" element={<RegisterStatus />} />
           
@@ -167,7 +174,7 @@ const App: React.FC = () => {
           } />
 
           <Route path="/ossa/dashboard" element={
-            <ProtectedRoute permission="ossa.manage_cases" roles={['ossa', 'ossa_staff', 'admin']}>
+            <ProtectedRoute permissionAny={['ossa.manage_cases', 'events.approve']} roles={['ossa', 'ossa_staff', 'admin']}>
               <OSSADashboard />
             </ProtectedRoute>
           } />

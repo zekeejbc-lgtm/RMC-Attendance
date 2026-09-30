@@ -119,7 +119,7 @@ const StudentEvents: React.FC = () => {
                 type="button"
                 key={event.id}
                 onClick={() => setSelectedEvent(event)}
-                className="group relative w-full overflow-hidden rounded-2xl border border-gold-400/40 bg-gradient-to-br from-brand-900 to-brand-950 p-4 text-left text-white shadow-md transition-all hover:border-gold-400"
+                className="group relative w-full overflow-hidden rounded-2xl border border-gold-400/40 bg-brand-900 p-4 text-left text-white shadow-md transition-all hover:border-gold-400"
               >
                 <div className="absolute top-0 right-0 bg-gold-gradient text-brand-900 font-extrabold text-[8px] uppercase px-3 py-1 rounded-bl-xl shadow-xs tracking-wider">
                   Live Event
@@ -291,7 +291,7 @@ const StudentEvents: React.FC = () => {
               <button
                 aria-label="File for excuse"
                 onClick={() => { setSubmittedExcuse(false); setExcuseError(''); setExcuseDetails(''); setSelectedFile(null); setFilePreviewName(''); setShowExcuseModal(true); }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gold-gradient px-6 py-3 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition-all hover:brightness-110 active:scale-95 sm:w-auto"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl app-button--gold px-6 py-3 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition-all hover:brightness-110 active:scale-95 sm:w-auto"
                 type="button"
               >
               <FileUp size={16} /> Excuse

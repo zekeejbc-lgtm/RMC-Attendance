@@ -1,10 +1,22 @@
 import { useState } from 'react';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import CustomSelect from './CustomSelect';
 
 afterEach(cleanup);
+
+it('closes only the select when Escape is pressed inside a surrounding dialog', async () => {
+  const user = userEvent.setup();
+  const parentKeyDown = vi.fn();
+  render(<div onKeyDown={parentKeyDown}><CustomSelect label="Status" value="" onChange={() => undefined}
+    options={[{ value: 'ready', label: 'Ready' }, { value: '', label: 'Not configured' }]} /></div>);
+  await user.click(screen.getByRole('button', { name: /status.*not configured/i }));
+  expect(screen.getByRole('option', { name: 'Not configured' })).toHaveFocus();
+  await user.keyboard('{Escape}');
+  expect(parentKeyDown).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: /status.*not configured/i })).toHaveFocus();
+});
 
 it('selects and clears every supplied option without imposing caller-specific sentinel values', async () => {
   const user = userEvent.setup();

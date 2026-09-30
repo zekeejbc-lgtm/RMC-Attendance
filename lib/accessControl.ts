@@ -10,13 +10,16 @@ export interface PermissionDefinition {
 }
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
+  { id: 'directory.create_units', name: 'Create Directory Units', category: 'Directory', description: 'Create units and apply templates within the assigned scope. Also requires Manage Directory Structure. Disabled for SSG by default.' },
+  { id: 'events.require_ossa_approval', name: 'Require OSSA Approval', category: 'Events', description: 'Workflow rule: events and ceremonies submitted or changed by this role remain inactive until OSSA approves. Enabled for SSG by default. Turning it off does not approve existing requests.' },
+  { id: 'events.approve', name: 'Review Event & Ceremony Requests', category: 'OSSA', description: 'Allow OSSA administrators or OSSA staff to approve or reject activities within their scope. Authors cannot approve their own requests.' },
   { id: 'system.manage_accounts', name: 'Manage User Accounts', category: 'System', description: 'Create, edit, and manage school official accounts' },
   { id: 'system.view_audit', name: 'View System Audit Logs', category: 'System', description: 'Access security and activity audit trails' },
   { id: 'system.freeze', name: 'Freeze System & Scopes', category: 'System', description: 'Freeze or unfreeze global system or specific departments/sections' },
   { id: 'system.health', name: 'Monitor System Health', category: 'System', description: 'View database metrics, storage usage, and component status' },
   { id: 'system.payment_reminders', name: 'Manage Payments & Reminders', category: 'System', description: 'Track payment status and send payment reminders to OSAS' },
   { id: 'system.manage_rbac', name: 'Manage RBAC & Roles', category: 'System', description: 'Create, edit, and customize access control permissions for roles' },
-  { id: 'directory.manage_structure', name: 'Manage Directory Structure', category: 'Directory', description: 'Add, modify, or archive campus hierarchy units' },
+  { id: 'directory.manage_structure', name: 'Manage Directory Structure', category: 'Directory', description: 'Modify, restore, or archive campus hierarchy units' },
   { id: 'directory.delete_structure', name: 'Delete Directory Structure & Units', category: 'Directory', description: 'Delete school units, departments, and academic hierarchy nodes' },
   { id: 'directory.manage_members', name: 'Manage Members & Students', category: 'Directory', description: 'Create and update student rosters and section assignments' },
   { id: 'directory.add_members_manually', name: 'Add Members Manually', category: 'Directory', description: 'Open the manual form to add an individual member to a class section' },
@@ -36,7 +39,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     isPositionOnly: false,
     permissions: [
       'system.manage_accounts', 'system.view_audit', 'system.freeze', 'system.health',
-      'system.payment_reminders', 'system.manage_rbac', 'directory.manage_structure',
+      'system.payment_reminders', 'system.manage_rbac', 'directory.manage_structure', 'directory.create_units',
       'directory.delete_structure', 'directory.manage_members', 'attendance.scan',
       'directory.add_members_manually', 'directory.change_member_designation', 'directory.manage_student_sanctions',
       'attendance.manage', 'events.manage', 'ossa.manage_cases',
@@ -49,7 +52,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     description: 'Directs student discipline, excuses, and institutional sanction cases',
     isPositionOnly: false,
     permissions: [
-      'directory.manage_structure', 'directory.manage_members', 'attendance.scan',
+      'directory.manage_structure', 'directory.create_units', 'directory.manage_members', 'attendance.scan', 'events.approve',
       'directory.add_members_manually', 'directory.change_member_designation', 'directory.manage_student_sanctions',
       'attendance.manage', 'events.manage', 'ossa.manage_cases', 'system.health',
     ],
@@ -68,7 +71,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'SSG Officer',
     description: 'Manages events, geofencing, and directory section rosters',
     isPositionOnly: false,
-    permissions: ['directory.manage_structure', 'directory.manage_members', 'directory.add_members_manually', 'directory.change_member_designation', 'attendance.scan', 'attendance.manage', 'events.manage'],
+    permissions: ['directory.manage_structure', 'directory.manage_members', 'directory.add_members_manually', 'directory.change_member_designation', 'attendance.scan', 'attendance.manage', 'events.manage', 'events.require_ossa_approval'],
     isBuiltIn: true,
   },
   mayor: {

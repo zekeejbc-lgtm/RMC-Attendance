@@ -84,11 +84,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const role = profile?.role || '';
   const navItems = [
+  { label: 'Organizations', icon: Building2, path: '/organizations', roles: [] },
   {
     label: 'OSSA Hub',
     icon: Building2,
     path: '/ossa/dashboard',
-    permission: 'ossa.manage_cases',
+    permissionAny: ['ossa.manage_cases', 'events.approve'],
     roles: ['ossa', 'ossa_staff']
   },
 
@@ -233,6 +234,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   const userRole = profile.role;
+  if (item.path === '/organizations' && hasPermission(userRole, 'directory.manage_structure')) return false;
 
 
   // First check role access
@@ -398,7 +400,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <nav aria-label="Main navigation" className="min-h-0 flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
             {allowedNavItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path;
+              const isActive = location.pathname === item.path || (item.path === '/ssg/panel' && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
               return <button type="button" key={item.path} aria-current={isActive ? 'page' : undefined} onClick={() => navigateAndClose(item.path)} className={navButtonClass(isActive)}><Icon size={22} /><span className="font-medium text-sm">{item.label}</span></button>;
             })}
             {renderDirectory(true)}
@@ -425,7 +427,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <nav aria-label="Desktop navigation" className="min-h-0 flex-1 p-3 mt-2 space-y-2 overflow-y-auto custom-scrollbar">
           {allowedNavItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path || (item.path === '/ssg/panel' && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
             return <button type="button" key={item.path} aria-label={isSidebarCollapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined} onClick={() => navigate(item.path)} className={navButtonClass(isActive, isSidebarCollapsed)}><Icon size={22} />{!isSidebarCollapsed && <span className="truncate font-medium text-sm">{item.label}</span>}</button>;
           })}
           {isSidebarCollapsed && hasDirectory ? <div className="pt-4 mt-4 border-t border-brand-800/80 space-y-2">{canViewAttendance && <button type="button" aria-label="Attendance dashboard" aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined} onClick={() => navigate('/admin/attendance')} className={navButtonClass(location.pathname === '/admin/attendance', true)}><BarChart3 size={22} /></button>}{role === 'admin' && <button type="button" aria-label="System Controls" aria-current={location.pathname.startsWith('/admin/controls') ? 'page' : undefined} onClick={() => navigate('/admin/controls')} className={navButtonClass(location.pathname.startsWith('/admin/controls'), true)}><Sliders size={22} /></button>}</div> : renderDirectory()}

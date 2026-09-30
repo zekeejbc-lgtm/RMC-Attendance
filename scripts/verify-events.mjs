@@ -53,10 +53,14 @@ try {
   const student = await account('student', `${prefix}-section`);
   for (const [role, manager] of [['ssg', officer], ['ossa', osas]]) {
     const childId = `${prefix}-${role}-child`;
-    await command('addSchoolNode', [`${prefix}-department`, { id: childId, name: `${prefix} ${role} child`, type: 'section' }], manager.who);
+    if (role === 'ssg') {
+      assert.ok((await manager.who.rpc('rmc_command', { action: 'addSchoolNode', args: [`${prefix}-department`, { id: childId, name: 'Denied SSG unit', type: 'section' }] })).error);
+      pass('SSG cannot create units by default');
+    }
+    await command('addSchoolNode', [`${prefix}-department`, { id: childId, name: `${prefix} ${role} child`, type: 'section' }], role === 'ssg' ? admin : manager.who);
     nodes.push(childId);
     await command('updateSchoolNode', [childId, { name: `${prefix} ${role} managed child` }], manager.who);
-    pass(`${role} can create and manage units within the assigned unit`);
+    pass(`${role} can manage existing units within the assigned unit`);
     for (const outside of [`${prefix}-outside`, `${prefix}-campus`]) {
       assert.ok((await manager.who.rpc('rmc_command', { action: 'addSchoolNode', args: [outside, { id: `${prefix}-${role}-forbidden`, name: 'Forbidden', type: 'section' }] })).error);
       assert.ok((await manager.who.rpc('rmc_command', { action: 'updateSchoolNode', args: [outside, { name: 'Forbidden change' }] })).error);
@@ -77,6 +81,9 @@ try {
   assert.deepEqual(row.data.recipientGroups, ['All Students']);
   assert.equal(Date.parse(row.start_at), event().startTime); assert.equal(row.data.startDate, date);
   pass('officer creates persisted configuration with server-owned creator and scope');
+  assert.equal(row.data.approvalStatus, 'pending');
+  assert.ok(!checked(await student.who.rpc('rmc_snapshot')).events.some(e => e.id === id));
+  checked(await osas.who.rpc('rmc_review_event', { event_id: id, decision: 'approved', notes: 'Verified' }));
   assert.ok(checked(await student.who.rpc('rmc_snapshot')).events.some(e => e.id === id));
   pass('recipient can reload saved event from a separate authenticated session');
   const targeted = await command('createEvent', [event({

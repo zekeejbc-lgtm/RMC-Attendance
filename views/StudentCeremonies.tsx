@@ -1,3 +1,4 @@
+import ActivityApprovalQueue from '../components/events/ActivityApprovalQueue';
 import { appData, uploadDocument } from '../lib/backend';
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -66,7 +67,7 @@ const StudentCeremonies: React.FC = () => {
     const events = profile
       ? canManage || ['ossa', 'ossa_staff'].includes(profile.role) ? appData.getVisibleEvents(profile.uid) : appData.getEvents().filter(event => appData.isEventRecipient(event, profile) || isCeremonyVolunteer(event, profile, appData.getSchoolStructure()))
       : [];
-    const ceremonies: SchoolCeremony[] = events.filter(event => event.kind === 'flag_ceremony' && !event.cancellationStatus).map(event => ({
+    const ceremonies: SchoolCeremony[] = events.filter(event => event.kind === 'flag_ceremony' && !event.cancellationStatus && event.approvalStatus !== 'pending' && event.approvalStatus !== 'rejected').map(event => ({
       id: event.id, title: event.title, required: Boolean(profile && appData.isEventRecipient(event, profile)), volunteerMerit: event.ceremony?.allowVolunteerMerit ? event.ceremony.volunteerMeritHours : 0, date: manilaDate(event.startTime), geofenceEnabled: event.geofenceEnabled !== false, canEdit: canManage && canManageEventInScope(profile, event, appData.getSchoolStructure()) && event.status !== 'done', type: event.ceremony?.flagKind === 'retreat' ? 'flag_retreat' : 'flag_raising', scheduleDay: new Date(event.startTime).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
       timeFrame: `${new Date(event.startTime).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })} - ${new Date(event.endTime).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })}`,
       locationName: event.geofenceEnabled ? 'Designated event area' : 'See event instructions', geofenceRadius: event.location.radius_meters,
@@ -182,6 +183,7 @@ const StudentCeremonies: React.FC = () => {
       />
 
       {/* SEARCH & FILTER */}
+      <ActivityApprovalQueue purpose="ceremony" />
       <Surface aria-label="Ceremony filters" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
           <SearchInput ariaLabel="Search ceremonies" className="flex-1" onChange={setSearchTerm} placeholder="Search ceremony..." value={searchTerm} />
 
@@ -262,7 +264,7 @@ const StudentCeremonies: React.FC = () => {
               <button
                 aria-label="File for excuse"
                 onClick={() => { setSubmittedExcuse(false); setExcuseError(''); setExcuseDetails(''); setSelectedFile(null); setFilePreviewName(''); setShowExcuseModal(true); }}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gold-gradient px-6 py-3 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition-all hover:brightness-110 active:scale-95 sm:w-auto"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl app-button--gold px-6 py-3 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition-all hover:brightness-110 active:scale-95 sm:w-auto"
                 type="button"
               >
               <FileUp size={16} /> Excuse
