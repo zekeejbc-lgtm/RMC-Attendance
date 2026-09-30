@@ -237,7 +237,7 @@ const StudentProfile: React.FC = () => {
       // Remove the replaced Drive object only after Supabase points at the new one.
       const previousId = driveFileIdFromUrl(previousUrl);
       if (previousId && previousId !== uploaded.id) {
-        try { await deleteDriveImage(previousId); } catch (error) { console.warn('Old profile image could not be removed from Drive.', error); }
+        try { await deleteDriveImage(previousId, 'replacement'); } catch (error) { console.warn('Old profile image could not be removed from Drive.', error); }
       }
       setPhotoFile(null);
       setPhotoPreview(uploaded.url);
@@ -247,8 +247,8 @@ const StudentProfile: React.FC = () => {
       const detail = error && typeof error === 'object' && 'message' in error
         ? String((error as { message?: unknown }).message || '')
         : error instanceof Error ? error.message : '';
-      if (uploadedId) void deleteDriveImage(uploadedId).catch(() => undefined);
       setPhotoError(detail || 'Unable to save your profile photo.');
+      if (uploadedId) await deleteDriveImage(uploadedId, 'failed-save').catch(() => undefined);
     } finally {
       setIsSavingPhoto(false);
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { SchoolNode } from '../../types';
 import { findNodePath } from '../../lib/academicDirectory';
@@ -11,9 +11,10 @@ interface Props {
   roots: SchoolNode[];
   selected: string[];
   onChange: (groups: string[]) => void;
+  onPendingChange?: (pending: boolean) => void;
 }
 
-export function EventRecipientPicker({ roots, selected, onChange }: Props) {
+export function EventRecipientPicker({ roots, selected, onChange, onPendingChange }: Props) {
   const [type, setType] = useState('directory');
   const [path, setPath] = useState<string[]>([]);
   // Resolve against the current directory, including after a backend refresh.
@@ -21,6 +22,7 @@ export function EventRecipientPicker({ roots, selected, onChange }: Props) {
   const available = currentPath.length > 0 && currentPath.every(node => !node.metadata?.archived && node.metadata?.selectableForEvents !== false);
   const candidate = type === 'directory' ? (available ? `node:${currentPath[currentPath.length - 1].id}` : '') : type;
   const duplicate = selected.includes(candidate);
+  useEffect(() => { onPendingChange?.(Boolean(candidate && !duplicate)); }, [candidate, duplicate, onPendingChange]);
   const add = () => {
     if (!candidate || duplicate) return;
     onChange(candidate === 'All Students' ? [candidate] : [...selected.filter(group => group !== 'All Students'), candidate]);
@@ -43,6 +45,7 @@ export function EventRecipientPicker({ roots, selected, onChange }: Props) {
     <div className="flex flex-wrap items-center gap-3">
       <Button type="button" variant="secondary" disabled={!candidate || duplicate} onClick={add}><Plus size={16} /> Add recipient</Button>
       {duplicate && <p className="text-xs text-slate-500">This recipient is already added.</p>}
+      {candidate && !duplicate && <p className="text-sm text-amber-700">Click Add recipient to include this selection before continuing.</p>}
     </div>
     <div aria-label="Added event recipients" role="status" className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/70">
       <div className="flex flex-wrap gap-2">

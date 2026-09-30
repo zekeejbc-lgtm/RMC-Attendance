@@ -102,7 +102,7 @@ const SSGPanel: React.FC = () => {
     setStructure(profile && typeof appData.getVisibleSchoolStructure === 'function'
       ? appData.getVisibleSchoolStructure(profile.uid)
       : appData.getSchoolStructure());
-    setEvents(profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents());
+    setEvents((profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents()).filter(event => !event.isGeneralEvent));
     
     // Check if the current user has selected student open to refresh their data
     if (selectedStudent) {

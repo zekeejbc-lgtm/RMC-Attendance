@@ -20,7 +20,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     {
       const refresh = () => {
-        const events = (profile ? appData.getRecipientEvents(profile.uid) : []).filter(e => e.status === 'active' && !e.cancellationStatus);
+        const events = (profile ? appData.getRecipientEvents(profile.uid) : []).filter(e => !e.isGeneralEvent && e.status === 'active' && !e.cancellationStatus);
         setActiveEvents(events);
       };
       refresh();

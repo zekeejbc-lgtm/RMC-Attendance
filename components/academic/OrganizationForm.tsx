@@ -66,7 +66,7 @@ export default function OrganizationForm({ organization, profile, onClose, initi
       onClose();
     } catch (error) {
       setError(organizationError(error));
-      if (uploaded) await deleteDriveImage(uploaded.id).catch(() => {});
+      if (uploaded) await deleteDriveImage(uploaded.id, 'failed-save').catch(() => {});
     } finally { setBusy(false); }
   };
 

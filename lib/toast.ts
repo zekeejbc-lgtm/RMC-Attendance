@@ -1,5 +1,10 @@
 export type ToastKind = 'progress' | 'success' | 'error';
-export interface ToastItem { id: number; kind: ToastKind; message: string; code?: string }
+export interface ToastItem { id: number; kind: ToastKind; message: string; code?: string; title?: string; phases?: string[]; phase?: number; percent?: number; occurrences?: number; request?: boolean }
+export interface OperationProgress {
+  step: (phase: number) => void;
+  fail: (error: unknown, message?: string) => void;
+  complete: (message?: string) => void;
+}
 const listeners = new Set<() => void>();
 const timers = new Map<number, ReturnType<typeof setTimeout>>();
 let items: ToastItem[] = [];
@@ -16,9 +21,20 @@ function dismiss(id: number) {
 }
 function show(kind: ToastKind, message: string, code?: string, id = ++sequence) {
   clearTimeout(timers.get(id));
-  items = [...items.filter(item => item.id !== id), { id, kind, message, code }];
-  while (items.length > 3) { const old = items.shift()!; clearTimeout(timers.get(old.id)); timers.delete(old.id); }
-  timers.set(id, setTimeout(() => dismiss(id), kind === 'progress' ? 30000 : kind === 'error' ? 7000 : 3500));
+  const previous = items.find(item => item.id === id);
+  const next = { ...previous, id, kind, message, code };
+  // Background polling can repeat the same failure. Keep one reviewable entry.
+  if (kind === 'error') {
+    const duplicates = items.filter(item => item.id !== id && item.kind === 'error' && item.code === code && item.message === message);
+    if (duplicates.length) {
+      next.occurrences = 1 + duplicates.reduce((count, item) => count + (item.occurrences || 1), 0);
+      items = items.filter(item => !duplicates.includes(item));
+    }
+  }
+  if (kind === 'success' && previous?.phases) next.percent = 100;
+  items = previous ? items.map(item => item.id === id ? next : item) : [...items, next];
+  // Active requests and failures stay available until finished or dismissed.
+  if (kind === 'success') timers.set(id, setTimeout(() => dismiss(id), 3500));
   emit(); return id;
 }
 
@@ -27,18 +43,18 @@ export function classifyError(error: unknown) {
   const value = error as { code?: string; status?: number; name?: string; message?: string } | null;
   const code = String(value?.code || '');
   const message = String(value?.message || error || '').toLowerCase();
-  if (value?.name === 'NotAllowedError' || /camera|geolocation/.test(message)) return { code: 'DEVICE-001', message: 'Device access failed. Check camera or location permissions.' };
+  if (value?.name === 'NotAllowedError' || /camera|geolocation/.test(message)) return { code: 'DEVICE-001', message: 'Camera or location access is blocked.' };
   if (value?.name === 'AbortError') return { code: 'ACT-001', message: 'Action cancelled.' };
-  if (value?.name === 'TimeoutError' || /timeout|timed out/.test(message)) return { code: 'NET-002', message: 'Request timed out. Check the result before retrying.' };
-  if (/fetch|network|offline|connection/.test(message)) return { code: 'NET-001', message: 'Connection interrupted. Check your connection and retry.' };
-  if (value?.status === 429 || /rate.limit|too many requests/.test(message)) return { code: 'LIMIT-001', message: 'Too many requests. Please wait and retry.' };
-  if (value?.status === 401 || /credentials|password|sign in|jwt|session|otp|auth/.test(message)) return { code: 'AUTH-001', message: 'Authentication failed. Check your details or sign in again.' };
-  if (value?.status === 403 || code === '42501' || /permission|not allowed|forbidden|denied|unauthorized/.test(message)) return { code: 'ACCESS-001', message: 'You do not have permission for this action.' };
-  if (value?.status === 409 || code === '23505' || /duplicate|already exists|conflict/.test(message)) return { code: 'DATA-001', message: 'This conflicts with an existing record. Refresh and check it.' };
-  if (value?.status === 404 || /not found|no longer exists/.test(message)) return { code: 'DATA-002', message: 'This record is no longer available. Refresh and try again.' };
-  if (value?.status === 413 || /file|upload|5 mb/.test(message)) return { code: 'FILE-001', message: 'Upload failed. Check the file type and size, then retry.' };
-  if ([400, 422].includes(value?.status || 0) || /invalid|required|choose|must |missing/.test(message)) return { code: 'INPUT-001', message: 'Check the entered values and try again.' };
-  return { code: 'SYS-001', message: 'The action could not be completed. Please try again.' };
+  if (value?.name === 'TimeoutError' || /timeout|timed out/.test(message)) return { code: 'NET-002', message: 'This is taking too long.' };
+  if (/fetch|network|offline|connection/.test(message)) return { code: 'NET-001', message: 'Connection lost.' };
+  if (value?.status === 429 || /rate.limit|too many requests/.test(message)) return { code: 'LIMIT-001', message: 'Please wait before trying again.' };
+  if (value?.status === 401 || /credentials|password|sign in|jwt|session|otp|auth/.test(message)) return { code: 'AUTH-001', message: 'Could not verify your sign-in details.' };
+  if (value?.status === 403 || code === '42501' || /permission|not allowed|forbidden|denied|unauthorized/.test(message)) return { code: 'ACCESS-001', message: 'You do not have permission to do this.' };
+  if (value?.status === 409 || code === '23505' || /duplicate|already exists|conflict/.test(message)) return { code: 'DATA-001', message: 'A matching record already exists.' };
+  if (value?.status === 404 || /not found|no longer exists/.test(message)) return { code: 'DATA-002', message: 'This record is no longer available.' };
+  if (value?.status === 413 || /file|upload|5 mb/.test(message)) return { code: 'FILE-001', message: 'Could not upload this file.' };
+  if ([400, 422].includes(value?.status || 0) || /invalid|required|choose|must |missing/.test(message)) return { code: 'INPUT-001', message: 'Some details are missing or incorrect.' };
+  return { code: 'SYS-001', message: 'Something went wrong.' };
 }
 function errorToast(error: unknown, id?: number) {
   const value = error as { name?: string; message?: string; code?: string; details?: string; hint?: string; status?: number } | null;
@@ -60,6 +76,33 @@ function errorToast(error: unknown, id?: number) {
 }
 export const toast = {
   dismiss,
+  start(label: string, phases = ['Getting ready', 'Working on it', 'Finishing up'], request = false): OperationProgress {
+    const id = request ? ++sequence : show('progress', phases[0]);
+    let finished = false;
+    let currentPhase = 0;
+    const step = (phase: number) => {
+      if (finished) return;
+      currentPhase = phase;
+      items = items.map(item => item.id === id ? { ...item, title: label, request, phases, phase, percent: Math.round(phase / phases.length * 100), message: phases[phase] } : item);
+      emit();
+    };
+    const publish = () => { show('progress', phases[currentPhase], undefined, id); step(currentPhase); };
+    // Fast background checks stay quiet; longer requests still show progress.
+    const delay = request ? setTimeout(publish, 500) : undefined;
+    step(0);
+    return {
+      step,
+      complete(message = `${label} completed`) { if (finished) return; finished = true; clearTimeout(delay); if (request) dismiss(id); else show('success', message, undefined, id); },
+      fail(error, message) {
+        if (finished) return;
+        clearTimeout(delay);
+        if (request && !items.some(item => item.id === id)) publish();
+        finished = true;
+        errorToast(error, id);
+        if (message) { items = items.map(item => item.id === id ? { ...item, message } : item); emit(); }
+      },
+    };
+  },
   progress: (message: string) => show('progress', message),
   success: (message: string, id?: number) => show('success', message, undefined, id),
   error: errorToast,
@@ -68,19 +111,20 @@ export const toast = {
     try { const result = operation(); show('success', success, undefined, id); return result; }
     catch (error) { errorToast(error, id); throw error; }
   },
-  async track<T>(operation: () => PromiseLike<T>, label: string, success = `${label} completed`) {
-    const id = show('progress', `${label}…`);
-    try { const result = await operation(); show('success', success, undefined, id); return result; }
-    catch (error) { errorToast(error, id); throw error; }
+  async track<T>(operation: (progress: OperationProgress) => PromiseLike<T>, label: string, success = `${label} completed`, phases = ['Working on it']) {
+    const progress = toast.start(label, phases);
+    try { const result = await operation(progress); progress.complete(success); return result; }
+    catch (error) { progress.fail(error); throw error; }
   },
   // APIs that resolve with { error } must not show a false success.
   async result<T extends { error?: unknown }>(operation: () => PromiseLike<T>, label: string, success?: string): Promise<T> {
-    const id = show('progress', `${label}…`);
+    const progress = toast.start(label, ['Working on it', 'Finishing up']);
     try {
       const result = await operation();
-      if (result.error) errorToast(result.error, id);
-      else show('success', success || `${label} completed`, undefined, id);
+      progress.step(1);
+      if (result.error) progress.fail(result.error);
+      else progress.complete(success || `${label} completed`);
       return result;
-    } catch (error) { errorToast(error, id); throw error; }
+    } catch (error) { progress.fail(error); throw error; }
   },
 };

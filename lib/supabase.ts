@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { backendFetch } from './backendFetch';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -8,6 +9,7 @@ export const configurationError = !url || !key
 
 // No privileged key, local database, or demo fallback is shipped to the browser.
 export const supabase = createClient(url || 'https://unconfigured.supabase.co', key || 'unconfigured', {
+  global: { fetch: backendFetch },
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
@@ -23,7 +25,7 @@ export async function executeSensitiveAction(action: string, target: string, con
   requireConfiguration();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user?.email) throw new Error('Sign in again before continuing.');
-  const verifier = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'rmc-sensitive-action' } });
+  const verifier = createClient(url, key, { global: { fetch: backendFetch }, auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'rmc-sensitive-action' } });
   try {
     const login = await verifier.auth.signInWithPassword({ email: user.email, password: confirmation.password });
     if (login.error || login.data.user?.id !== user.id) throw new Error('Incorrect current password.');
@@ -43,7 +45,7 @@ export async function executeSensitiveAction(action: string, target: string, con
 // Reauthentication must not downgrade the active browser's verified MFA session.
 export async function verifyPassword(email: string, password: string) {
   requireConfiguration();
-  const verifier = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'rmc-password-verification' } });
+  const verifier = createClient(url, key, { global: { fetch: backendFetch }, auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'rmc-password-verification' } });
   const { error } = await verifier.auth.signInWithPassword({ email, password });
   if (!error) await verifier.auth.signOut({ scope: 'local' });
   return !error;

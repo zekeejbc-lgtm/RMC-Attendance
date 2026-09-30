@@ -1,3 +1,4 @@
+import { attendanceWindowTitle, eventDisplayTitle } from '../lib/eventGroups';
 import { escapeHtml } from '../lib/export';
 import { appData } from '../lib/backend';
 import React, { useState, useMemo } from 'react';
@@ -35,7 +36,7 @@ const StudentRecords: React.FC = () => {
   const { profile, revision, stats: userStats } = useAuth();
   const activityCredits = useMemo(() => appData.getAttendanceRecords(profile?.uid || '').filter(r => ['service', 'merit'].includes(r.event?.kind || '')), [profile?.uid, revision]);
   const records: AttendanceRecord[] = useMemo(() => appData.getAttendanceRecords(profile?.uid || '').map(r => ({
-    id: r.id, title: r.event?.title || 'Archived event', category: r.event?.kind === 'flag_ceremony' ? 'Ceremony' : 'Event',
+    id: r.id, title: r.event ? [eventDisplayTitle(r.event, appData.getEvents()), attendanceWindowTitle(r.event, r.slot)].filter(Boolean).join(' / ') : 'Archived event', category: r.event?.kind === 'flag_ceremony' ? 'Ceremony' : 'Event',
     date: r.slot === 'default' ? new Date(r.event?.startTime || r.time_in).toLocaleDateString() : r.slot.split(':')[0],
     timeIn: r.time_in ? new Date(r.time_in).toLocaleTimeString() : '?', status: r.status, scannedBy: r.scanned_by_name || 'System',
   })), [profile?.uid, revision]);

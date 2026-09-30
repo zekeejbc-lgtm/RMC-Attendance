@@ -64,7 +64,7 @@ export const GeofenceMap: React.FC<GeofenceMapProps> = ({ value, onChange, posit
         {position && <Circle center={[position.latitude, position.longitude]} radius={Math.max(position.accuracy, 3)} pathOptions={{ color: '#16a34a', fillOpacity: 0.4 }} />}
       </MapContainer>
       <div aria-label="Selected geofence location" className="pointer-events-none absolute bottom-3 left-3 z-[500] rounded-lg bg-white/95 px-3 py-2 text-[11px] font-bold text-brand-900 shadow-md backdrop-blur dark:bg-slate-900/95 dark:text-white" role="status">
-        <span className="block">{onChange ? 'Tap the map or drag the marker to set the center.' : 'Event attendance boundary; green shows your GPS position.'}</span>
+        <span className="block">{onChange ? 'Tap the map or drag the marker to set the center.' : position ? 'Event attendance boundary; green shows your GPS position.' : 'The marker shows the event center. The blue circle is the attendance boundary.'}</span>
         <span className="mt-0.5 block font-semibold text-slate-600 dark:text-slate-300">{value.lat.toFixed(6)}, {value.lng.toFixed(6)}</span>
       </div>
     </div>

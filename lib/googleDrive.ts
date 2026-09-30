@@ -1,3 +1,5 @@
+import { toast, type OperationProgress } from './toast';
+
 const DEFAULT_GOOGLE_DRIVE_GAS_URL = 'https://script.google.com/macros/s/AKfycby2BH5kpT9BN1BX2ODlGmjz6oIbKnbChfZuCAv2QDDcLvVbGB0RJXz1uaJ1eTHJ_t8/exec';
 export const GOOGLE_DRIVE_GAS_URL = import.meta.env.VITE_GOOGLE_DRIVE_GAS_URL || DEFAULT_GOOGLE_DRIVE_GAS_URL;
 export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -48,7 +50,8 @@ function readableResponseError(text: string, status: number) {
   return plain.slice(0, 300) || responseError({}, status);
 }
 
-async function request<T = DriveResponse>(body: Record<string, unknown>): Promise<T> {
+async function request<T = DriveResponse>(body: Record<string, unknown>, progress: OperationProgress): Promise<T> {
+  progress.step(2);
   const response = await fetch(GOOGLE_DRIVE_GAS_URL, {
     method: 'POST',
     // text/plain avoids a browser preflight against Apps Script while still carrying JSON.
@@ -56,6 +59,7 @@ async function request<T = DriveResponse>(body: Record<string, unknown>): Promis
     body: JSON.stringify(body),
     redirect: 'follow',
   });
+  progress.step(3);
   const text = await response.text();
   let payload: DriveResponse;
   try { payload = JSON.parse(text) as DriveResponse; }
@@ -67,32 +71,80 @@ async function request<T = DriveResponse>(body: Record<string, unknown>): Promis
 function unwrap(payload: DriveResponse): DriveImageResult {
   const value = payload.result || payload;
   if (!value.id || !value.url) throw new Error('Google Drive returned no public image URL.');
-  return { id: value.id, name: value.name || 'profile-image', url: publicDriveImageUrl(value.url) };
+  if (!/^[a-zA-Z0-9_-]+$/.test(value.id)) throw new Error('Google Drive returned an invalid file ID.');
+  // Persist the canonical Drive URL accepted by profile and enrollment validation.
+  // publicDriveImageUrl/driveImageCandidates choose display URLs when rendering.
+  return { id: value.id, name: value.name || 'profile-image', url: `https://drive.google.com/thumbnail?id=${value.id}&sz=w1600` };
 }
 
+const drivePhases = ['Checking your photo', 'Preparing your photo', 'Working on your photo', 'Finishing up'];
+
 export async function createDriveImage(file: File, personName: string, studentId: string) {
-  validateProfileImage(file);
-  const dataUrl = await fileAsDataUrl(file);
-  return unwrap(await request({ action: 'create', name: personName, studentId, mimeType: file.type, dataUrl }));
+  return toast.track(async progress => {
+    validateProfileImage(file);
+    progress.step(1);
+    const dataUrl = await fileAsDataUrl(file);
+    return unwrap(await request({ action: 'create', name: personName, studentId, mimeType: file.type, dataUrl }, progress));
+  }, 'Upload photo', 'Photo uploaded', drivePhases);
 }
 
 export async function updateDriveImage(fileId: string, file: File, personName: string, studentId: string) {
-  validateProfileImage(file);
-  const dataUrl = await fileAsDataUrl(file);
-  return unwrap(await request({ action: 'update', fileId, name: personName, studentId, mimeType: file.type, dataUrl }));
+  return toast.track(async progress => {
+    validateProfileImage(file);
+    progress.step(1);
+    const dataUrl = await fileAsDataUrl(file);
+    return unwrap(await request({ action: 'update', fileId, name: personName, studentId, mimeType: file.type, dataUrl }, progress));
+  }, 'Replace photo', undefined, drivePhases);
 }
 
-export async function deleteDriveImage(fileId: string) {
-  if (fileId) await request({ action: 'delete', fileId });
+// Non-upload operations use the same transport phases without file preparation.
+function driveRequest<T>(label: string, operation: (progress: OperationProgress) => Promise<T>) {
+  return toast.track(progress => operation({ ...progress, step: phase => progress.step(phase - 2) }), label, undefined,
+    ['Working on your photo', 'Finishing up']);
 }
+export type PhotoRemovalReason = 'failed-save' | 'replacement' | 'delete';
 
+const removalMessages = {
+  'failed-save': {
+    title: 'Clean up unsaved photo',
+    phases: ['Removing the upload after the save failed', 'Confirming cleanup'],
+    success: 'Unsaved upload removed. Your previous photo was kept.',
+    error: 'Could not clean up the unsaved upload. An extra copy may remain in Drive.',
+  },
+  replacement: {
+    title: 'Remove replaced photo',
+    phases: ['Removing the old photo after saving the new one', 'Confirming old photo removal'],
+    success: 'Old photo removed. Your new photo is saved.',
+    error: 'Your new photo is saved, but the old copy could not be removed from Drive.',
+  },
+  delete: {
+    title: 'Delete photo',
+    phases: ['Moving the photo to Drive trash', 'Confirming deletion'],
+    success: 'Photo moved to Drive trash.',
+    error: 'Could not delete the photo from Drive.',
+  },
+};
+
+export async function deleteDriveImage(fileId: string, reason: PhotoRemovalReason = 'delete') {
+  if (!fileId) return;
+  const messages = removalMessages[reason];
+  const progress = toast.start(messages.title, messages.phases);
+  try {
+    await request({ action: 'delete', fileId }, { ...progress, step: phase => progress.step(phase - 2) });
+    progress.complete(messages.success);
+  } catch (error) {
+    progress.fail(error, messages.error);
+    throw error;
+  }
+}
 export async function getDriveImage(fileId: string) {
-  return unwrap(await request({ action: 'read', fileId }));
+  return driveRequest('Load photo', async progress => unwrap(await request({ action: 'read', fileId }, progress)));
 }
-
 export async function listDriveImages() {
-  const payload = await request<{ files?: DriveImageResult[] }>({ action: 'list' });
-  return payload.files || [];
+  return driveRequest('Load photos', async progress => {
+    const payload = await request<{ files?: DriveImageResult[] }>({ action: 'list' }, progress);
+    return payload.files || [];
+  });
 }
 
 export function driveFileIdFromUrl(url: string | undefined) {

@@ -19,6 +19,7 @@ const SSGCreateCeremony = lazy(() => import('./views/SSGCreateCeremony'));
 const SSGCreateEvent = lazy(() => import('./views/SSGCreateEvent'));
 const LandingPage = lazy(() => import('./views/LandingPage'));
 const Organizations = lazy(() => import('./views/Organizations'));
+const GeneralEvent = lazy(() => import('./views/GeneralEvent'));
 const OrganizationEvent = lazy(() => import('./views/OrganizationEvent'));
 
 const AttendanceDashboard = lazy(() => import('./views/AttendanceDashboard'));
@@ -93,6 +94,9 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
+          <Route path="/student/events/:eventId" element={<ProtectedRoute roles={['student', 'mayor', 'ssg']}><GeneralEvent student /></ProtectedRoute>} />
+          <Route path="/ssg/events/:eventId" element={<ProtectedRoute permission="events.manage" roles={['ssg', 'admin', 'ossa']}><GeneralEvent /></ProtectedRoute>} />
+          <Route path="/organizations/:organizationId/events/:eventId" element={<ProtectedRoute><GeneralEvent /></ProtectedRoute>} />
           <Route path="/student/events" element={
             <ProtectedRoute roles={['student', 'mayor', 'ssg']}>
               <StudentEvents />

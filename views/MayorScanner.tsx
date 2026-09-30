@@ -1,3 +1,4 @@
+import { eventDisplayTitle } from '../lib/eventGroups';
 import { toast } from '../lib/toast';
 import { GeofenceMap } from '../components/events/GeofenceMap';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
@@ -72,7 +73,7 @@ const MayorScanner: React.FC = () => {
   useEffect(() => {
     {
       const now = Date.now();
-      const visibleEvents = profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents();
+      const visibleEvents = (profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents()).filter(event => !event.isGeneralEvent);
       setEvents(visibleEvents.filter(event => event.approvalStatus !== 'pending' && event.approvalStatus !== 'rejected').map((event) => ({
         ...event,
         startTime: eventTime(event.startTime, now - 60000),
@@ -267,7 +268,7 @@ const MayorScanner: React.FC = () => {
         <PageHeader
           eyebrow="Mayor workspace · Attendance"
           title="Attendance recording"
-          description={selectedEvent ? `${selectedEvent.title} · Verify each student before saving their attendance.` : 'Record student attendance.'}
+          description={selectedEvent ? `${eventDisplayTitle(selectedEvent, appData.getEvents())} · Verify each student before saving their attendance.` : 'Record student attendance.'}
           actions={<Button variant="secondary" className="sm:w-auto" onClick={closeScanner}><ArrowLeft size={17} /> Back to events</Button>}
         />
 
@@ -354,7 +355,7 @@ const MayorScanner: React.FC = () => {
         <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-7 xl:grid-cols-3">
           {groupedEvents[tab].map((event) => (
             <button key={event.id} type="button" onClick={() => openEvent(event)} className="group flex min-h-40 flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50/70 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-gold-400 hover:bg-white hover:shadow-lg dark:border-slate-700 dark:bg-slate-900/70 dark:hover:bg-slate-800">
-              <span><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${tab === 'current' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : tab === 'scheduled' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}><span className={`h-1.5 w-1.5 rounded-full ${tab === 'current' ? 'animate-pulse bg-emerald-500' : 'bg-current'}`} />{tab}</span><span className="mt-3 block text-base font-black text-brand-900 dark:text-white">{event.title}</span></span>
+              <span><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${tab === 'current' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : tab === 'scheduled' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}><span className={`h-1.5 w-1.5 rounded-full ${tab === 'current' ? 'animate-pulse bg-emerald-500' : 'bg-current'}`} />{tab}</span><span className="mt-3 block text-base font-black text-brand-900 dark:text-white">{eventDisplayTitle(event, appData.getEvents())}</span></span>
               <span className="mt-5 flex items-end justify-between gap-3"><span className="text-xs font-semibold leading-5 text-slate-500 dark:text-slate-400"><Clock3 size={13} className="mr-1 inline" />{formatEventTime(event.startTime)}<br /><MapPin size={13} className="mr-1 inline" />{event.location.radius_meters} m geofence</span><ChevronRight className="text-gold-500 transition-transform group-hover:translate-x-1" size={20} /></span>
             </button>
           ))}

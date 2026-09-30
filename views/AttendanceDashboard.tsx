@@ -1,3 +1,4 @@
+import { attendanceWindowTitle, eventDisplayTitle } from '../lib/eventGroups';
 import { toast } from '../lib/toast';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -45,6 +46,8 @@ interface FilterState {
 }
 
 interface AttendanceRecord {
+  id: string;
+  eventTitle: string;
   studentId: string;
   studentName: string;
   status: 'present' | 'late' | 'excused' | 'absent' | 'not_recorded';
@@ -96,7 +99,7 @@ const AttendanceDashboard: React.FC = () => {
   // Load initial data
   useEffect(() => {
     {
-      setEvents(profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents());
+      setEvents((profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents()).filter(event => !event.isGeneralEvent));
     }
   }, [revision, profile]);
 
@@ -120,11 +123,15 @@ const AttendanceDashboard: React.FC = () => {
             && matches(filters.gradeLevel || filters.yearLevel || filters.elemGradeLevel, data.level)
             && matches(filters.major, data.major) && matches(filters.college, data.department)
             && (!filters.secondaryType || (filters.secondaryType === 'shs' ? /senior/i : /junior/i).test(data.department || ''));
-        }).map(student => ({ studentId: student.student_id, studentName: student.name,
-          status: logs[student.uid]?.status || (event.status === 'done' ? 'absent' : 'not_recorded'),
-          timeIn: logs[student.uid]?.time_in, section: student.school_data.section,
-          program: student.school_data.program || student.school_data.strand, level: student.school_data.level,
-        }));
+        }).flatMap(student => {
+          const records = appData.getAttendanceRecords?.(student.uid).filter(record => record.event?.id === event.id) || [];
+          const rows = records.length ? records : [{ id: `${event.id}:${student.uid}`, slot: '', status: logs[student.uid]?.status || (event.status === 'done' ? 'absent' : 'not_recorded'), time_in: logs[student.uid]?.time_in }];
+          return rows.map(record => ({ id: `${student.uid}:${record.id}`, studentId: student.student_id, studentName: student.name,
+            eventTitle: [eventDisplayTitle(event, appData.getEvents()), record.slot === 'default' ? '' : record.slot.split(':')[0], attendanceWindowTitle(event, record.slot)].filter(Boolean).join(' / '),
+            status: record.status as AttendanceRecord['status'], timeIn: record.time_in, section: student.school_data.section,
+            program: student.school_data.program || student.school_data.strand, level: student.school_data.level,
+          }));
+        });
       });
   }, [events, filters, selectedEvents, profile, timeFilter, dateRange]);
   
@@ -230,6 +237,7 @@ const AttendanceDashboard: React.FC = () => {
       doc.text('Detailed Records', 14, 20);
       
       const tableBody = attendanceData.map(r => [
+        r.eventTitle,
         r.studentName,
         r.studentId,
         r.status.toUpperCase(),
@@ -240,7 +248,7 @@ const AttendanceDashboard: React.FC = () => {
 
       autoTable(doc, {
         startY: 30,
-        head: [['Name', 'ID', 'Status', 'Section', 'Level', 'Time In']],
+        head: [['Event / Window', 'Name', 'ID', 'Status', 'Section', 'Level', 'Time In']],
         body: tableBody,
         theme: 'grid',
         headStyles: { fillColor: [14, 27, 66] },
@@ -254,8 +262,9 @@ const AttendanceDashboard: React.FC = () => {
 
   const handleExportCSV = () => {
     return toast.sync(() => {
-    const headers = ['Student Name', 'Student ID', 'Status', 'Section', 'Level', 'Time In'];
+    const headers = ['Event / Window', 'Student Name', 'Student ID', 'Status', 'Section', 'Level', 'Time In'];
     const rows = attendanceData.map(r => [
+      r.eventTitle,
       r.studentName,
       r.studentId,
       r.status,
@@ -308,7 +317,7 @@ const AttendanceDashboard: React.FC = () => {
               if (Array.isArray(value)) setSelectedEvents(value);
               else setSelectedEvents([value]);
             }}
-            options={events.map((event) => ({ value: event.id, label: event.title }))}
+            options={events.map((event) => ({ value: event.id, label: eventDisplayTitle(event, appData.getEvents()) }))}
             placeholder="All Events"
             searchable
             value={selectedEvents}
@@ -411,9 +420,9 @@ const AttendanceDashboard: React.FC = () => {
           <h2 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-brand-900 dark:text-white"><Users size={14} className="text-gold-500" /> Recent Logs</h2>
           <div className="max-h-72 flex-1 space-y-3 overflow-y-auto pr-1">
             {attendanceData.slice(0, 10).map((record) => (
-              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900" key={record.studentId}>
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900" key={record.id}>
                 <span aria-hidden="true" className={`h-10 w-2 shrink-0 rounded-full ${record.status === 'present' ? 'bg-emerald-500' : record.status === 'late' ? 'bg-amber-500' : record.status === 'absent' ? 'bg-red-500' : 'bg-slate-300'}`} />
-                <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-brand-900 dark:text-white">{record.studentName}</p><p className="text-[10px] uppercase tracking-wider text-slate-500">{record.studentId}</p></div>
+                <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></p><p className="text-[10px] uppercase tracking-wider text-slate-500">{record.studentId}</p></div>
                 <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-500">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
               </div>
             ))}
@@ -430,14 +439,14 @@ const AttendanceDashboard: React.FC = () => {
           <table aria-label="Attendance records" className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-900 dark:text-slate-300"><tr><th className="px-5 py-3">Student</th><th className="px-5 py-3">ID</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Section</th><th className="px-5 py-3">Level</th><th className="px-5 py-3">Time In</th></tr></thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-              {attendanceData.map((record) => <tr key={record.studentId}><td className="px-5 py-3 font-semibold text-brand-900 dark:text-white">{record.studentName}</td><td className="px-5 py-3 font-mono text-xs text-slate-500">{record.studentId}</td><td className="px-5 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.section}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.level}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString() : '-'}</td></tr>)}
+              {attendanceData.map((record) => <tr key={record.id}><td className="px-5 py-3 font-semibold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></td><td className="px-5 py-3 font-mono text-xs text-slate-500">{record.studentId}</td><td className="px-5 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.section}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.level}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString() : '-'}</td></tr>)}
             </tbody>
           </table>
         </div>
         <div className="space-y-3 p-4 md:hidden">
           {attendanceData.map((record) => (
-            <article aria-label={`${record.studentName} attendance record`} className="mobile-data-card rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900" key={record.studentId}>
-              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="font-bold text-brand-900 dark:text-white">{record.studentName}</h3><p className="font-mono text-xs text-slate-500">{record.studentId}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></div>
+            <article aria-label={`${record.studentName} attendance record`} className="mobile-data-card rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900" key={record.id}>
+              <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="font-bold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></h3><p className="font-mono text-xs text-slate-500">{record.studentId}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></div>
               <dl className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt className="font-semibold text-slate-500">Section</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.section}</dd></div><div><dt className="font-semibold text-slate-500">Level</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.level}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">Time In</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString() : '-'}</dd></div></dl>
             </article>
           ))}

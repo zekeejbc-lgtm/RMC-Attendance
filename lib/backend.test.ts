@@ -5,6 +5,7 @@ vi.mock('./supabase', () => ({
   supabase: { rpc: api.rpc, from: () => ({ select: api.select }), functions: { invoke: api.invoke }, auth: { signUp: api.signUp } },
 }));
 import { appData, refreshData, resetData } from './backend';
+import { toastStore } from './toast';
 import type { UserProfile } from '../types';
 
 const applicant = { email: 'student@example.edu', name: 'Student', username: 'student_123', student_id: '123', school_data: {} } as UserProfile;
@@ -29,6 +30,7 @@ it('preserves a successful resubmission when its subsequent refresh fails', asyn
   api.rpc.mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: null, error: { message: 'Offline' } });
   await expect(appData.submitApplication(applicant, '')).resolves.toEqual({ uid: 'student', needsEmailConfirmation: false });
   expect(api.signUp).not.toHaveBeenCalled();
+  expect(toastStore.getSnapshot()).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'Submit application', kind: 'error', phase: 1, message: expect.stringContaining('Changes saved') })]));
 });
 
 function snapshot() {
@@ -45,6 +47,21 @@ function snapshot() {
 }
 beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); resetData('student'); });
 afterEach(() => { resetData(); });
+
+it.each(['ssg', 'student'])('shows school-wide general events to an unassigned %s without exposing restricted events', async role => {
+  const data = snapshot();
+  data.profiles[0].role = role;
+  const general = { id: 'general', title: 'Intramurals', startTime: 1, endTime: 2, isGeneralEvent: true, recipientGroups: ['All Students'], audienceTarget: { mode: 'all' } };
+  const events = [general,
+    { ...general, id: 'restricted', scopeNodeId: 'another-unit' },
+    { ...general, id: 'pending-approval', approvalStatus: 'pending' },
+  ];
+  api.rpc.mockResolvedValue({ data: { ...data, events }, error: null });
+  await refreshData();
+  expect(appData.getVisibleEvents('student').map(event => event.id)).toEqual(['general']);
+  expect(appData.getRecipientEvents('student').map(event => event.id)).toEqual(['general']);
+  expect(appData.getVisibleEvents('unknown')).toEqual([]);
+});
 
 it('starts empty and never seeds or persists school records in local storage', () => {
   expect(appData.getEvents()).toEqual([]);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import SSGCreateCeremony from '../views/SSGCreateCeremony';
@@ -9,8 +9,9 @@ import userEvent from '@testing-library/user-event';
 
 const state = vi.hoisted(() => ({
   auth: { profile: { uid: 'officer', role: 'ssg', official_data: { assignment_node_id: 'school' } }, revision: 0, loading: false },
-  events: [] as any[], create: vi.fn(), createCeremonies: vi.fn(), update: vi.fn(), extend: vi.fn(), attendance: {} as Record<string, unknown>,
+  upload: vi.fn(), events: [] as any[], create: vi.fn(), createCeremonies: vi.fn(), update: vi.fn(), extend: vi.fn(), attendance: {} as Record<string, unknown>,
 }));
+vi.mock('../lib/googleDrive', async importOriginal => ({ ...await importOriginal<typeof import('../lib/googleDrive')>(), createDriveImage: state.upload }));
 vi.mock('../components/AuthContext', () => ({ useAuth: () => state.auth }));
 vi.mock('../components/events/GeofenceMap', () => ({ GeofenceMap: () => <div /> }));
 vi.mock('../lib/backend', () => ({ appData: {
@@ -31,7 +32,15 @@ function mount(path = '/ssg/events/create') {
   </Routes></MemoryRouter>);
 }
 function next() { fireEvent.click(screen.getByRole('button', { name: /^Next:/ })); }
-function review() { next(); next(); next(); }
+function review() {
+  next();
+  const unit = screen.queryByRole('button', { name: /^Event management unit/ });
+  if (unit && !unit.hasAttribute('disabled') && unit.textContent?.includes('Choose the school unit')) {
+    fireEvent.click(unit);
+    fireEvent.click(screen.getByRole('option', { name: 'Assigned school' }));
+  }
+  next(); next();
+}
 function ceremonySchedule() {
   fireEvent.change(screen.getByLabelText('Ceremony Title'), { target: { value: 'Flag raising' } });
   fireEvent.change(screen.getByLabelText('Ceremony Details and Instructions'), { target: { value: 'Instructions' } });
@@ -44,6 +53,28 @@ function fill() {
   ] as const) fireEvent.change(screen.getByLabelText(label), { target: { value } });
   if (screen.queryByRole('progressbar')) next();
 }
+it('requires and saves the admin-selected management unit', async () => {
+  state.auth.profile.role = 'admin';
+  mount(); fill(); next(); next();
+  expect(screen.getByText('Choose the event management unit.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /^Event management unit/ }));
+  fireEvent.click(screen.getByRole('option', { name: 'Assigned school' }));
+  next(); next();
+  fireEvent.submit(screen.getByRole('form'));
+  await waitFor(() => expect(state.create).toHaveBeenCalledWith(expect.objectContaining({ scopeNodeId: 'school' })));
+});
+
+it('blocks continuing when a recipient unit was selected but not added', () => {
+  mount(); fill(); next();
+  fireEvent.click(within(screen.getByRole('group', { name: 'Choose recipient unit' })).getByRole('button'));
+  fireEvent.click(screen.getByRole('option', { name: 'Assigned school' }));
+  next();
+  expect(screen.getByText('Click Add recipient to include your selected unit before continuing.')).toBeInTheDocument();
+  expect(state.create).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Add recipient' }));
+  next();
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '75');
+});
 it.each(['event', 'ceremony'])('guides %s creation through visible phases and preserves entries on Back', async purpose => {
   const user = userEvent.setup();
   mount(purpose === 'ceremony' ? '/ssg/ceremonies/create' : '/ssg/events/create');
@@ -169,7 +200,7 @@ it('lets an admin predict, edit, and save ceremony dates in a dedicated form', a
   fireEvent.submit(screen.getByRole('form'));
   await screen.findByText('Ceremony registry');
   expect(state.createCeremonies).toHaveBeenCalledWith(expect.objectContaining({
-    kind: 'flag_ceremony', scopeNodeId: undefined, title: 'Assembly',
+    kind: 'flag_ceremony', scopeNodeId: 'school', title: 'Assembly',
     ceremony: expect.objectContaining({ allowVolunteerMerit: false, exemptStudentIds: [] }),
   }), ['2026-11-10']);
   expect(state.create).not.toHaveBeenCalled();
@@ -313,4 +344,86 @@ it('uses the navigated calendar month when predicting dates', () => {
  fireEvent.click(screen.getByRole('button', {name:'Previous month'}));
  fireEvent.click(screen.getByRole('button', {name:'Automatically predict dates'}));
  expect(screen.getByRole('button', {name:'Remove 2026-10-26'})).toBeInTheDocument();
+});
+
+
+it('saves a duration container without attendance windows or sanctions', async () => {
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: /activity type/i }));
+  fireEvent.click(screen.getByRole('option', { name: 'General event (duration)' }));
+  fireEvent.change(screen.getByLabelText('Event Title'), { target: { value: 'Foundation Days' } });
+  fireEvent.change(screen.getByLabelText('Event Details and Information'), { target: { value: 'Three days of activities' } });
+  next();
+  fireEvent.change(screen.getByLabelText('Start Date'), { target: { value: '2026-11-10' } });
+  fireEvent.change(screen.getByLabelText('End Date'), { target: { value: '2026-11-12' } });
+  expect(screen.queryByLabelText('Time In 1')).not.toBeInTheDocument();
+  review();
+  fireEvent.submit(screen.getByRole('form'));
+  await screen.findByText('Event registry');
+  expect(state.create).toHaveBeenCalledWith(expect.objectContaining({ isGeneralEvent: true, startDate: '2026-11-10', endDate: '2026-11-12', attendanceWindows: [], penaltyValue: 0, geofenceEnabled: false }));
+});
+
+it('preserves named windows and location inside the chosen general event', async () => {
+  state.events = [{ id: 'general', title: 'Foundation Days', isGeneralEvent: true, status: 'upcoming', scopeNodeId: 'school', startDate: '2026-11-10', endDate: '2026-11-12' }];
+  mount('/ssg/events/create?parent=general');
+  fireEvent.change(screen.getByLabelText('Location name'), { target: { value: 'Main gymnasium' } });
+  fill();
+  fireEvent.change(screen.getByLabelText('Window title 1'), { target: { value: 'Opening program' } });
+  review();
+  fireEvent.submit(screen.getByRole('form'));
+  await screen.findByText('Event registry');
+  expect(state.create).toHaveBeenCalledWith(expect.objectContaining({ parentEventId: 'general', venue: 'Main gymnasium', attendanceWindows: [expect.objectContaining({ label: 'Opening program' })] }));
+});
+
+it('rejects specific event dates outside the general event duration', () => {
+  state.events = [{ id: 'general', title: 'Foundation Days', isGeneralEvent: true, status: 'upcoming', scopeNodeId: 'school', startDate: '2026-11-10', endDate: '2026-11-12' }];
+  mount('/ssg/events/create?parent=general');
+  fill();
+  fireEvent.change(screen.getByLabelText('End Date'), { target: { value: '2026-11-13' } });
+  next();
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '25');
+  expect(state.create).not.toHaveBeenCalled();
+});
+
+
+it('places active general events and their nested activities in the active section', () => {
+  state.events = [{ id: 'general', title: 'Foundation Days', isGeneralEvent: true, status: 'active', startDate: '2026-11-10', endDate: '2026-11-12', recipientGroups: ['All Students'] },
+    { id: 'child', title: 'Opening program', parentEventId: 'general', status: 'active', recipientGroups: ['All Students'] }];
+  render(<MemoryRouter><SSGEventCreation /></MemoryRouter>);
+  const active = screen.getByRole('heading', { name: 'Active & Ongoing (1)' }).closest('section')!;
+  expect(within(active).getByRole('button', { name: 'Foundation Days' })).toBeVisible();
+  expect(within(active).getByRole('button', { name: /Opening program/ })).toBeVisible();
+  expect(screen.getAllByRole('button', { name: /Opening program/ })).toHaveLength(1);
+  expect(within(active).getByRole('button', { name: 'Add specific event' })).toBeVisible();
+});
+
+it('uploads an optional banner and reuses its URL when saving is retried', async () => {
+  state.upload.mockResolvedValue({ id: 'banner', url: 'https://drive.google.com/thumbnail?id=banner&sz=w1600' });
+  state.create.mockRejectedValueOnce(new Error('Please retry saving')).mockResolvedValueOnce('event');
+  mount();
+  expect(screen.getByText(/1600 x 600 pixels/)).toBeVisible();
+  const file = new File(['banner'], 'banner.png', { type: 'image/png' });
+  fireEvent.change(screen.getByLabelText('Event banner (optional)'), { target: { files: [file] } });
+  await screen.findByRole('img', { name: 'Event banner preview' });
+  fill(); review();
+  fireEvent.submit(screen.getByRole('form'));
+  await screen.findByText('Please retry saving');
+  fireEvent.submit(screen.getByRole('form'));
+  await screen.findByText('Event registry');
+  expect(state.upload).toHaveBeenCalledTimes(1);
+  expect(state.create).toHaveBeenLastCalledWith(expect.objectContaining({ bannerUrl: 'https://drive.google.com/thumbnail?id=banner&sz=w1600' }));
+});
+
+it('rejects invalid banners and lets the user remove a selected banner', async () => {
+  mount();
+  fireEvent.change(screen.getByLabelText('Event banner (optional)'), { target: { files: [new File(['pdf'], 'banner.pdf', { type: 'application/pdf' })] } });
+  expect(screen.getByRole('alert')).toHaveTextContent('5 MB or smaller');
+  fireEvent.change(screen.getByLabelText('Event banner (optional)'), { target: { files: [new File(['image'], 'banner.png', { type: 'image/png' })] } });
+  await screen.findByRole('img', { name: 'Event banner preview' });
+  fireEvent.click(screen.getByRole('button', { name: 'Remove banner' }));
+  expect(screen.queryByRole('img', { name: 'Event banner preview' })).not.toBeInTheDocument();
+  fill(); review(); fireEvent.submit(screen.getByRole('form'));
+  await screen.findByText('Event registry');
+  expect(state.upload).not.toHaveBeenCalled();
+  expect(state.create).toHaveBeenCalledWith(expect.objectContaining({ bannerUrl: '' }));
 });

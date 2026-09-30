@@ -1,3 +1,8 @@
+import { useNavigate } from 'react-router-dom';
+import EventLocationDetails from '../components/events/EventLocationDetails';
+import EventBanner from '../components/events/EventBanner';
+import { EventGroups } from '../components/events/EventGroups';
+import { eventDisplayTitle, eventSectionRoots } from '../lib/eventGroups';
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { AppEvent } from '../types';
@@ -15,6 +20,7 @@ import {
 
 
 const StudentEvents: React.FC = () => {
+  const navigate = useNavigate();
   const { profile, revision } = useAuth();
   
   // UI States
@@ -45,7 +51,7 @@ const StudentEvents: React.FC = () => {
   // Filtered lists
   const filteredEvents = useMemo(() => {
     return allEvents.filter(event => {
-      const matchesSearch = event.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      const matchesSearch = eventDisplayTitle(event, allEvents).toLowerCase().includes(searchTerm.toLowerCase()) ||
                             (event.description || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' ? true : event.status === statusFilter;
       return matchesSearch && matchesStatus;
@@ -53,11 +59,11 @@ const StudentEvents: React.FC = () => {
   }, [allEvents, searchTerm, statusFilter]);
 
   // Group events into categories
-  const activeEvents = useMemo(() => filteredEvents.filter(e => e.status === 'active'), [filteredEvents]);
-  const scheduledEvents = useMemo(() => filteredEvents.filter(e => e.status === 'upcoming'), [filteredEvents]);
-  const archivedEvents = useMemo(() => filteredEvents.filter(e => e.status === 'done'), [filteredEvents]);
+  const activeEvents = useMemo(() => eventSectionRoots(filteredEvents).filter(e => e.status === 'active'), [filteredEvents]);
+  const scheduledEvents = useMemo(() => eventSectionRoots(filteredEvents).filter(e => e.status === 'upcoming'), [filteredEvents]);
+  const archivedEvents = useMemo(() => eventSectionRoots(filteredEvents).filter(e => e.status === 'done'), [filteredEvents]);
 
-  const canFileExcuse = (event: AppEvent) => !event.cancellationStatus;
+  const canFileExcuse = (event: AppEvent) => !event.isGeneralEvent && !event.cancellationStatus;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -114,13 +120,14 @@ const StudentEvents: React.FC = () => {
 
         {activeEvents.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {activeEvents.map(event => (
+            {activeEvents.map(event => event.isGeneralEvent ? <EventGroups key={event.id} events={allEvents} groupIds={[event.id]} onOpen={target => target.isGeneralEvent ? navigate(`/student/events/${target.id}`) : setSelectedEvent(target)} /> : (
               <button
                 type="button"
                 key={event.id}
                 onClick={() => setSelectedEvent(event)}
                 className="group relative w-full overflow-hidden rounded-2xl border border-gold-400/40 bg-brand-900 p-4 text-left text-white shadow-md transition-all hover:border-gold-400"
               >
+                {event.bannerUrl && <EventBanner src={event.bannerUrl} alt={`${event.title} banner`} />}
                 <div className="absolute top-0 right-0 bg-gold-gradient text-brand-900 font-extrabold text-[8px] uppercase px-3 py-1 rounded-bl-xl shadow-xs tracking-wider">
                   Live Event
                 </div>
@@ -131,7 +138,7 @@ const StudentEvents: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <h3 className="pr-12 text-sm font-bold tracking-tight text-white transition-colors [overflow-wrap:anywhere] group-hover:text-gold-300">
-                      {event.title}
+                      {eventDisplayTitle(event, allEvents)}
                     </h3>
                     <p className="text-slate-300 text-[11px] font-medium line-clamp-2 mt-0.5">
                       {event.description}
@@ -190,13 +197,14 @@ const StudentEvents: React.FC = () => {
         <Collapsible id="scheduled-events-panel" open={isScheduledOpen} innerClassName="space-y-4 p-4 sm:p-6">
             {scheduledEvents.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {scheduledEvents.map(event => (
+                {scheduledEvents.map(event => event.isGeneralEvent ? <EventGroups key={event.id} events={allEvents} groupIds={[event.id]} onOpen={target => target.isGeneralEvent ? navigate(`/student/events/${target.id}`) : setSelectedEvent(target)} /> : (
                   <button
                     type="button"
                     key={event.id}
                     onClick={() => setSelectedEvent(event)}
                     className="flex w-full flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition-all hover:border-gold-400 hover:bg-white hover:shadow-md dark:border-slate-700 dark:bg-slate-900/60 dark:hover:border-gold-400 dark:hover:bg-slate-800 sm:p-5"
                   >
+                {event.bannerUrl && <EventBanner src={event.bannerUrl} alt={`${event.title} banner`} />}
                     <div>
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-brand-800 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/40 px-2.5 py-0.5 rounded-md">
@@ -206,7 +214,7 @@ const StudentEvents: React.FC = () => {
                           {new Date(event.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       </div>
-                      <h3 className="text-sm font-black uppercase tracking-tight text-brand-900 [overflow-wrap:anywhere] dark:text-slate-100">{event.title}</h3>
+                      <h3 className="text-sm font-black uppercase tracking-tight text-brand-900 [overflow-wrap:anywhere] dark:text-slate-100">{eventDisplayTitle(event, allEvents)}</h3>
                       <p className="text-slate-500 dark:text-slate-400 text-xs line-clamp-2 mt-1">{event.description}</p>
                     </div>
 
@@ -249,13 +257,14 @@ const StudentEvents: React.FC = () => {
         <Collapsible id="archived-events-panel" open={isArchivedOpen} innerClassName="space-y-4 p-4 sm:p-6">
             {archivedEvents.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {archivedEvents.map(event => (
+                {archivedEvents.map(event => event.isGeneralEvent ? <EventGroups key={event.id} events={allEvents} groupIds={[event.id]} onOpen={target => target.isGeneralEvent ? navigate(`/student/events/${target.id}`) : setSelectedEvent(target)} /> : (
                   <button
                     type="button"
                     key={event.id}
                     onClick={() => setSelectedEvent(event)}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left opacity-80 transition-all hover:border-slate-300 hover:opacity-100 dark:border-slate-700 dark:bg-slate-900/60 dark:hover:border-slate-600 sm:p-5"
                   >
+                {event.bannerUrl && <EventBanner src={event.bannerUrl} alt={`${event.title} banner`} />}
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                         {event.status}
@@ -264,7 +273,7 @@ const StudentEvents: React.FC = () => {
                         {new Date(event.startTime).toLocaleDateString()}
                       </span>
                     </div>
-                    <h3 className="text-sm font-black uppercase tracking-tight text-brand-900 [overflow-wrap:anywhere] dark:text-slate-100">{event.title}</h3>
+                    <h3 className="text-sm font-black uppercase tracking-tight text-brand-900 [overflow-wrap:anywhere] dark:text-slate-100">{eventDisplayTitle(event, allEvents)}</h3>
                     <p className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{event.description}</p>
                   </button>
                 ))}
@@ -280,7 +289,7 @@ const StudentEvents: React.FC = () => {
         <Modal
           open
           onClose={() => setSelectedEvent(null)}
-          title={selectedEvent.title}
+          title={eventDisplayTitle(selectedEvent, allEvents)}
           description={`Review this ${selectedEvent.status} event's schedule, sanction, and geofence.`}
           size="lg"
           footer={canFileExcuse(selectedEvent) ? (
@@ -300,9 +309,14 @@ const StudentEvents: React.FC = () => {
           ) : undefined}
         >
           <div className="space-y-5">
+            {selectedEvent.bannerUrl && <EventBanner src={selectedEvent.bannerUrl} alt={`${selectedEvent.title} banner`} />}
             <span className="inline-flex rounded-full border border-gold-300 bg-gold-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-gold-700 dark:border-gold-400/30 dark:bg-gold-400/10 dark:text-gold-300">
               {selectedEvent.status} Event
             </span>
+              {selectedEvent.isGeneralEvent && <p className="text-sm">Attendance is recorded for the specific events listed under this general event.</p>}
+              {selectedEvent.venue && <p><b>Location:</b> {selectedEvent.venue}</p>}
+              {selectedEvent.attendanceWindows?.map((window, index) => <p key={window.id}>{window.label || `Window ${index + 1}`}: {window.timeIn}?{window.timeOut} ? Late after {window.lateAfterMinutes} minutes</p>)}
+              <EventLocationDetails event={selectedEvent} />
               {/* Description */}
               <div>
                 <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-1">Full Description</h4>

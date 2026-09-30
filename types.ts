@@ -206,6 +206,11 @@ export interface EventSanctionRule {
 }
 
 export interface AppEvent {
+  isGeneralEvent?: boolean;
+  bannerUrl?: string;
+  parentEventId?: string | null;
+  parentEventTitle?: string;
+  venue?: string;
   requiresOssaApproval?: boolean;
   reviewedAt?: number;
   organizationId?: string;
