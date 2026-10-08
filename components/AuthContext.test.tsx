@@ -13,6 +13,7 @@ vi.mock('../lib/supabase', () => ({
 vi.mock('./AuthChallenge', () => ({ AuthChallenge: () => null }));
 import { AuthProvider, useAuth } from './AuthContext';
 import { appData, resetData } from '../lib/backend';
+import { toast } from '../lib/toast';
 
 function deferred() {
   let resolve!: (value: any) => void;
@@ -46,7 +47,22 @@ beforeEach(() => {
   });
   api.assurance.mockResolvedValue({ data: { currentLevel: 'aal1', nextLevel: 'aal1' }, error: null });
 });
-afterEach(() => { cleanup(); resetData(); });
+afterEach(() => { cleanup(); resetData(); vi.restoreAllMocks(); });
+
+it('avoids backend polling while offline and restores the workspace on reconnect', async () => {
+  const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+  api.rpc.mockResolvedValue({ data: snapshot, error: null });
+  render(<AuthProvider><Probe /></AuthProvider>); emit('student');
+  await screen.findAllByText('Reconnect to load your school information and records.');
+  expect(api.rpc).not.toHaveBeenCalled();
+  act(() => window.dispatchEvent(new Event('focus')));
+  expect(api.rpc).not.toHaveBeenCalled();
+  online.mockReturnValue(true);
+  act(() => window.dispatchEvent(new Event('online')));
+  await screen.findByText('Student');
+  expect(api.rpc).toHaveBeenCalledOnce();
+  expect(screen.queryAllByText('Reconnect to load your school information and records.')).toHaveLength(0);
+});
 
 it('shows school data on first open as soon as the public request finishes', async () => {
   const request = deferred(); api.select.mockReturnValue(request.promise);
@@ -65,6 +81,23 @@ it('loads the school, profile and events when restoring a saved login', async ()
   expect(screen.getByText('School campus')).toBeInTheDocument();
   expect(screen.getByText('Student')).toBeInTheDocument();
   expect(screen.getByText('Assembly')).toBeInTheDocument();
+});
+
+it('shows a welcome popup on every login without repeating it on refresh or token renewal', async () => {
+  const popup = vi.spyOn(toast, 'success');
+  api.rpc.mockResolvedValue({ data: snapshot, error: null });
+  api.select.mockResolvedValue({ data: nodes, error: null });
+  render(<AuthProvider><Probe /></AuthProvider>); emit('student');
+  await waitFor(() => expect(popup).toHaveBeenCalledOnce());
+  expect(popup).toHaveBeenCalledWith(expect.stringContaining('Welcome back, Student!'));
+  act(() => authChange('TOKEN_REFRESHED', { user: { id: 'student' } }));
+  act(() => window.dispatchEvent(new Event('focus')));
+  await waitFor(() => expect(api.rpc.mock.calls.length).toBeGreaterThan(1));
+  expect(popup).toHaveBeenCalledOnce();
+  emit(null);
+  await waitFor(() => expect(screen.queryByText('Student')).not.toBeInTheDocument());
+  emit('student');
+  await waitFor(() => expect(popup).toHaveBeenCalledTimes(2));
 });
 
 it.each([false, true])('keeps login loading when the old public request completes (error: %s)', async fails => {

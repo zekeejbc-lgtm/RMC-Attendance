@@ -1,4 +1,5 @@
 import { toast, type OperationProgress } from './toast';
+import { supabase } from './supabase';
 
 const DEFAULT_GOOGLE_DRIVE_GAS_URL = 'https://script.google.com/macros/s/AKfycby2BH5kpT9BN1BX2ODlGmjz6oIbKnbChfZuCAv2QDDcLvVbGB0RJXz1uaJ1eTHJ_t8/exec';
 export const GOOGLE_DRIVE_GAS_URL = import.meta.env.VITE_GOOGLE_DRIVE_GAS_URL || DEFAULT_GOOGLE_DRIVE_GAS_URL;
@@ -17,6 +18,21 @@ type DriveResponse = Partial<DriveImageResult> & {
   message?: string;
   result?: Partial<DriveImageResult>;
 };
+
+const temporaryCapabilities = new Map<string, string>();
+const capabilityKey = (id: string) => `rmc.drive-capability.${id}`;
+function readCapability(id: string) {
+  try { return sessionStorage.getItem(capabilityKey(id)) || temporaryCapabilities.get(id); }
+  catch { return temporaryCapabilities.get(id); }
+}
+function rememberCapability(id: string, token: string) {
+  temporaryCapabilities.set(id, token);
+  try { sessionStorage.setItem(capabilityKey(id), token); } catch { /* Private browsing can disable session storage. */ }
+}
+function forgetCapability(id: string) {
+  temporaryCapabilities.delete(id);
+  try { sessionStorage.removeItem(capabilityKey(id)); } catch { /* Nothing was persisted. */ }
+}
 
 export function validateProfileImage(file: File) {
   if (!PROFILE_IMAGE_TYPES.includes(file.type as (typeof PROFILE_IMAGE_TYPES)[number])) {
@@ -51,12 +67,19 @@ function readableResponseError(text: string, status: number) {
 }
 
 async function request<T = DriveResponse>(body: Record<string, unknown>, progress: OperationProgress): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const managementToken = body.action === 'create' ? crypto.randomUUID() + crypto.randomUUID()
+    : typeof body.fileId === 'string' ? readCapability(body.fileId) : null;
+  const replacementManagementToken = body.action === 'update' && body.dataUrl ? crypto.randomUUID() + crypto.randomUUID() : null;
   progress.step(2);
   const response = await fetch(GOOGLE_DRIVE_GAS_URL, {
     method: 'POST',
     // text/plain avoids a browser preflight against Apps Script while still carrying JSON.
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, ...(session?.access_token ? { accessToken: session.access_token } : {}), ...(managementToken ? { managementToken } : {}), ...(replacementManagementToken ? { replacementManagementToken } : {}) }),
+    cache: 'no-store',
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer',
     redirect: 'follow',
   });
   progress.step(3);
@@ -65,6 +88,10 @@ async function request<T = DriveResponse>(body: Record<string, unknown>, progres
   try { payload = JSON.parse(text) as DriveResponse; }
   catch { throw new Error(readableResponseError(text, response.status)); }
   if (!response.ok || payload.success === false || payload.error) throw new Error(responseError(payload, response.status));
+  const id = (payload.result || payload).id;
+  if (body.action === 'create' && managementToken && id && /^[a-zA-Z0-9_-]+$/.test(id)) rememberCapability(id, managementToken);
+  if (body.action === 'update' && replacementManagementToken && id && /^[a-zA-Z0-9_-]+$/.test(id)) rememberCapability(id, replacementManagementToken);
+  if (body.action === 'delete' && typeof body.fileId === 'string') forgetCapability(body.fileId);
   return payload as T;
 }
 

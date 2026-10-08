@@ -16,6 +16,8 @@ import { serializeAcademicAssignment, findNodePath } from '../lib/academicDirect
 import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 import { createDriveImage, driveFileIdFromUrl, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
 import { enrollmentUsername, validEmergencyPhone, validStudentId } from '../lib/enrollment';
+import GoogleSignIn from '../components/GoogleSignIn';
+import { checkGoogle, submitGoogleEnrollment, type GoogleEnrollment } from '../lib/googleAuth';
 import { 
   ArrowRight, Shield, Target, Users, 
   MapPin, Mail, Phone, Facebook, Instagram,
@@ -50,6 +52,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [googleEnrollment, setGoogleEnrollment] = useState<GoogleEnrollment | null>(null);
+  const [googleNeedsEnrollment, setGoogleNeedsEnrollment] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [showTestPanel, setShowTestPanel] = useState(false);
@@ -139,6 +143,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   };
 
   // Login Handlers
+  const handleGoogle = async (credential: string, nonce: string, enrolling: boolean) => {
+    setLoginError(''); setRegError('');
+    const result = await checkGoogle(credential, nonce);
+    if (result.session) {
+      setGoogleEnrollment(null); setGoogleNeedsEnrollment(false);
+      setShowLoginModal(false); setShowRegisterModal(false);
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    setGoogleEnrollment(result.enrollment);
+    setRegData(current => ({ ...current, email: result.email }));
+    if (enrolling) {
+      setGoogleNeedsEnrollment(false);
+    } else {
+      setGoogleNeedsEnrollment(true);
+      setLoginError('This Google email is not enrolled. Complete enrollment to create your account.');
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoggingIn) return;
@@ -270,7 +293,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       profile.photo_url = photoUrl;
       // Validate the exact payload that the signup trigger will receive.
       await appData.validateEnrollment(profile, securityKey.trim(), 4);
-      const result = await appData.submitApplication(profile, regData.password, securityKey.trim());
+      const result = googleEnrollment && !user
+        ? await submitGoogleEnrollment(profile, regData.password, securityKey.trim(), googleEnrollment)
+        : await appData.submitApplication(profile, regData.password, securityKey.trim());
       setNeedsEmailConfirmation(result.needsEmailConfirmation);
       setRegSuccess(true);
     } catch (submissionError) {
@@ -512,6 +537,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                        setLoginError(error ? error.message : 'Check your email for a password reset link.');
                      }}>Forgot password?</button>
                    </form>
+                   {showLoginModal && <div className="mt-4 space-y-3">
+                     <GoogleSignIn onCredential={(credential, nonce) => handleGoogle(credential, nonce, false)} onError={setLoginError} />
+                     {googleNeedsEnrollment && <Button type="button" onClick={() => { setShowLoginModal(false); setShowRegisterModal(true); setRegStep(1); }}>Enroll with this Google email</Button>}
+                   </div>}
                 </div>
 
                 <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-3.5">
@@ -617,6 +646,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
               {regStep === 1 && (
                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                      <p className="text-sm text-slate-500">Complete your account details, academic assignment, emergency contact, and profile picture.</p>
+                     {!user && showRegisterModal && <GoogleSignIn enrollment onCredential={(credential, nonce) => handleGoogle(credential, nonce, true)} onError={setRegError} />}
+                     {googleEnrollment && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">Google email verified: {googleEnrollment.email}. Your account will be created only when you finish enrollment.</p>}
 
                     <div className="space-y-1">
                        <label htmlFor="landing-register-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Legal Full Name</label>
@@ -630,7 +661,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                        </div>
                        <div className="space-y-1">
                           <label htmlFor="landing-register-email" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Email Address</label>
-                          <input id="landing-register-email" placeholder="name@email.com" type="email" className="app-control w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} />
+                          <input id="landing-register-email" placeholder="name@email.com" type="email" readOnly={Boolean(googleEnrollment) || Boolean(user)} className="app-control w-full p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} />
                        </div>
                     </div>
 

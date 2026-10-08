@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
@@ -12,6 +12,8 @@ interface ModalProps {
   closeOnBackdrop?: boolean;
   children: ReactNode;
   footer?: ReactNode;
+  bodyClassName?: string;
+  anchor?: () => HTMLElement | null;
 }
 
 interface ModalEntry {
@@ -122,7 +124,31 @@ export function Modal({
   closeOnBackdrop = true,
   children,
   footer,
+  bodyClassName,
+  anchor,
 }: ModalProps) {
+  const [retained, setRetained] = useState(open);
+  const [position, setPosition] = useState({ top: 68, right: 16 });
+  const visible = open || (Boolean(anchor) && retained);
+  useEffect(() => {
+    if (open) { setRetained(true); return; }
+    const timer = window.setTimeout(() => setRetained(false), 180);
+    return () => clearTimeout(timer);
+  }, [open]);
+  useEffect(() => {
+    if (!visible || !anchor) return;
+    const place = () => {
+      const bounds = anchor()?.getBoundingClientRect();
+      if (!bounds) return;
+      const width = Math.min(400, window.innerWidth - 24);
+      setPosition({ top: Math.max(12, Math.min(bounds.bottom + 12, window.innerHeight - 160)),
+        right: Math.max(12, Math.min(window.innerWidth - bounds.right, window.innerWidth - width - 12)) });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [visible, anchor]);
   const modalId = useId();
   const titleId = useId();
   const descriptionId = useId();
@@ -161,7 +187,7 @@ export function Modal({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!visible) return;
 
     previouslyFocusedRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -174,14 +200,14 @@ export function Modal({
       previouslyFocusedRef.current?.focus();
       previouslyFocusedRef.current = null;
     };
-  }, [modalId, open, requestClose, trapFocus]);
+  }, [modalId, visible, requestClose, trapFocus]);
 
-  if (!open) return null;
+  if (!visible) return null;
 
   return createPortal(
     <div data-modal-root="true">
       <div
-        className="app-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm sm:p-6"
+        className={anchor ? 'app-notification-backdrop fixed inset-0 z-50' : 'app-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm sm:p-6'}
         data-testid="modal-backdrop"
         onClick={closeOnBackdrop ? requestClose : undefined}
       >
@@ -189,7 +215,9 @@ export function Modal({
           aria-describedby={description ? descriptionId : undefined}
           aria-labelledby={titleId}
           aria-modal="true"
-          className={`app-modal-panel relative flex w-full min-w-0 max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl border border-gold-400/30 bg-white shadow-modal dark:bg-slate-800 sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl ${sizeClasses[size]}`}
+          className={`app-modal-panel ${anchor ? 'app-notification-panel fixed' : 'relative'} flex w-full min-w-0 max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl border border-gold-400/30 bg-white shadow-modal dark:bg-slate-800 sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl ${sizeClasses[size]}`}
+          data-state={open ? 'open' : 'closing'}
+          style={anchor ? { top: position.top, right: position.right, width: 'min(400px, calc(100vw - 24px))', maxHeight: `calc(100dvh - ${position.top + 12}px)` } : undefined}
           onClick={(event) => event.stopPropagation()}
           ref={dialogRef}
           role="dialog"
@@ -213,7 +241,7 @@ export function Modal({
               <span aria-hidden="true" className="text-2xl leading-none">×</span>
             </button>
           </div>
-          <div className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
+          <div className={bodyClassName || 'min-h-0 min-w-0 overflow-x-hidden overflow-y-auto px-5 py-5 sm:px-6'}>{children}</div>
           {footer ? (
             <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:justify-end sm:px-6 dark:border-slate-700">
               {footer}

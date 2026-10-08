@@ -2,7 +2,7 @@ export function downloadCsv(filename: string, rows: Array<Array<unknown>>) {
   return toast.sync(() => {
   const quote = (value: unknown) => {
     let text = String(value ?? '');
-    if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`;
+    if (/^[\s\uFEFF]*[=+@\-]/.test(text) || /^[\t\r\n]/.test(text)) text = `'${text}`;
     return `"${text.replace(/"/g, '""')}"`;
   };
   const url = URL.createObjectURL(new Blob(['\uFEFF' + rows.map(row => row.map(quote).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));

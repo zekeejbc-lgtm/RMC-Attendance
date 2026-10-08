@@ -29,6 +29,7 @@ import { UserRole } from './types';
 import { hasPermission, AppPermission } from './lib/accessControl';
 import { AppLoading, PageSkeleton } from './components/ui/Skeleton';
 import ToastViewport from './components/ui/ToastViewport';
+import PwaStatus from './components/ui/PwaStatus';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -38,11 +39,16 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permission, permissionAny }) => {
-  const { user, loading, profile } = useAuth();
+  const { user, loading, profile, error } = useAuth();
 
   if (loading) return <AppLoading label="Loading your workspace"><PageSkeleton /></AppLoading>;
 
   if (!user) return <Navigate to="/login" replace />;
+
+  if (!profile && error) return <main className="mx-auto max-w-xl px-4 py-12 text-slate-800 dark:text-slate-100">
+    <h1 className="text-2xl font-bold">Your workspace is unavailable</h1>
+    <p className="mt-3">Reconnect and retry to load your records.</p>
+  </main>;
 
   // If authenticated but no profile, they are likely still in the application phase
   if (!profile) {
@@ -68,6 +74,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
 const App: React.FC = () => {
   return (
     <ThemeProvider>
+      <PwaStatus />
       <ToastViewport />
       <AuthProvider>
         <HashRouter>

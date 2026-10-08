@@ -1,3 +1,4 @@
+import { DEFAULT_EXCUSE_WINDOW_DAYS, MAX_EXCUSE_WINDOW_DAYS } from '../../lib/excusePolicy';
 import { TimeInput } from '../ui/TimeInput';
 import { formatClockTime } from '../../lib/dateTime';
 import EventBanner from './EventBanner';
@@ -105,6 +106,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
   const [location, setLocation] = useState({ lat: editingEvent?.location.lat ?? 7.0736, lng: editingEvent?.location.lng ?? 125.6126, radius: editingEvent?.location.radius_meters ?? 100, isLocating: false });
   const [attendanceWindows, setAttendanceWindows] = useState<EventAttendanceWindow[]>(editingEvent?.attendanceWindows?.length ? editingEvent.attendanceWindows : editingEvent ? [{ id: 'window-1', label: 'Window 1', timeIn: timePart(editingEvent.startTime), timeOut: timePart(editingEvent.endTime), lateAfterMinutes: 15 }] : [newWindow(1)]);
   const [lateSanction, setLateSanction] = useState<EventSanctionRule>(editingEvent?.sanctionRules?.late || { value: 30, unit: 'minutes' });
+  const [excuseWindowDays, setExcuseWindowDays] = useState(editingEvent?.excuseWindowDays ?? DEFAULT_EXCUSE_WINDOW_DAYS);
   const [absentSanction, setAbsentSanction] = useState<EventSanctionRule>(editingEvent?.sanctionRules?.absent || (editingEvent ? { value: editingEvent.penaltyValue, unit: editingEvent.penaltyUnit } : { value: 1, unit: 'hours' }));
 
   const directory = useMemo(() => appData.getSchoolStructure(), [revision]);
@@ -152,7 +154,8 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
   const sanctionsValid = isGeneralEvent || [lateSanction.value, absentSanction.value].every(value => Number.isFinite(value) && value >= 0);
   const activityNumbersValid = (kind !== 'merit' || (Number.isFinite(meritHours) && meritHours > 0 && meritHours <= 24))
     && (isGeneralEvent || Boolean(parentEventId) || isEditing || (Number.isInteger(occurrences) && occurrences >= 1 && occurrences <= 52));
-  const numbersValid = sanctionsValid && activityNumbersValid;
+  const excusePolicyValid = isGeneralEvent || ['service', 'merit'].includes(kind || '') || (Number.isInteger(excuseWindowDays) && excuseWindowDays >= 0 && excuseWindowDays <= MAX_EXCUSE_WINDOW_DAYS);
+  const numbersValid = sanctionsValid && activityNumbersValid && excusePolicyValid;
   const geofenceValid = isGeneralEvent || !geofenceEnabled || (Number.isFinite(location.lat) && Math.abs(location.lat) <= 90
     && Number.isFinite(location.lng) && Math.abs(location.lng) <= 180
     && Number.isFinite(location.radius) && location.radius >= 10 && location.radius <= 5000);
@@ -169,7 +172,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
       : !isGeneralEvent && (!windowsValid || windowsOverlap) ? 'Enter valid, non-overlapping attendance windows and non-negative late thresholds.' : '',
     pendingRecipient ? 'Click Add recipient to include your selected unit before continuing.' : !managementScopeValid ? 'Choose the event management unit.' : !hasAssignedScope || !recipientsInScope || !recipientGroups.length ? 'Choose at least one recipient within your assigned school unit.'
       : isCeremony && !ceremonyValid ? 'Check class attendance windows and volunteer merit hours (greater than 0 and up to 24).' : '',
-    !geofenceValid ? 'Enter valid coordinates and a radius between 10 and 5000 meters.' : !sanctionsValid ? 'Sanction values must be zero or greater.' : '',
+    !geofenceValid ? 'Enter valid coordinates and a radius between 10 and 5000 meters.' : !sanctionsValid ? 'Sanction values must be zero or greater.' : !excusePolicyValid ? 'Enter a whole number from 0 to 30 excuse submission days.' : '',
   ];
   const nextPhase = () => {
     if (phaseIssues[phase]) { setPhaseError(phaseIssues[phase]); return; }
@@ -206,6 +209,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
       endDate: savedEnd,
       startTime: new Date(`${savedStart}T${isGeneralEvent ? '00:00' : firstWindow.timeIn}:00+08:00`).getTime(),
       endTime: new Date(`${savedEnd}T${isGeneralEvent ? '23:59' : lastWindow.timeOut}:00+08:00`).getTime(),
+      excuseWindowDays: isGeneralEvent || ['service', 'merit'].includes(kind || '') ? undefined : excuseWindowDays,
       attendanceWindows: isGeneralEvent ? [] : sortedWindows.map((window, index) => ({ ...window, label: window.label?.trim() || `Window ${index + 1}` })),
       sanctionRules: (isGeneralEvent || ['service','merit'].includes(kind || '')) ? { late: {value:0,unit:'hours'}, absent: {value:0,unit:'hours'} } : { late: lateSanction, absent: absentSanction },
       penaltyValue: (isGeneralEvent || ['service','merit'].includes(kind || '')) ? 0 : absentSanction.value,
@@ -346,6 +350,13 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
         {isCeremony && !ceremonyValid && <p role="alert" className="text-sm text-amber-700">Choose allowed ceremony dates, valid class windows, and positive volunteer merit hours (up to 24).</p>}
         </fieldset>
         <fieldset hidden={phasedCreation && phase !== 3} disabled={saving || (phasedCreation && phase !== 3)} className="min-w-0 space-y-6">
+        {!isGeneralEvent && !['service', 'merit'].includes(kind || '') && <Surface className="space-y-3 p-4 sm:p-6">
+          <h2 className="text-lg font-bold text-brand-900 dark:text-white">Excuse submission window</h2>
+          <label htmlFor="excuse-window-days" className="app-field-label block">Days to submit after the activity ends</label>
+          <input id="excuse-window-days" type="number" min="0" max={MAX_EXCUSE_WINDOW_DAYS} step="1" required className="input-field" value={Number.isNaN(excuseWindowDays) ? '' : excuseWindowDays} onChange={event => setExcuseWindowDays(event.target.value === '' ? NaN : Number(event.target.value))} />
+          <p className="text-sm text-slate-500 dark:text-slate-400">Choose 0?30 days. Students may submit in advance once the activity is approved. Zero closes submissions when the activity ends. For repeated ceremonies, each date has its own deadline. A supporting document and OSSA approval are required.</p>
+          {!excusePolicyValid && <p role="alert" className="text-sm text-red-600">Enter a whole number from 0 to 30 days.</p>}
+        </Surface>}
         {isGeneralEvent ? <Surface className="p-5 text-sm">Locations, attendance windows and sanctions are configured on each specific event after you save this general event.</Surface> : <Surface className="space-y-5 p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><MapPin size={20} className="text-gold-500" /> Geofencing</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Require scans to occur inside a defined event perimeter.</p></div><button type="button" role="switch" aria-checked={geofenceEnabled} aria-label="Enable geofencing" onClick={() => setGeofenceEnabled((enabled) => !enabled)} className={`relative h-8 w-14 shrink-0 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 ${geofenceEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}><span aria-hidden="true" className={`absolute left-0 top-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${geofenceEnabled ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>
           {geofenceEnabled ? (
@@ -388,6 +399,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
             {!isGeneralEvent && <div><dt className="font-bold">Attendance windows · Philippine time</dt><dd className="mt-1 space-y-1">{sortedWindows.map(window => <p key={window.id}>{formatClockTime(window.timeIn)}–{formatClockTime(window.timeOut)} · Late after {window.lateAfterMinutes} minutes</p>)}</dd></div>}
             <div><dt className="font-bold">Geofencing</dt><dd className="mt-1">{geofenceEnabled ? `${location.radius} m radius at ${location.lat}, ${location.lng}` : 'Disabled'}</dd></div>
             {!isGeneralEvent && !['service', 'merit'].includes(kind || '') && <div><dt className="font-bold">Sanctions</dt><dd className="mt-1">Late: {lateSanction.value} {lateSanction.unit}; absent: {absentSanction.value} {absentSanction.unit}</dd></div>}
+            {!isGeneralEvent && !['service', 'merit'].includes(kind || '') && <div><dt className="font-bold">Excuse submission</dt><dd className="mt-1">Advance submissions allowed; closes {excuseWindowDays} days after each activity ends. Supporting document and OSSA approval required.</dd></div>}
             {kind === 'merit' && <div><dt className="font-bold">Merit award</dt><dd className="mt-1">{meritHours} hours</dd></div>}
             {kind === 'service' && <div><dt className="font-bold">Excess service hours</dt><dd className="mt-1">{serviceOverflow === 'merit' ? 'Save as earned merit' : 'Not credited'}</dd></div>}
             {isCeremony && <div><dt className="font-bold">Ceremony attendance settings</dt><dd className="mt-1">{ceremony.exemptStudentIds.length} general exemptions · {Object.keys(ceremony.classWindows).length} class schedule overrides · {Object.values(ceremony.exemptStudentIdsByDate || {}).reduce((total, ids) => total + ids.length, 0)} date-specific exemptions. Volunteer merit: {ceremony.allowVolunteerMerit ? `${ceremony.volunteerMeritHours} hours` : 'Disabled'}.</dd></div>}

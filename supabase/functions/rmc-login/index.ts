@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
+import { readJson, responseHeaders as cors } from '../_shared/http.ts';
 
-const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const respond = (body: unknown, status = 200) => Response.json(body, { status, headers: cors });
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -8,7 +8,7 @@ Deno.serve(async (req: Request) => {
   const url = Deno.env.get('SUPABASE_URL')!;
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false, autoRefreshToken: false } });
   try {
-    const { identifier, password } = await req.json();
+    const { identifier, password } = await readJson(req, 16 * 1024);
     if (typeof identifier !== 'string' || typeof password !== 'string' || identifier.length > 254 || password.length > 1024) throw new Error('Invalid credentials');
     const normalized = identifier.trim().toLowerCase();
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';

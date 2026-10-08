@@ -30,7 +30,7 @@ try {
       await page.goto(`${base}/#${route}`, { waitUntil: 'networkidle0' });
       try { await page.waitForSelector('main h1, main h2', { timeout: 20000 }); } catch(error) { console.log('BROWSER STATE '+JSON.stringify(await page.evaluate(() => ({hash:location.hash,text:document.body.innerText.slice(0,1500)})))); throw error; }
       assert.equal(await page.evaluate(() => location.hash), `#${route}`, `${role} route redirected: ${route}`);
-      const alerts = await page.$$eval('[role="alert"]', nodes => nodes.map(n => n.textContent));
+      const alerts = await page.$$eval('[role="alert"]', nodes => nodes.map(n => n.textContent?.trim()).filter(Boolean));
       assert.equal(alerts.length, 0, `${route}: ${alerts.join('; ')}`);
       assert.equal(await page.evaluate(() => localStorage.getItem('rmc_regalia_db')), null);
       if (route === '/student/qr') await page.waitForSelector('[role="img"][aria-label^="Student QR code"] svg', { timeout: 15000 });

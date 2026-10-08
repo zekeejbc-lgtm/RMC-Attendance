@@ -39,7 +39,8 @@ try {
   await completed;
   const downloaded = fs.readFileSync(path.join(downloadPath, await filename));
   assert.equal(downloaded.subarray(1, 4).toString(), 'PNG');
-  await page.addScriptTag({ content: fs.readFileSync('node_modules/html5-qrcode/html5-qrcode.min.js', 'utf8') });
+  // Run the test decoder through DevTools; the app intentionally blocks inline scripts.
+  await page.evaluate(fs.readFileSync('node_modules/html5-qrcode/html5-qrcode.min.js', 'utf8'));
   const token = await page.evaluate(async base64 => {
     const mount = document.createElement('div'); mount.id = 'download-qr-check'; document.body.appendChild(mount);
     const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));

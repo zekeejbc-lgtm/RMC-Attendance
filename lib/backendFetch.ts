@@ -36,7 +36,7 @@ function requestLabel(input: RequestInfo | URL, init?: RequestInit) {
 export const backendFetch: typeof fetch = async (input, init) => {
   const progress = toast.start(requestLabel(input, init), ['Working on it', 'Getting your updates', 'Finishing up'], true);
   try {
-    const response = await fetch(input, init);
+    const response = await fetch(input, { ...init, cache: 'no-store' });
     progress.step(1);
     // A clone preserves the SDK's normal body parsing and error semantics.
     const text = await response.clone().text();

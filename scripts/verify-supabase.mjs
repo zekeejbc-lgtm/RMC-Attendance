@@ -19,6 +19,14 @@ const deny = (name, result) => { assert.ok(result.error, `${name} should be deni
 const command = async (action, args, who = admin) => { const r = await who.rpc('rmc_command', { action, args }); if (r.error) throw new Error(`${action}: ${r.error.message}`); return r.data; };
 const person = (name, node = `${prefix}-section`, role = 'student') => ({ name: `${prefix} ${name}`, username: `${prefix}-${name}`, email: `${prefix}-${name}@example.test`, student_id: `${prefix}-${name}`, role, school_data: { type: 'College', level: '1', section: 'Test section', academic_assignment: { campusId: `${prefix}-campus`, terminalGroupId: node, nodePathIds: [`${prefix}-campus`, `${prefix}-department`, node] } }, ...(role !== 'student' ? { official_data: { body: 'SSG', assignment_node_id: node } } : {}) });
 const password = crypto.randomBytes(24).toString('base64url');
+async function enrollmentTicket(email) {
+  const ticket = crypto.randomUUID();
+  const hash = value => crypto.createHash('sha256').update(value).digest('hex');
+  const result = await service.rpc('rmc_enrollment_reserve', { email_hash: hash(email.trim().toLowerCase()), ip_hash: hash(prefix), ticket_hash: hash(ticket) });
+  if (result.error) throw new Error(`Enrollment reservation: ${result.error.message}. Apply the Google enrollment migration before running this integration check.`);
+  assert.equal(result.data, 0, 'Test enrollment was unexpectedly throttled');
+  return ticket;
+}
 async function create(name, node, role = 'student') {
   const profile = person(name, node, role);
   const data = await ok(`provision ${name}`, await admin.functions.invoke('rmc-accounts', { body: { action: 'create', data: { members: [{ profile, password }] } } }));
@@ -52,7 +60,12 @@ try {
   // Auth admin creates without sending email. This runs the exact signup trigger
   // used by public sign-up, with deliberately forged privileged metadata.
   const admissionProfile = person('admission');
-  const admission = await ok('admission trigger', await service.auth.admin.createUser({ email: admissionProfile.email, password, email_confirm: true, user_metadata: { profile: { ...admissionProfile, role: 'admin', account_status: 'active' } } }));
+  // Public signup enforces the current enrollment fields; provisioning does not
+  // follow the applicant workflow. Keep this test independent of real images.
+  admissionProfile.student_id = `2026-${String(crypto.randomInt(100000)).padStart(5, '0')}`;
+  admissionProfile.guardian = { name: 'Verification Guardian', contact: '09123456789' };
+  admissionProfile.photo_url = `https://drive.google.com/thumbnail?id=${prefix}_photo&sz=w1600`;
+  const admission = await ok('admission trigger', await service.auth.admin.createUser({ email: admissionProfile.email, password, email_confirm: true, user_metadata: { profile: { ...admissionProfile, role: 'admin', account_status: 'active' }, enrollment_ticket: await enrollmentTicket(admissionProfile.email) } }));
   ids.push(admission.user.id);
   const pending = await ok('read pending admission', await service.from('rmc_profiles').select('role_id,status').eq('id', admission.user.id).single());
   assert.deepEqual(pending, { role_id: 'student', status: 'pending' });
@@ -62,7 +75,7 @@ try {
   await command('approveApplication', [admission.user.id, 'student']);
   deny('admission cannot be approved twice', await admin.rpc('rmc_command', { action: 'approveApplication', args: [admission.user.id, 'student'] }));
   await command('setSectionSecurityKey', [`${prefix}-section`, 'VERIFY-SECRET-123']);
-  const wrongKey = await service.auth.admin.createUser({ email: person('wrongkey').email, password, email_confirm: true, user_metadata: { profile: person('wrongkey'), enrollment_key: 'WRONG' } });
+  const wrongKey = await service.auth.admin.createUser({ email: person('wrongkey').email, password, email_confirm: true, user_metadata: { profile: person('wrongkey'), enrollment_key: 'WRONG', enrollment_ticket: await enrollmentTicket(person('wrongkey').email) } });
   deny('invalid enrollment key rejected on server', wrongKey);
   const id = await command('createEvent', [event('attendance')]);
   const qr = await ok('issue expiring QR', await student.who.rpc('rmc_issue_qr'));
@@ -105,12 +118,12 @@ try {
   const outs = await Promise.all([mayor.who.rpc('rmc_record_attendance', { ...scan, event_id: serviceEvent, direction: 'out' }), mayor.who.rpc('rmc_record_attendance', { ...scan, event_id: serviceEvent, direction: 'out' })]);
   outs.forEach(r => assert.equal(r.error, null, r.error?.message)); assert.equal(outs.filter(r => r.data.already_recorded).length, 1);
   checks.push('merit credit applied once'); console.log('PASS merit credit applied once');
-  await ok('submit excuse', await student.who.rpc('rmc_command', { action: 'submitExcuseApplication', args: [{ event_id: id, category: 'medical', reason: 'Integration test supporting explanation.' }] }));
+  const path = `${student.id}/excuses/${crypto.randomUUID()}.pdf`; uploaded.push(path);
+  await ok('private document upload', await student.who.storage.from('rmc-documents').upload(path, new Blob(['%PDF-1.4\n%%EOF'], { type: 'application/pdf' })));
+  await ok('submit excuse', await student.who.rpc('rmc_command', { action: 'submitExcuseApplication', args: [{ event_id: id, category: 'medical', reason: 'Integration test supporting explanation.', proof_url: `storage://${path}` }] }));
   const excuses = await student.who.from('rmc_excuses').select('id').eq('student_id', student.id);
   await command('reviewExcuseApplication', [excuses.data[0].id, 'approved', 'Verified explanation', 1]);
   deny('excuse cannot be waived twice', await admin.rpc('rmc_command', { action: 'reviewExcuseApplication', args: [excuses.data[0].id, 'approved', 'Duplicate', 1] }));
-  const path = `${student.id}/verify/${crypto.randomUUID()}.pdf`; uploaded.push(path);
-  await ok('private document upload', await student.who.storage.from('rmc-documents').upload(path, new Blob(['%PDF-1.4\n%%EOF'], { type: 'application/pdf' })));
   deny('another student cannot open private document', await other.who.storage.from('rmc-documents').createSignedUrl(path, 60));
   await ok('owner can open private document', await student.who.storage.from('rmc-documents').createSignedUrl(path, 60));
   const after = await ok('persisted attendance and sanction snapshot', await student.who.rpc('rmc_snapshot'));
@@ -140,6 +153,8 @@ try {
   await ok('verify real TOTP factor', await student.who.auth.mfa.challengeAndVerify({ factorId: factor.id, code: totp() }));
   const lowAssurance = client(); await ok('sign in enrolled user without second factor', await lowAssurance.auth.signInWithPassword({ email: student.profile.email, password }));
   deny('MFA protected operation rejects password-only session', await lowAssurance.rpc('rmc_issue_qr'));
+  deny('MFA protected printed QR rejects password-only session', await lowAssurance.rpc('rmc_get_print_qr'));
+  deny('MFA protected printed QR rotation rejects password-only session', await lowAssurance.rpc('rmc_refresh_print_qr'));
   const restricted = await ok('MFA read restrictions', await lowAssurance.rpc('rmc_snapshot'));
   assert.equal(restricted.profiles.length, 0); assert.equal(restricted.attendance.length, 0); assert.equal(restricted.sanctions.length, 0);
   deny('MFA password-only session cannot sign private documents', await lowAssurance.storage.from('rmc-documents').createSignedUrl(path, 60));
@@ -148,6 +163,7 @@ try {
   assert.ok(deactivated.error || deactivated.data?.profiles?.length === 0);
   checks.push('deactivation revokes existing-session records'); console.log('PASS deactivation revokes existing-session records');
   await ok('MFA verified session can issue QR', await student.who.rpc('rmc_issue_qr'));
+  await ok('MFA verified session can read printed QR', await student.who.rpc('rmc_get_print_qr'));
   console.log(`Verified ${checks.length} live checks.`);
 } finally {
   if (uploaded.length) await service.storage.from('rmc-documents').remove(uploaded);

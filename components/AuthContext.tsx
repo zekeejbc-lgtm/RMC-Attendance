@@ -17,23 +17,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let disposed = false, syncing = false, syncAgain = false;
     let identity: string | null | undefined;
     let identityVersion = 0;
+    let welcomePending: string | null = null;
     const failed = (error: unknown) => { if (!disposed) setState(s => ({ ...s, loading: false, error: error instanceof Error ? error.message : 'Unable to connect to Supabase.' })); };
     const sync = async () => {
       if (disposed || identity === undefined) return;
+      if (!navigator.onLine) { failed(new Error('Reconnect to load your school information and records.')); return; }
       if (syncing) { syncAgain = true; return; }
       syncing = true;
       const version = identityVersion;
+      let needsMfa = false;
       try {
         if (identity) {
           const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
           if (disposed || version !== identityVersion) return;
           if (error) throw error;
-          if (data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2') setChallenge('mfa');
+          needsMfa = data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2';
+          if (needsMfa) setChallenge('mfa');
         }
         const applied = await refreshData();
         if (disposed || version !== identityVersion) return;
         // A superseded request has not finished loading this session's workspace.
         if (!applied) { syncAgain = true; return; }
+        const account = appAuth.getCurrentUser();
+        if (welcomePending === identity && account?.profile.account_status === 'active' && !needsMfa) {
+          welcomePending = null;
+          toast.success(`Welcome back, ${account.profile.name}! Open the notification bell for your latest updates.`);
+        }
         setState(s => ({ ...s, loading: false, error: null }));
       }
       catch (error) { if (version === identityVersion) failed(error); }
@@ -53,19 +62,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         identityVersion++;
         if (syncing) syncAgain = true;
         identity = uid; resetData(uid);
+        welcomePending = uid;
         setState(s => ({ ...s, user: session ? { uid: session.user.id, email: session.user.email } : null, profile: null, stats: null, loading: true, error: null }));
       }
       // Auth callbacks hold a client lock; start database queries after the callback returns.
       setTimeout(() => void sync(), 0);
     });
-    const poll = setInterval(() => { if (document.visibilityState === 'visible') void sync(); }, 15000);
-    const onFocus = () => void sync(); window.addEventListener('focus', onFocus);
+    const poll = setInterval(() => { if (navigator.onLine && document.visibilityState === 'visible') void sync(); }, 15000);
+    const onFocus = () => { if (navigator.onLine) void sync(); }; window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onFocus);
     const onRejection = (event: PromiseRejectionEvent) => { toast.error(event.reason); event.preventDefault(); };
     window.addEventListener('unhandledrejection', onRejection);
     const onSyncError = (event: Event) => failed(new Error((event as CustomEvent).detail));
     window.addEventListener('rmc_sync_error', onSyncError);
     if (configurationError) failed(new Error(configurationError));
-    return () => { disposed = true; clearInterval(poll); subscription.unsubscribe(); unsubscribeData(); window.removeEventListener('focus', onFocus); window.removeEventListener('unhandledrejection', onRejection); window.removeEventListener('rmc_sync_error', onSyncError); };
+    return () => { disposed = true; clearInterval(poll); subscription.unsubscribe(); unsubscribeData(); window.removeEventListener('focus', onFocus); window.removeEventListener('online', onFocus); window.removeEventListener('unhandledrejection', onRejection); window.removeEventListener('rmc_sync_error', onSyncError); };
   }, []);
   return <AuthContext.Provider value={state}>
     {state.error && <div role="alert" className="border-b border-red-300 bg-red-50 p-3 text-sm text-red-900">{state.error} <button className="underline" onClick={() => window.location.reload()}>Retry connection</button></div>}

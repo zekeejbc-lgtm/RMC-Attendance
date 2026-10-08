@@ -620,6 +620,23 @@ describe('student route UI behavior', () => {
     expect(screen.getByRole('dialog', { name: /weekly institutional flag raising ceremony/i })).toBeInTheDocument();
   });
 
+  it.each([false, true])('blocks expired excuses and honors activity-specific extensions (ceremony=%s)', async (ceremony) => {
+    const user = userEvent.setup();
+    useStudent();
+    staffState.events = [{ id: 'expired', title: 'Expired Activity', status: 'done', kind: ceremony ? 'flag_ceremony' : 'attendance', endTime: Date.now() - 4 * 86400000, startTime: Date.now() - 5 * 86400000, excuseWindowDays: 3 }];
+    const { unmount } = renderRoute(ceremony ? <StudentCeremonies /> : <StudentEvents />);
+    await user.click(screen.getByRole('button', { name: ceremony ? /archived ceremonies/i : /archived events/i }));
+    await user.click(screen.getByRole('button', { name: /expired activity/i }));
+    expect(screen.getByRole('button', { name: /file for excuse/i })).toBeDisabled();
+    expect(screen.getAllByText(/submission window has closed/i).length).toBeGreaterThan(0);
+    unmount();
+    staffState.events[0].excuseWindowDays = 7;
+    renderRoute(ceremony ? <StudentCeremonies /> : <StudentEvents />);
+    await user.click(screen.getByRole('button', { name: ceremony ? /archived ceremonies/i : /archived events/i }));
+    await user.click(screen.getByRole('button', { name: /expired activity/i }));
+    expect(screen.getByRole('button', { name: /file for excuse/i })).toBeEnabled();
+  });
+
   it('allows retrospective excuses for ended events and archived ceremonies', async () => {
     const user = userEvent.setup();
     useStudent();

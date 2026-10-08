@@ -1,11 +1,11 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, CircleAlert, LoaderCircle, X } from 'lucide-react';
 import { toast, toastStore, type ToastItem } from '../../lib/toast';
 
-function Notification({ item }: { item: ToastItem }) {
+function Notification({ item, exiting }: { item: ToastItem; exiting: boolean }) {
   const phase = item.phase ?? 0;
-  return <div className="app-toast" data-kind={item.kind}>
+  return <div className="app-toast" data-kind={item.kind} data-state={exiting ? 'closing' : 'open'}>
     {item.kind === 'progress' ? <LoaderCircle size={17} className="app-toast-spinner" aria-hidden="true" /> : item.kind === 'error' ? <CircleAlert size={17} aria-hidden="true" /> : <Check size={17} aria-hidden="true" />}
     <div className="app-toast-content">
       {item.kind === 'error' ? <>
@@ -27,10 +27,19 @@ function Notification({ item }: { item: ToastItem }) {
 
 export default function ToastViewport() {
   const items = useSyncExternalStore(toastStore.subscribe, toastStore.getSnapshot);
+  const [displayed, setDisplayed] = useState<{ item: ToastItem; exiting: boolean }[]>([]);
+  useEffect(() => {
+    setDisplayed(previous => [
+      ...previous.filter(entry => !items.some(item => item.id === entry.item.id)).map(entry => ({ ...entry, exiting: true })),
+      ...items.map(item => ({ item, exiting: false })),
+    ]);
+    const timer = window.setTimeout(() => setDisplayed(previous => previous.filter(entry => !entry.exiting)), 200);
+    return () => clearTimeout(timer);
+  }, [items]);
   const hasAction = items.some(item => !item.request && item.kind === 'progress');
-  const visible = items.filter(item => !hasAction || !item.request || item.kind === 'error');
+  const visible = displayed.filter(({ item }) => !hasAction || !item.request || item.kind === 'error');
   return createPortal(<div className="app-toast-viewport" data-toast-root="true" aria-label="Notifications">
-    <div role="status" aria-live="polite">{visible.filter(item => item.kind !== 'error').map(item => <Notification item={item} key={item.id} />)}</div>
-    <div role="alert" aria-live="assertive">{visible.filter(item => item.kind === 'error').map(item => <Notification item={item} key={item.id} />)}</div>
+    <div role="status" aria-live="polite">{visible.filter(({ item }) => item.kind !== 'error').map(({ item, exiting }) => <Notification item={item} exiting={exiting} key={`${item.id}:${item.kind}`} />)}</div>
+    <div role="alert" aria-live="assertive">{visible.filter(({ item }) => item.kind === 'error').map(({ item, exiting }) => <Notification item={item} exiting={exiting} key={`${item.id}:${item.kind}`} />)}</div>
   </div>, document.body);
 }

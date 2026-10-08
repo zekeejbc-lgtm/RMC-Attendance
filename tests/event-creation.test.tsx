@@ -108,15 +108,19 @@ it('reviews the full event and requires final confirmation before saving', async
   await user.type(screen.getByRole('textbox', { name: 'Event Title' }), 'Assembly');
   await user.type(screen.getByRole('textbox', { name: 'Event Details and Information' }), 'School assembly');
   await user.click(screen.getByRole('button', { name: 'Next: Schedule' }));
-  for (const [label, value] of [['Start Date', '2026-11-10'], ['End Date', '2026-11-10'], ['Time In 1', '08:00'], ['Time Out 1', '10:00']]) {
+  for (const [label, value] of [['Start Date', '2026-11-10'], ['End Date', '2026-11-10']]) {
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   }
+  fireEvent.change(screen.getByRole('combobox', { name: 'Time In 1 hour' }), { target: { value: '8' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 1 hour' }), { target: { value: '10' } });
   await user.click(screen.getByRole('button', { name: 'Next: Attendees' }));
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
   expect(screen.getByRole('heading', { name: 'Event recipients' })).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Next: Rules & Location' }));
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '75');
   fireEvent.change(screen.getByLabelText('Late Sanction Value'), { target: { value: '45' } });
+  expect(screen.getByLabelText('Days to submit after the activity ends')).toHaveValue(3);
+  fireEvent.change(screen.getByLabelText('Days to submit after the activity ends'), { target: { value: '7' } });
   await user.click(screen.getByRole('button', { name: 'Next: Review' }));
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
   expect(screen.getByText('Late: 45 minutes; absent: 1 hours')).toBeVisible();
@@ -124,6 +128,7 @@ it('reviews the full event and requires final confirmation before saving', async
   await user.click(screen.getByRole('button', { name: 'Submit for OSSA Approval' }));
   await screen.findByText('Event registry');
   expect(state.create).toHaveBeenCalledTimes(1);
+  expect(state.create).toHaveBeenCalledWith(expect.objectContaining({ excuseWindowDays: 7 }));
 });
 
 it('sets standard flag retreat to Friday afternoon while keeping school times editable', () => {
@@ -426,4 +431,22 @@ it('rejects invalid banners and lets the user remove a selected banner', async (
   await screen.findByText('Event registry');
   expect(state.upload).not.toHaveBeenCalled();
   expect(state.create).toHaveBeenCalledWith(expect.objectContaining({ bannerUrl: '' }));
+});
+
+
+it.each(['event', 'ceremony'])('edits and validates an existing %s excuse window', async purpose => {
+  const ceremony = purpose === 'ceremony';
+  state.events = [{ id: 'policy-event', title: 'Policy activity', description: 'Existing instructions', kind: ceremony ? 'flag_ceremony' : 'attendance', status: 'upcoming', scopeNodeId: 'school', created_by: 'officer',
+    startDate: '2026-11-10', endDate: '2026-11-10', startTime: Date.parse('2026-11-10T08:00:00+08:00'), endTime: Date.parse('2026-11-10T10:00:00+08:00'),
+    excuseWindowDays: 7, penaltyValue: 1, penaltyUnit: 'hours', geofenceEnabled: false, location: { lat: 0, lng: 0, radius_meters: 0 },
+    attendanceWindows: [{ id: 'morning', timeIn: '08:00', timeOut: '10:00', lateAfterMinutes: 15 }], audienceTarget: { mode: 'all' }, target: { all: true }, recipientGroups: ['All Students'] }];
+  mount(`/ssg/${ceremony ? 'ceremonies' : 'events'}/policy-event/edit`);
+  const field = screen.getByLabelText('Days to submit after the activity ends');
+  expect(field).toHaveValue(7);
+  fireEvent.change(field, { target: { value: '31' } });
+  fireEvent.submit(screen.getByRole('form'));
+  expect(state.update).not.toHaveBeenCalled();
+  fireEvent.change(field, { target: { value: '0' } });
+  fireEvent.submit(screen.getByRole('form'));
+  await waitFor(() => expect(state.update).toHaveBeenCalledWith('policy-event', expect.objectContaining({ excuseWindowDays: 0 })));
 });

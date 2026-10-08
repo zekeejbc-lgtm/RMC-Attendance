@@ -11,13 +11,14 @@ import type { UserProfile } from '../types';
 const applicant = { email: 'student@example.edu', name: 'Student', username: 'student_123', student_id: '123', school_data: {} } as UserProfile;
 it('submits the admission profile and key through Supabase and reports email confirmation', async () => {
   resetData();
-  api.signUp.mockResolvedValue({ data: { user: { id: 'new', identities: [{}] }, session: null }, error: null });
+  api.invoke.mockResolvedValue({ data: { uid: 'new', needsEmailConfirmation: true }, error: null });
   await expect(appData.submitApplication(applicant, 'strong-password', 'SECTION-KEY')).resolves.toEqual({ uid: 'new', needsEmailConfirmation: true });
-  expect(api.signUp).toHaveBeenCalledWith(expect.objectContaining({ email: applicant.email, password: 'strong-password', options: expect.objectContaining({ data: { profile: applicant, enrollment_key: 'SECTION-KEY' } }) }));
+  expect(api.invoke).toHaveBeenCalledWith('rmc-enroll', { body: { action: 'enroll', profile: applicant, password: 'strong-password', enrollmentKey: 'SECTION-KEY' } });
+  expect(api.signUp).not.toHaveBeenCalled();
 });
 it('does not report a duplicate signup as a newly submitted application', async () => {
   resetData();
-  api.signUp.mockResolvedValue({ data: { user: { id: 'hidden', identities: [] }, session: null }, error: null });
+  api.invoke.mockResolvedValue({ data: { error: 'This email is already registered. Sign in to track your application.' }, error: null });
   await expect(appData.submitApplication(applicant, 'strong-password')).rejects.toThrow('already registered');
 });
 it('prevents a signed-in student from creating another account', async () => {

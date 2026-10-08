@@ -420,3 +420,7 @@ verify_jwt = false
 [functions.rmc-login]
 verify_jwt = false
 # Public password login: no account data is returned without a valid password.
+
+[functions.rmc-enroll]
+verify_jwt = false
+# Verifies Google JWTs; final enrollment is required before creating an Auth user.

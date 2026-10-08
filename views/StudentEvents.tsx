@@ -1,3 +1,5 @@
+import { excuseBlockReason, excuseFileError, EXCUSE_FILE_ACCEPT } from '../lib/excusePolicy';
+import { ExcuseWindowNotice, useExcuseClock } from '../components/events/ExcuseWindowNotice';
 import { formatManilaTime, formatManilaDate, formatClockTime } from '../lib/dateTime';
 import { useNavigate } from 'react-router-dom';
 import EventLocationDetails from '../components/events/EventLocationDetails';
@@ -36,6 +38,8 @@ const StudentEvents: React.FC = () => {
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [showExcuseModal, setShowExcuseModal] = useState(false);
 
+  const now = useExcuseClock();
+
   // Excuse Form State
   const [excuseReason, setExcuseReason] = useState('Medical / Health Condition');
   const [excuseDetails, setExcuseDetails] = useState('');
@@ -64,7 +68,8 @@ const StudentEvents: React.FC = () => {
   const scheduledEvents = useMemo(() => eventSectionRoots(filteredEvents).filter(e => e.status === 'upcoming'), [filteredEvents]);
   const archivedEvents = useMemo(() => eventSectionRoots(filteredEvents).filter(e => e.status === 'done'), [filteredEvents]);
 
-  const canFileExcuse = (event: AppEvent) => !event.isGeneralEvent && !event.cancellationStatus;
+  const canFileExcuse = (event: AppEvent) => !event.isGeneralEvent && !event.cancellationStatus && !['service', 'merit'].includes(event.kind || '');
+  const blockReason = (event: AppEvent, at = now) => excuseBlockReason(event, appData.getExcuseApplications(), profile?.uid || '', Boolean(profile && appData.isUserScopeFrozen(profile)), at);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -77,12 +82,14 @@ const StudentEvents: React.FC = () => {
   const handleExcuseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEvent || !profile || submitting) return;
+    const validationError = blockReason(selectedEvent, Date.now()) || (excuseDetails.trim().length < 10 ? 'Enter at least 10 characters of explanation.' : '') || excuseFileError(selectedFile);
+    if (validationError) { setExcuseError(validationError); return; }
     setSubmitting(true); setExcuseError('');
     try {
-      const proof = selectedFile ? await uploadDocument(selectedFile, 'excuses') : undefined;
-      await appData.submitExcuseApplication({ event_id: selectedEvent.id, reason: excuseDetails, category: /medical|health/i.test(excuseReason) ? 'medical' : /emergency/i.test(excuseReason) ? 'emergency' : /academic|official/i.test(excuseReason) ? 'institutional' : 'personal', proof_url: proof });
+      const proof = await uploadDocument(selectedFile!, 'excuses');
+      await appData.submitExcuseApplication({ event_id: selectedEvent.id, reason: excuseDetails, contact_mobile: excuseContact.trim() || undefined, category: /medical|health/i.test(excuseReason) ? 'medical' : /emergency/i.test(excuseReason) ? 'emergency' : /academic|official/i.test(excuseReason) ? 'institutional' : 'personal', proof_url: proof });
       setSubmittedExcuse(true);
-    } catch (error) { setExcuseError(error instanceof Error ? error.message : 'Unable to submit excuse.'); }
+    } catch (error) { setExcuseError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to submit excuse.'); }
     finally { setSubmitting(false); }
   };
 
@@ -296,11 +303,12 @@ const StudentEvents: React.FC = () => {
           footer={canFileExcuse(selectedEvent) ? (
             <>
               <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 sm:mr-auto sm:self-center">
-                Unable to attend this assembly?
+                {blockReason(selectedEvent) || 'Unable to attend this assembly?'}
               </p>
               <button
+                disabled={Boolean(blockReason(selectedEvent))}
                 aria-label="File for excuse"
-                onClick={() => { setSubmittedExcuse(false); setExcuseError(''); setExcuseDetails(''); setSelectedFile(null); setFilePreviewName(''); setShowExcuseModal(true); }}
+                onClick={() => { setSubmittedExcuse(false); setExcuseError(''); setExcuseDetails(''); setExcuseContact(''); setSelectedFile(null); setFilePreviewName(''); setShowExcuseModal(true); }}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl app-button--gold px-6 py-3 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition-all hover:brightness-110 active:scale-95 sm:w-auto"
                 type="button"
               >
@@ -310,6 +318,7 @@ const StudentEvents: React.FC = () => {
           ) : undefined}
         >
           <div className="space-y-5">
+            {canFileExcuse(selectedEvent) && <ExcuseWindowNotice event={selectedEvent} blocked={blockReason(selectedEvent)} />}
             {selectedEvent.bannerUrl && <EventBanner src={selectedEvent.bannerUrl} alt={`${selectedEvent.title} banner`} />}
             <span className="inline-flex rounded-full border border-gold-300 bg-gold-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-gold-700 dark:border-gold-400/30 dark:bg-gold-400/10 dark:text-gold-300">
               {selectedEvent.status} Event
@@ -399,6 +408,7 @@ const StudentEvents: React.FC = () => {
             <button
               aria-label="Submit formal excuse"
               type="submit"
+              disabled={submitting || Boolean(blockReason(selectedEvent))}
               form="event-excuse-form"
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gold-400/30 bg-brand-900 px-5 py-3.5 text-xs font-black uppercase tracking-widest text-white shadow-lg transition-all hover:bg-brand-800 active:scale-98 sm:w-auto"
             >
@@ -413,11 +423,12 @@ const StudentEvents: React.FC = () => {
                 </div>
                 <h4 className="text-lg font-black text-brand-900 dark:text-slate-100 uppercase tracking-tight">Excuse Letter Submitted!</h4>
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  Your application for <span className="font-bold text-brand-900 dark:text-slate-200">{selectedEvent.title}</span> has been forwarded to the SSG Student Affairs Committee for review.
+                  Your application for <span className="font-bold text-brand-900 dark:text-slate-200">{selectedEvent.title}</span> has been forwarded to the OSSA for review. Your absence is excused only after approval.
                 </p>
               </div>
             ) : (
               <form id="event-excuse-form" onSubmit={handleExcuseSubmit} className="space-y-4">
+                <ExcuseWindowNotice event={selectedEvent} blocked={blockReason(selectedEvent)} />
                 {excuseError && <p role="alert" className="text-sm text-red-600">{excuseError}</p>}
                 {/* Event Summary */}
                 <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
@@ -435,6 +446,7 @@ const StudentEvents: React.FC = () => {
                     id="event-excuse-details"
                     rows={3}
                     required
+                    minLength={10}
                     placeholder="Provide detailed justification for absence..."
                     value={excuseDetails}
                     onChange={(e) => setExcuseDetails(e.target.value)}
@@ -450,8 +462,8 @@ const StudentEvents: React.FC = () => {
                     <span className="text-xs font-bold text-brand-900 dark:text-slate-200">
                       {filePreviewName ? filePreviewName : 'Click or Drag File to Upload'}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-medium">PDF, JPG, PNG up to 10MB</span>
-                    <input aria-label="Attach Excuse Letter / Medical Certificate" id="event-excuse-file" type="file" accept="image/*,.pdf" onChange={handleFileChange} className="sr-only" />
+                    <span className="text-[10px] text-slate-400 font-medium">Required: PDF, JPG, PNG, WebP up to 5 MB</span>
+                    <input aria-label="Attach Excuse Letter / Medical Certificate" id="event-excuse-file" type="file" aria-required="true" accept={EXCUSE_FILE_ACCEPT} onChange={handleFileChange} className="sr-only" />
                   </label>
                 </div>
 

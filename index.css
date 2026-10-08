@@ -34,7 +34,30 @@
   font-size: 0.8125rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
-  animation: slideUp var(--motion-fast) var(--motion-standard) both;
+  animation: toastEnter 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.app-toast[data-state='closing'] { animation: toastExit 200ms ease-in both; pointer-events: none; }
+@keyframes toastEnter {
+  from { opacity: 0; transform: translateX(28px) translateY(8px) scale(0.96); }
+  to { opacity: 1; transform: translateX(0) translateY(0) scale(1); }
+}
+@keyframes toastExit {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to { opacity: 0; transform: translateX(28px) scale(0.96); }
+}
+.app-modal-panel.app-notification-panel {
+  transform-origin: top right;
+  animation: notificationEnter 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  box-shadow: 0 18px 55px rgb(0 0 0 / 0.22);
+}
+.app-modal-panel.app-notification-panel[data-state='closing'] { animation: notificationExit 180ms ease-in both; pointer-events: none; }
+@keyframes notificationEnter {
+  from { opacity: 0; transform: translateY(-10px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes notificationExit {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-8px) scale(0.96); }
 }
 .app-toast > svg { flex-shrink: 0; margin-top: 2px; color: var(--color-text-muted); }
 .app-toast[data-kind='success'] > svg { color: var(--color-success); }

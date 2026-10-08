@@ -136,6 +136,8 @@ export interface ExcuseApplication {
   category: 'medical' | 'personal' | 'institutional' | 'emergency';
   reason: string;
   proof_url?: string;
+  contact_mobile?: string;
+  submission_deadline?: number;
   submission_date: number;
   submitted_at?: number;
   status: 'pending' | 'approved' | 'rejected';
@@ -206,6 +208,8 @@ export interface EventSanctionRule {
 }
 
 export interface AppEvent {
+  /** Whole days (24 hours each) after endTime; 0 closes at the activity's end. */
+  excuseWindowDays?: number;
   isGeneralEvent?: boolean;
   bannerUrl?: string;
   parentEventId?: string | null;

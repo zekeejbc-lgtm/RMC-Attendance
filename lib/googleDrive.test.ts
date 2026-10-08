@@ -1,9 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
+vi.mock('./supabase', () => ({ supabase: { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }) } } }));
 import { createDriveImage, getDriveImage, updateDriveImage, publicDriveImageUrl, deleteDriveImage } from './googleDrive';
 
 import { toast, toastStore } from './toast';
 
-afterEach(() => { vi.unstubAllGlobals(); toastStore.getSnapshot().forEach(item => toast.dismiss(item.id)); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); toastStore.getSnapshot().forEach(item => toast.dismiss(item.id)); });
 it.each([
   ['failed-save', 'Clean up unsaved photo', 'Unsaved upload removed. Your previous photo was kept.'],
   ['replacement', 'Remove replaced photo', 'Old photo removed. Your new photo is saved.'],
@@ -14,6 +15,7 @@ it.each([
   vi.stubGlobal('fetch', fetcher);
   const pending = deleteDriveImage('old-file', reason);
   expect(toastStore.getSnapshot()[0]).toMatchObject({ kind: 'progress', title, phase: 0 });
+  await vi.waitFor(() => expect(fetcher).toHaveBeenCalled());
   expect(JSON.parse(fetcher.mock.calls[0][1].body as string)).toEqual({ action: 'delete', fileId: 'old-file' });
   finish({ ok: true, status: 200, text: async () => '{"success":true}' });
   await pending;
@@ -63,4 +65,16 @@ it('identifies invalid Drive results at the response validation phase', async ()
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{"success":true}' }));
   await expect(getDriveImage('file-id')).rejects.toThrow('no public image URL');
   expect(toastStore.getSnapshot()[0]).toMatchObject({ kind: 'error', phase: 1, phases: ['Working on your photo', 'Finishing up'] });
+});
+
+it('keeps successful uploads and cleanup working when session storage is unavailable', async () => {
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('Storage disabled'); });
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage disabled'); });
+  vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('Storage disabled'); });
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{"success":true,"id":"storage-disabled-file","url":"https://drive.google.com/thumbnail?id=storage-disabled-file&sz=w1600"}' });
+  vi.stubGlobal('fetch', fetcher);
+  await expect(createDriveImage(new File(['image'], 'photo.png', { type: 'image/png' }), 'Student', '123')).resolves.toHaveProperty('id', 'storage-disabled-file');
+  const upload = JSON.parse(fetcher.mock.calls[0][1].body);
+  await deleteDriveImage('storage-disabled-file');
+  expect(JSON.parse(fetcher.mock.calls[1][1].body).managementToken).toBe(upload.managementToken);
 });

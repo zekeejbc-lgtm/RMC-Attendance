@@ -5,6 +5,7 @@ import { DEFAULT_CORE_ROLES, setMockDataRef, hasPermission } from './accessContr
 import { findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNodeInSubtree, profileMatchesDirectorySection } from './academicDirectory';
 import { isEventRecipient, canManageEventInScope } from './eventAudience';
 import { publicDriveImageUrl } from './googleDrive';
+import { googleRequest } from './googleAuth';
 
 type Student = UserProfile & { stats: UserStats; sanction_logs: any[] };
 type Snapshot = {
@@ -249,16 +250,12 @@ export const appData = {
       await refreshAfterWrite(progress); return { uid: currentUserId, needsEmailConfirmation: false };
     }
     if (currentUserId) throw new Error('You already have an account. Open your application status or sign out to register another student.');
-    const { data, error } = await supabase.auth.signUp({ email: profile.email, password, options: { data: { profile, enrollment_key: enrollmentKey }, emailRedirectTo: window.location.origin } });
-    if (error) {
-      const message = error.message || '';
-      if (/name, email, username|already exists|duplicate key/i.test(message)) {
-        throw new Error('This name, username, or email address is already enrolled. Use different account details.');
-      }
-      throw error;
+    const result = await googleRequest({ action: 'enroll', profile, password, enrollmentKey });
+    if (result.session) {
+      const { error } = await supabase.auth.setSession(result.session);
+      if (error) throw error;
     }
-    if (!data.user || data.user.identities?.length === 0) throw new Error('Unable to create a new account with these details. If you already registered, confirm your email and sign in.');
-    return { uid: data.user?.id, needsEmailConfirmation: !data.session };
+    return { uid: result.uid, needsEmailConfirmation: result.needsEmailConfirmation };
   
   }, 'Submit application');
 },

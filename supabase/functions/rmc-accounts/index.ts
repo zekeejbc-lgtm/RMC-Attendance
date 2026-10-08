@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
+import { readJson, responseHeaders as cors } from '../_shared/http.ts';
 
-const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const respond = (body: unknown, status = 200) => Response.json(body, { status, headers: cors });
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -14,7 +14,7 @@ Deno.serve(async (req: Request) => {
   const caller = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } });
   const created: string[] = [];
   try {
-    const { action, data } = await req.json();
+    const { action, data } = await readJson(req, 1024 * 1024);
     if (action === 'access') {
       const { error: permissionError } = await caller.rpc('rmc_assert_manage_accounts');
       if (permissionError) throw permissionError;
@@ -30,7 +30,7 @@ Deno.serve(async (req: Request) => {
       return respond({ users });
     }
     if (action === 'reset_password') {
-      if (typeof data?.uid !== 'string' || typeof data?.password !== 'string' || data.password.length < 12) throw new Error('Passwords must contain at least 12 characters.');
+      if (typeof data?.uid !== 'string' || typeof data?.password !== 'string' || data.password.length < 12 || data.password.length > 1024) throw new Error('Passwords must contain between 12 and 1024 characters.');
       const { error: permissionError } = await caller.rpc('rmc_change_account_password', { target: data.uid });
       if (permissionError) throw permissionError;
       const { error } = await admin.auth.admin.updateUserById(data.uid, { password: data.password });
@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
     if (action !== 'create' || !Array.isArray(data?.members) || data.members.length < 1 || data.members.length > 100) throw new Error('Provide between 1 and 100 accounts.');
     const members = [];
     for (const member of data.members) {
-      if (member.password && member.password.length < 12) throw new Error('Temporary passwords must contain at least 12 characters.');
+      if (!member || typeof member !== 'object' || (member.password !== undefined && (typeof member.password !== 'string' || member.password.length < 12 || member.password.length > 1024))) throw new Error('Temporary passwords must contain between 12 and 1024 characters.');
       const { data: profile, error } = await caller.rpc('rmc_reserve_account', { person: member.profile });
       if (error) throw error;
       members.push({ ...member, profile });

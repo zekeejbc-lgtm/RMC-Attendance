@@ -1,3 +1,5 @@
+import { excuseBlockReason, excuseFileError, EXCUSE_FILE_ACCEPT } from '../lib/excusePolicy';
+import { ExcuseWindowNotice, useExcuseClock } from '../components/events/ExcuseWindowNotice';
 import { formatManilaDate, formatManilaTime } from '../lib/dateTime';
 import ActivityApprovalQueue from '../components/events/ActivityApprovalQueue';
 import { appData, uploadDocument } from '../lib/backend';
@@ -21,6 +23,7 @@ import {
 } from 'lucide-react';
 
 interface SchoolCeremony {
+  event: import('../types').AppEvent;
   id: string;
   title: string;
   type: 'flag_raising' | 'flag_retreat';
@@ -54,6 +57,8 @@ const StudentCeremonies: React.FC = () => {
   const [selectedCeremony, setSelectedCeremony] = useState<SchoolCeremony | null>(null);
   const [showExcuseModal, setShowExcuseModal] = useState(false);
 
+  const now = useExcuseClock();
+
   // Excuse Form State
   const [excuseReason, setExcuseReason] = useState('Official Academic Conflict');
   const [excuseDetails, setExcuseDetails] = useState('');
@@ -69,7 +74,7 @@ const StudentCeremonies: React.FC = () => {
       ? canManage || ['ossa', 'ossa_staff'].includes(profile.role) ? appData.getVisibleEvents(profile.uid) : appData.getEvents().filter(event => appData.isEventRecipient(event, profile) || isCeremonyVolunteer(event, profile, appData.getSchoolStructure()))
       : [];
     const ceremonies: SchoolCeremony[] = events.filter(event => event.kind === 'flag_ceremony' && !event.cancellationStatus && event.approvalStatus !== 'pending' && event.approvalStatus !== 'rejected').map(event => ({
-      id: event.id, title: event.title, required: Boolean(profile && appData.isEventRecipient(event, profile)), volunteerMerit: event.ceremony?.allowVolunteerMerit ? event.ceremony.volunteerMeritHours : 0, date: manilaDate(event.startTime), geofenceEnabled: event.geofenceEnabled !== false, canEdit: canManage && canManageEventInScope(profile, event, appData.getSchoolStructure()) && event.status !== 'done', type: event.ceremony?.flagKind === 'retreat' ? 'flag_retreat' : 'flag_raising', scheduleDay: formatManilaDate(event.startTime, { timeZone: 'Asia/Manila' }),
+      event, id: event.id, title: event.title, required: Boolean(profile && appData.isEventRecipient(event, profile)), volunteerMerit: event.ceremony?.allowVolunteerMerit ? event.ceremony.volunteerMeritHours : 0, date: manilaDate(event.startTime), geofenceEnabled: event.geofenceEnabled !== false, canEdit: canManage && canManageEventInScope(profile, event, appData.getSchoolStructure()) && event.status !== 'done', type: event.ceremony?.flagKind === 'retreat' ? 'flag_retreat' : 'flag_raising', scheduleDay: formatManilaDate(event.startTime, { timeZone: 'Asia/Manila' }),
       timeFrame: `${formatManilaTime(event.startTime, { timeZone: 'Asia/Manila' })} - ${formatManilaTime(event.endTime, { timeZone: 'Asia/Manila' })}`,
       locationName: event.geofenceEnabled ? 'Designated event area' : 'See event instructions', geofenceRadius: event.location.radius_meters,
       attire: 'See event instructions', description: event.description || '', penaltyValue: event.penaltyUnit === 'minutes' ? event.penaltyValue / 60 : event.penaltyValue,
@@ -97,6 +102,7 @@ const StudentCeremonies: React.FC = () => {
   );
 
   const canFileExcuse = (ceremony: SchoolCeremony) => Boolean(ceremony.required && profile && ['student', 'mayor', 'ssg'].includes(profile.role));
+  const blockReason = (ceremony: SchoolCeremony, at = now) => excuseBlockReason(ceremony.event, appData.getExcuseApplications(), profile?.uid || '', Boolean(profile && appData.isUserScopeFrozen(profile)), at);
 
   const renderCeremonyCard = (ceremony: SchoolCeremony) => (
     <button
@@ -163,12 +169,14 @@ const StudentCeremonies: React.FC = () => {
   const handleExcuseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCeremony || !profile || submitting) return;
+    const validationError = blockReason(selectedCeremony, Date.now()) || (excuseDetails.trim().length < 10 ? 'Enter at least 10 characters of explanation.' : '') || excuseFileError(selectedFile);
+    if (validationError) { setExcuseError(validationError); return; }
     setSubmitting(true); setExcuseError('');
     try {
-      const proof = selectedFile ? await uploadDocument(selectedFile, 'excuses') : undefined;
-      await appData.submitExcuseApplication({ event_id: selectedCeremony.id, reason: excuseDetails, category: /medical|health/i.test(excuseReason) ? 'medical' : /emergency/i.test(excuseReason) ? 'emergency' : /academic|official/i.test(excuseReason) ? 'institutional' : 'personal', proof_url: proof });
+      const proof = await uploadDocument(selectedFile!, 'excuses');
+      await appData.submitExcuseApplication({ event_id: selectedCeremony.id, reason: excuseDetails, contact_mobile: excuseContact.trim() || undefined, category: /medical|health/i.test(excuseReason) ? 'medical' : /emergency/i.test(excuseReason) ? 'emergency' : /academic|official/i.test(excuseReason) ? 'institutional' : 'personal', proof_url: proof });
       setSubmittedExcuse(true);
-    } catch (error) { setExcuseError(error instanceof Error ? error.message : 'Unable to submit excuse.'); }
+    } catch (error) { setExcuseError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to submit excuse.'); }
     finally { setSubmitting(false); }
   };
 
@@ -260,11 +268,12 @@ const StudentCeremonies: React.FC = () => {
           footer={selectedCeremony.canEdit ? <Button onClick={() => navigate(`/ssg/ceremonies/${selectedCeremony.id}/edit`)}>Edit Ceremony</Button> : canFileExcuse(selectedCeremony) ? (
             <>
               <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 sm:mr-auto sm:self-center">
-                Cannot participate in this official ceremony?
+                {blockReason(selectedCeremony) || 'Cannot participate in this official ceremony?'}
               </p>
               <button
+                disabled={Boolean(blockReason(selectedCeremony))}
                 aria-label="File for excuse"
-                onClick={() => { setSubmittedExcuse(false); setExcuseError(''); setExcuseDetails(''); setSelectedFile(null); setFilePreviewName(''); setShowExcuseModal(true); }}
+                onClick={() => { setSubmittedExcuse(false); setExcuseError(''); setExcuseDetails(''); setExcuseContact(''); setSelectedFile(null); setFilePreviewName(''); setShowExcuseModal(true); }}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl app-button--gold px-6 py-3 text-xs font-black uppercase tracking-widest text-brand-900 shadow-lg transition-all hover:brightness-110 active:scale-95 sm:w-auto"
                 type="button"
               >
@@ -274,6 +283,7 @@ const StudentCeremonies: React.FC = () => {
           ) : undefined}
         >
           <div className="space-y-5">
+            {canFileExcuse(selectedCeremony) && <ExcuseWindowNotice event={selectedCeremony.event} blocked={blockReason(selectedCeremony)} />}
             <span className="inline-flex rounded-full border border-gold-300 bg-gold-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-gold-700 dark:border-gold-400/30 dark:bg-gold-400/10 dark:text-gold-300">
               {selectedCeremony.type.replace('_', ' ')}
             </span>
@@ -328,6 +338,7 @@ const StudentCeremonies: React.FC = () => {
             <button
               aria-label="Transmit exemption letter"
               type="submit"
+              disabled={submitting || Boolean(blockReason(selectedCeremony))}
               form="ceremony-excuse-form"
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gold-400/30 bg-brand-900 px-5 py-3.5 text-xs font-black uppercase tracking-widest text-white shadow-lg transition-all hover:bg-brand-800 active:scale-98 sm:w-auto"
             >
@@ -342,11 +353,12 @@ const StudentCeremonies: React.FC = () => {
                 </div>
                 <h4 className="text-lg font-black text-brand-900 dark:text-slate-100 uppercase tracking-tight">Exemption Form Transmitted!</h4>
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  Your exemption request for <span className="font-bold text-brand-900 dark:text-slate-100">{selectedCeremony.title}</span> has been logged for Prefect of Discipline approval.
+                  Your exemption request for <span className="font-bold text-brand-900 dark:text-slate-100">{selectedCeremony.title}</span> has been logged for OSSA review. Your absence is excused only after approval.
                 </p>
               </div>
             ) : (
               <form id="ceremony-excuse-form" onSubmit={handleExcuseSubmit} className="space-y-4">
+                <ExcuseWindowNotice event={selectedCeremony.event} blocked={blockReason(selectedCeremony)} />
                 {excuseError && <p role="alert" className="text-sm text-red-600">{excuseError}</p>}
                 <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Target Ceremony</p>
@@ -361,6 +373,7 @@ const StudentCeremonies: React.FC = () => {
                     id="ceremony-excuse-details"
                     rows={3}
                     required
+                    minLength={10}
                     placeholder="Provide detailed explanation for ceremony absence..."
                     value={excuseDetails}
                     onChange={(e) => setExcuseDetails(e.target.value)}
@@ -375,8 +388,8 @@ const StudentCeremonies: React.FC = () => {
                     <span className="text-xs font-bold text-brand-900 dark:text-slate-200">
                       {filePreviewName ? filePreviewName : 'Upload Excuse Letter / Photo'}
                     </span>
-                    <span className="text-[10px] text-slate-400 font-medium">Supported formats: PDF, PNG, JPG</span>
-                    <input aria-label="Upload Supporting Document / Excuse Letter" id="ceremony-excuse-file" type="file" accept="image/*,.pdf" onChange={handleFileChange} className="sr-only" />
+                    <span className="text-[10px] text-slate-400 font-medium">Required: PDF, JPG, PNG, WebP up to 5 MB</span>
+                    <input aria-label="Upload Supporting Document / Excuse Letter" id="ceremony-excuse-file" type="file" aria-required="true" accept={EXCUSE_FILE_ACCEPT} onChange={handleFileChange} className="sr-only" />
                   </label>
                 </div>
               </form>
