@@ -1,6 +1,6 @@
 
 import React, { lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { ThemeProvider } from './components/ThemeContext';
 import Layout from './components/ui/Layout';
@@ -18,6 +18,7 @@ const SSGEventCreation = lazy(() => import('./views/SSGEventCreation'));
 const SSGCreateCeremony = lazy(() => import('./views/SSGCreateCeremony'));
 const SSGCreateEvent = lazy(() => import('./views/SSGCreateEvent'));
 const LandingPage = lazy(() => import('./views/LandingPage'));
+const LegalPage = lazy(() => import('./views/LegalPage'));
 const Organizations = lazy(() => import('./views/Organizations'));
 const GeneralEvent = lazy(() => import('./views/GeneralEvent'));
 const OrganizationEvent = lazy(() => import('./views/OrganizationEvent'));
@@ -30,6 +31,7 @@ import { hasPermission, AppPermission } from './lib/accessControl';
 import { AppLoading, PageSkeleton } from './components/ui/Skeleton';
 import ToastViewport from './components/ui/ToastViewport';
 import PwaStatus from './components/ui/PwaStatus';
+import { appData } from './lib/backend';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -39,11 +41,16 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permission, permissionAny }) => {
-  const { user, loading, profile, error } = useAuth();
+  const { user, loading, profile, error, offlineScanner, approvalNoticeSeen } = useAuth();
+  const location = useLocation();
 
   if (loading) return <AppLoading label="Loading your workspace"><PageSkeleton /></AppLoading>;
 
   if (!user) return <Navigate to="/login" replace />;
+  if (offlineScanner) {
+    if (location.pathname !== '/mayor/scan') return <Navigate to="/mayor/scan" replace />;
+    return <Layout>{children}</Layout>;
+  }
 
   if (!profile && error) return <main className="mx-auto max-w-xl px-4 py-12 text-slate-800 dark:text-slate-100">
     <h1 className="text-2xl font-bold">Your workspace is unavailable</h1>
@@ -52,6 +59,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
 
   // If authenticated but no profile, they are likely still in the application phase
   if (!profile) {
+    return <Navigate to="/register/status" replace />;
+  }
+  if (approvalNoticeSeen === false && appData.getApplications().some(application => application.id === user.uid && application.status === 'approved')) {
     return <Navigate to="/register/status" replace />;
   }
 
@@ -80,6 +90,10 @@ const App: React.FC = () => {
         <HashRouter>
           <Suspense fallback={<AppLoading label="Loading page"><PageSkeleton /></AppLoading>}><Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/privacy-policy" element={<LegalPage kind="privacy" />} />
+          <Route path="/data-deletion" element={<LegalPage kind="deletion" />} />
+          <Route path="/data-privacy-agreement" element={<LegalPage kind="agreement" />} />
+          <Route path="/terms-of-service" element={<LegalPage kind="terms" />} />
           <Route path="/login" element={<LandingPage defaultOpenLogin={true} />} />
           <Route path="/organizations/public" element={<Organizations publicDirectory />} />
           <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />

@@ -8,6 +8,8 @@ import { supabase } from '../lib/supabase';
 import { AppLoading } from '../components/ui/Skeleton';
 import { toast } from '../lib/toast';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
+import CountdownBar from '../components/ui/CountdownBar';
+import { claimApprovalNotice } from '../lib/approvalNotice';
 
 const fieldLabels: Record<string, string> = {
   name: 'Full name', student_id: 'Student ID', guardian_name: 'Guardian name',
@@ -15,13 +17,13 @@ const fieldLabels: Record<string, string> = {
   id_front: 'Student ID front', id_back: 'Student ID back',
 };
 
-const dashboardOpenedKey = (uid: string) => `rmc:dashboard-opened:${uid}`;
-
 export default function RegisterStatus() {
-  const { user, profile, loading, revision } = useAuth();
+  const { user, profile, loading, revision, markApprovalNoticeSeen } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [approvalReady, setApprovalReady] = useState(false);
+  const [approvalRetry, setApprovalRetry] = useState(0);
   const application = appData.getApplications().find(a => a.id === user?.uid);
   const [corrections, setCorrections] = useState({ name: '', student_id: '', guardian_name: '', guardian_phone: '' });
   const clarificationFields = application?.clarification_fields || [];
@@ -32,10 +34,20 @@ export default function RegisterStatus() {
 
   useEffect(() => { if (!loading && !user) navigate('/login'); }, [loading, user, navigate]);
   useEffect(() => {
-    if (!loading && profile && user && window.localStorage.getItem(dashboardOpenedKey(user.uid)) === 'true') {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [loading, profile, user, navigate]);
+    if (loading || !profile || !user) return;
+    let cancelled = false;
+    setApprovalReady(false);
+    setError('');
+    void claimApprovalNotice(user.uid).then(show => {
+      if (cancelled) return;
+      markApprovalNoticeSeen?.();
+      if (show) setApprovalReady(true);
+      else navigate('/dashboard', { replace: true });
+    }).catch(() => {
+      if (!cancelled) setError('Unable to save your approval notice. Reconnect and try again.');
+    });
+    return () => { cancelled = true; };
+  }, [loading, Boolean(profile), user?.uid, navigate, approvalRetry]);
   useEffect(() => {
     if (!application) return;
     setCorrections({
@@ -47,6 +59,9 @@ export default function RegisterStatus() {
   }, [application?.id, application?.reviewed_at, revision]);
 
   if (loading) return <AppLoading label="Loading application status" />;
+  if (profile && !approvalReady) return error
+    ? <main className="app-surface mx-auto my-20 max-w-lg space-y-4 p-6"><p role="alert">{error}</p><Button onClick={() => setApprovalRetry(value => value + 1)}>Try again</Button><Button variant="secondary" onClick={() => void appAuth.signOut()}>Sign out</Button></main>
+    : <AppLoading label="Loading account approval" />;
 
   const upload = async (file: File | undefined, kind: string) => {
     if (!file) return;
@@ -93,6 +108,7 @@ export default function RegisterStatus() {
     <main className="app-surface mx-auto max-w-lg space-y-5 p-6">
       <h1 className="text-2xl font-bold">{heading}</h1>
       <p className="text-sm text-slate-500 [overflow-wrap:anywhere]">{description}</p>
+      {profile && approvalReady && <CountdownBar seconds={8} label="Opening your dashboard" onComplete={() => navigate('/dashboard', { replace: true })} />}
       {application && <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">Status</dt><dd className="font-bold capitalize">{application.status === 'bounced' ? 'Returned for clarification' : application.status}</dd></div><div><dt className="text-slate-500">Name</dt><dd>{application.form_data.name}</dd></div><div><dt className="text-slate-500">Student ID</dt><dd>{application.form_data.student_id}</dd></div><div><dt className="text-slate-500">School unit</dt><dd>{schoolData?.department || schoolData?.type || '—'}</dd></div><div><dt className="text-slate-500">Program / track</dt><dd>{schoolData?.program || schoolData?.track || schoolData?.strand || '—'}</dd></div><div><dt className="text-slate-500">Level</dt><dd>{schoolData?.level || '—'}</dd></div><div><dt className="text-slate-500">Section</dt><dd>{schoolData?.section || '—'}</dd></div></dl>}
 
       {application && ['bounced', 'rejected'].includes(application.status) && <section className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
@@ -111,7 +127,7 @@ export default function RegisterStatus() {
       </section>}
       {error && <p role="alert" className="text-red-600">{error}</p>}
       {uploading && <p role="status">Uploading…</p>}
-      {profile && <Button onClick={() => { window.localStorage.setItem(dashboardOpenedKey(user!.uid), 'true'); navigate('/dashboard', { replace: true }); }}>Open dashboard</Button>}
+      {profile && <Button onClick={() => navigate('/dashboard', { replace: true })}>Open dashboard</Button>}
       {canResubmit && <Button onClick={resubmit}>{application?.status === 'bounced' ? 'Submit clarifications' : 'Reapply with updated details'}</Button>}
       <Button variant="secondary" onClick={async () => { await appAuth.signOut(); navigate('/login'); }}>Sign out</Button>
     </main>

@@ -6,14 +6,14 @@ import PwaStatus from './PwaStatus';
 const worker = vi.hoisted(() => ({ needRefresh: false, update: vi.fn(), dismiss: vi.fn() }));
 vi.mock('virtual:pwa-register/react', () => ({ useRegisterSW: () => ({ needRefresh: [worker.needRefresh, worker.dismiss], updateServiceWorker: worker.update }) }));
 beforeEach(() => { worker.needRefresh = false; worker.update.mockReset(); worker.dismiss.mockReset(); vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 it('explains offline restrictions and clears them after reconnecting', () => {
   render(<PwaStatus />);
   expect(screen.queryByLabelText('App status')).toBeNull();
   act(() => window.dispatchEvent(new Event('offline')));
-  expect(screen.getByRole('status')).toHaveTextContent('Reconnect');
-  expect(screen.getByRole('status')).toHaveTextContent('record attendance');
+  expect(screen.getByRole('status')).toHaveTextContent('Prepared attendance rosters can be used offline');
+  expect(screen.getByRole('status')).toHaveTextContent('pending until synced');
   act(() => window.dispatchEvent(new Event('online')));
   expect(screen.queryByLabelText('App status')).toBeNull();
 });
@@ -36,8 +36,20 @@ it('offers browser installation and waits for the user to accept it', async () =
   const event = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), { prompt, userChoice: Promise.resolve({ outcome: 'accepted' }) });
   act(() => window.dispatchEvent(event));
   expect(event.defaultPrevented).toBe(true);
+  expect(screen.getByRole('dialog', { name: 'Install IARS' })).toBeInTheDocument();
   expect(prompt).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Install IARS' }));
   await waitFor(() => expect(prompt).toHaveBeenCalledOnce());
   await waitFor(() => expect(screen.queryByLabelText('App status')).toBeNull());
+});
+
+it('dismisses the install modal after twelve seconds without prompting the browser', () => {
+  vi.useFakeTimers();
+  render(<PwaStatus />);
+  const prompt = vi.fn();
+  act(() => window.dispatchEvent(Object.assign(new Event('beforeinstallprompt'), { prompt, userChoice: Promise.resolve({ outcome: 'dismissed' }) })));
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '12');
+  act(() => vi.advanceTimersByTime(12000));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(prompt).not.toHaveBeenCalled();
 });

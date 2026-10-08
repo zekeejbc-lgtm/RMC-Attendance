@@ -424,3 +424,7 @@ verify_jwt = false
 [functions.rmc-enroll]
 verify_jwt = false
 # Verifies Google JWTs; final enrollment is required before creating an Auth user.
+
+[functions.rmc-scanner-photo]
+verify_jwt = false
+# Auth is verified with getUser; the caller's JWT is used for current account/MFA/event/scope checks.

@@ -52,7 +52,7 @@ try {
   await page.type('#landing-login-identifier', account.username);
   await page.type('#landing-login-password', account.password);
   await page.$eval('#landing-login-password', input => input.closest('form').requestSubmit());
-  await page.waitForSelector('main', { timeout: 45000 });
+  await page.waitForFunction(() => location.hash === '#/dashboard', { timeout: 45000 });
   assert.equal(await page.evaluate(() => location.hash), '#/dashboard');
   pass('real Supabase login and dashboard work under the production CSP');
 

@@ -10,7 +10,7 @@ export const configurationError = !url || !key
 // No privileged key, local database, or demo fallback is shipped to the browser.
 export const supabase = createClient(url || 'https://unconfigured.supabase.co', key || 'unconfigured', {
   global: { fetch: backendFetch },
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, experimental: { passkey: true } },
 });
 
 export function requireConfiguration() {

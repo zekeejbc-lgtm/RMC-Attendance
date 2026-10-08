@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
 import { useTheme } from '../components/ThemeContext';
-import ThemeToggle from '../components/ui/ThemeToggle';
+import PublicHeader from '../components/ui/PublicHeader';
+import PublicFooter from '../components/ui/PublicFooter';
 import { appAuth, appData, refreshData, lookupEnrollment, EnrollmentLookup } from '../lib/backend';
 import { TEST_ACCOUNTS } from '../lib/seed';
 import { SchoolNode } from '../types';
@@ -17,6 +18,7 @@ import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 import { createDriveImage, driveFileIdFromUrl, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
 import { enrollmentUsername, validEmergencyPhone, validStudentId } from '../lib/enrollment';
 import GoogleSignIn from '../components/GoogleSignIn';
+import PasskeySignIn from '../components/PasskeySignIn';
 import { checkGoogle, submitGoogleEnrollment, type GoogleEnrollment } from '../lib/googleAuth';
 import { 
   ArrowRight, Shield, Target, Users, 
@@ -38,7 +40,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const { isMock, user, profile, revision, loading } = useAuth();
   
   // --- UI STATE ---
-  const [scrolled, setScrolled] = useState(false);
   const { resolvedTheme } = useTheme();
   const isDarkMode = resolvedTheme === 'dark';
   
@@ -87,15 +88,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
 
   // --- EFFECTS ---
   useEffect(() => {
+    const section = (location.state as { homeSection?: string } | null)?.homeSection;
+    if (section) document.getElementById(section)?.scrollIntoView({ behavior: 'smooth' });
+  }, [location.key, location.state]);
+
+  useEffect(() => {
     if (defaultOpenLogin) setShowLoginModal(true);
     if (defaultOpenRegister) setShowRegisterModal(true);
   }, [defaultOpenLogin, defaultOpenRegister]);
 
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+
 
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
@@ -311,49 +313,49 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const systemFeatures = [
     {
       icon: QrCode,
-      title: "Dynamic Student QR Badges",
-      desc: "Short-lived QR passes are validated by the server and expire automatically.",
-      tag: "Server-verified QR passes",
+      title: "Your student QR pass",
+      desc: "Show your QR code to the attendance officer. The code expires after a short time, so open your current pass before checking in.",
+      tag: "Easy student identification",
       color: "text-blue-600 dark:text-blue-400",
       bg: "bg-blue-50 dark:bg-blue-900/20"
     },
     {
       icon: MapPin,
-      title: "Geofenced Check-In Perimeter",
-      desc: "The scanner location is checked against the event boundary before each attendance record is saved.",
-      tag: "Precision Location Guard",
+      title: "Check in at the event",
+      desc: "For events with a location check, the officer's device confirms that the scan takes place in the event area.",
+      tag: "Attendance at the right place",
       color: "text-emerald-600 dark:text-emerald-400",
       bg: "bg-emerald-50 dark:bg-emerald-900/20"
     },
     {
       icon: ShieldCheck,
-      title: "Automated Sanction Engine",
-      desc: "Automatic calculation of tardiness penalties, unexcused absence hours, and community service resolution tracking.",
-      tag: "Rule-Based Logic",
+      title: "Understand your service hours",
+      desc: "See service hours recorded for late arrivals or absences under school rules, and follow their completion. Ask the school about any entry that seems wrong.",
+      tag: "Clear records for school review",
       color: "text-amber-600 dark:text-amber-400",
       bg: "bg-amber-50 dark:bg-amber-900/20"
     },
     {
       icon: FileCheck2,
-      title: "Digital Excuse Letter Portal",
-      desc: "Seamless excuse filing with supporting document uploads, routed directly to the Prefect of Discipline for approval.",
-      tag: "Paperless Approval",
+      title: "Send an excuse request",
+      desc: "Explain why you missed an event, provide supporting documents when needed, and check the school's response.",
+      tag: "Follow your request",
       color: "text-purple-600 dark:text-purple-400",
       bg: "bg-purple-50 dark:bg-purple-900/20"
     },
     {
       icon: Building2,
-      title: "Academic Hierarchy Engine",
-      desc: "Configurable organizational structure covering Colleges, Senior High, Junior High, Programs, and Section Mayors.",
-      tag: "Multi-Tier Structure",
+      title: "Keep school details organized",
+      desc: "The school organizes students by department, course, year level, and section so officers can find the right class records.",
+      tag: "Up-to-date class lists",
       color: "text-indigo-600 dark:text-indigo-400",
       bg: "bg-indigo-50 dark:bg-indigo-900/20"
     },
     {
       icon: BarChart3,
-      title: "Audit & Analytics Dashboard",
-      desc: "Comprehensive attendance stats, printable master lists, exportable reports, and real-time ceremony headcount.",
-      tag: "Institutional Compliance",
+      title: "View attendance reports",
+      desc: "Authorized officers can review attendance totals, find missing entries, and download reports for school use.",
+      tag: "Useful school reports",
       color: "text-rose-600 dark:text-rose-400",
       bg: "bg-rose-50 dark:bg-rose-900/20"
     }
@@ -361,46 +363,46 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
 
   const systemModules = [
     {
-      role: "Student Portal",
+      role: "For students",
       icon: UserCheck,
-      desc: "Personalized portal to display digital QR pass, view ceremony schedules, track attendance rate, and submit excuse letters.",
-      highlights: ["Live Dynamic QR Badge", "Ceremony Schedule & Map", "Sanction Hours Ledger", "Exemption Request Tracking"]
+      desc: "Open your QR pass, find upcoming school events, review your attendance, and submit an excuse when you need one.",
+      highlights: ["Your current QR pass", "Event times and locations", "Recorded service hours", "Excuse request updates"]
     },
     {
-      role: "Section Mayor Scanner",
+      role: "For class attendance officers",
       icon: Smartphone,
-      desc: "Mobile-optimized scanning interface for class mayors to record section attendance during assemblies with confirmation receipts.",
-      highlights: ["Camera QR Reader", "Server-Confirmed Attendance", "Real-Time Headcount", "Manual ID Fallback Search"]
+      desc: "Class mayors and other authorized officers can use a phone to scan student passes and check whether attendance was accepted.",
+      highlights: ["Scan with your camera", "Check saved attendance", "View attendance totals", "Find a student by ID"]
     },
     {
-      role: "SSG & Discipline Panel",
+      role: "For student affairs officers",
       icon: Shield,
-      desc: "Centralized administration for managing institutional events, reviewing excuse files, and assigning community service.",
-      highlights: ["Campus Event Creation", "Excuse Approval Workflow", "Sanction Ledger Management", "Export Master Reports"]
+      desc: "Authorized student government and school staff can manage events, review excuse requests, and follow up on service hours according to their assigned duties.",
+      highlights: ["Plan school events", "Review excuse requests", "Review service hours", "Download school reports"]
     },
     {
-      role: "Academic Structure Manager",
+      role: "For school administrators",
       icon: Layers,
-      desc: "Dynamic management of departments, programs, year levels, sections, and officer assignment across the entire institution.",
-      highlights: ["College & High School Units", "Officer Role Assignments", "Student Roster Tree", "Bulk Import / Export"]
+      desc: "Keep department, course, and class information current, and assign school officers to the duties they are allowed to perform.",
+      highlights: ["College and high school", "Assign school officers", "Manage class lists", "Import and download lists"]
     }
   ];
 
   const workflowSteps = [
     {
       step: "01",
-      title: "Student Presents Digital QR Pass",
-      desc: "Student opens the IARS portal on mobile to generate their short-lived, server-verified student QR pass."
+      title: "Open your student pass",
+      desc: "Log in and open your QR pass before reaching the attendance officer. Have your current pass ready on your phone."
     },
     {
       step: "02",
-      title: "Geofenced Verification & Scan",
-      desc: "Section Mayor or SSG Officer scans the pass using the mobile scanner while inside the verified location perimeter."
+      title: "Let the officer scan it",
+      desc: "The officer checks your identity and scans your pass. If the event requires a location check, the officer must be in the event area."
     },
     {
       step: "03",
-      title: "Automated Records & Sanctions",
-      desc: "System instantly logs attendance status (Present, Late, Absent), recalculates metrics, and updates disciplinary records."
+      title: "Check your attendance record",
+      desc: "Confirm that your attendance was saved. Scans taken without an internet connection remain pending until accepted after reconnection. Ask the officer about a missing or incorrect entry."
     }
   ];
 
@@ -410,55 +412,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const campusMap = import.meta.env.VITE_CAMPUS_MAP_URL || '';
   const contactLinks = [
     ...(supportEmail ? [{ icon: Mail, label: 'System Support', value: supportEmail, action: () => window.open(`mailto:${supportEmail}`), color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' }] : []),
-    ...(supportPhone ? [{ icon: Phone, label: 'Registrar / SSG Office', value: supportPhone, action: () => window.open(`tel:${supportPhone}`), color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20' }] : []),
+    ...(supportPhone ? [{ icon: Phone, label: 'School office', value: supportPhone, action: () => window.open(`tel:${supportPhone}`), color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20' }] : []),
     ...(campusName && campusMap.startsWith('https://') ? [{ icon: MapPin, label: 'Main Campus', value: campusName, action: () => window.open(campusMap, '_blank', 'noopener,noreferrer'), color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20' }] : []),
   ];
 
   return (
     <div className={`min-h-dvh overflow-x-hidden font-inter transition-colors duration-base ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
       
-      {/* NAVBAR */}
-      <nav className={`fixed top-0 left-0 right-0 z-40 transition-all duration-base ${scrolled ? 'bg-white/85 dark:bg-slate-900/85 backdrop-blur-md shadow-sm py-4 border-b border-slate-200/50 dark:border-slate-800/50' : 'bg-transparent py-6'}`}>
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 sm:flex-nowrap sm:px-6">
-          <div className="flex min-w-0 items-center gap-2 cursor-pointer sm:gap-3" onClick={() => scrollTo('home')}>
-             <img 
-               src="https://i.imgur.com/K3T5yIT.jpeg" 
-               alt="IARS Academic Seal" 
-               className="w-10 h-10 rounded-full object-cover shadow-lg ring-2 ring-gold-400/50 hover:scale-105 transition-transform shrink-0" 
-             />
-             <div className="min-w-0">
-                <h1 className="font-black uppercase tracking-tighter leading-none text-brand-900 dark:text-white text-base">IARS</h1>
-                <p className="hidden text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400 sm:block">Attendance & Records System</p>
-             </div>
-          </div>
-          
-          <div className="hidden md:flex items-center gap-8 bg-white/60 dark:bg-slate-800/60 px-8 py-3 rounded-full border border-slate-200/60 dark:border-slate-700/60 backdrop-blur-sm shadow-sm">
-             {[
-               { id: 'home', label: 'Home' },
-               { id: 'features', label: 'Features' },
-               { id: 'modules', label: 'Modules' },
-               { id: 'workflow', label: 'Workflow' },
-               { id: 'security', label: 'Security' }
-             ].map(item => (
-               <button 
-                 key={item.id} 
-                 onClick={() => scrollTo(item.id)}
-                 className="text-[11px] font-bold uppercase tracking-widest text-brand-900 dark:text-slate-200 hover:text-gold-600 dark:hover:text-gold-400 transition-colors"
-               >
-                 {item.label}
-               </button>
-             ))}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-             <a href="#/organizations/public" className="text-xs font-bold text-brand-900 dark:text-white">Organizations</a>
-             <ThemeToggle />
-             <button onClick={() => setShowLoginModal(true)} className="px-3 py-2.5 bg-brand-900 dark:bg-gold-500 text-white dark:text-brand-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-800 dark:hover:bg-gold-400 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 sm:px-6">
-                Log In
-             </button>
-          </div>
-        </div>
-      </nav>
+      <PublicHeader onSection={scrollTo} onLogin={() => setShowLoginModal(true)} />
 
       {/* --- MODALS --- */}
 
@@ -467,8 +428,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
         open={showLoginModal}
         onClose={() => { setShowLoginModal(false); if (defaultOpenLogin) navigate('/'); }}
         size="md"
-        title="Portal Login"
-        description="Enter your credentials to connect to your academic workspace"
+        title="Log in to IARS"
+        description="Use your account to view attendance and school records"
       >
            <div className="min-w-0">
               <div className="flex flex-col justify-between">
@@ -538,6 +499,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                      }}>Forgot password?</button>
                    </form>
                    {showLoginModal && <div className="mt-4 space-y-3">
+                     <PasskeySignIn disabled={isLoggingIn} onSuccess={() => {
+                       const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+                       navigate(returnTo || '/dashboard', { replace: true, state: null });
+                     }} />
                      <GoogleSignIn onCredential={(credential, nonce) => handleGoogle(credential, nonce, false)} onError={setLoginError} />
                      {googleNeedsEnrollment && <Button type="button" onClick={() => { setShowLoginModal(false); setShowRegisterModal(true); setRegStep(1); }}>Enroll with this Google email</Button>}
                    </div>}
@@ -599,9 +564,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
         open={showRegisterModal}
         onClose={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); if (defaultOpenRegister) navigate('/'); }}
         size="xl"
-        title={regSuccess ? "Enrollment Submitted" : "System Enrollment"}
-        description={regSuccess ? "Application Submitted • Status Pending Review" : `Stage ${regStep} of 4 • Protocol`}
+        title={regSuccess ? "Enrollment Submitted" : "Create your student account"}
+        description={regSuccess ? "Your application is waiting for school review" : `Step ${regStep} of 4 — Account registration`}
       >
+        {!regSuccess && <p className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed dark:border-slate-700 dark:bg-slate-800">
+          Before providing your details, read our <a href="#/privacy-policy" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Privacy Policy</a>, <a href="#/data-privacy-agreement" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Data Privacy Act Agreement</a>, and <a href="#/terms-of-service" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Terms of Service</a> (open in a new tab). Ask your school about anything unclear.
+        </p>}
         {regSuccess ? (
           <div className="space-y-5 text-center py-2 animate-in fade-in zoom-in-95">
             <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 border-2 border-emerald-500 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-lg shadow-emerald-500/10">
@@ -739,7 +707,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                           </label>
                         </div>
                         <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                          Please enter the section enrollment security key for &ldquo;{terminal.name}&rdquo;. Request this key from your Class Mayor, SSG, or Section Officer.
+                          Enter the enrollment key for &ldquo;{terminal.name}&rdquo;. Ask your class mayor or school officer for this key.
                         </p>
                         <input
                           id="landing-register-security-key"
@@ -752,7 +720,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                     )}
 
                     <p className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-                      Your ID number and academic assignment will be verified against school records. ID image uploads are not needed.
+                      The school will check your student number and class details. You do not need to upload an image of your student ID.
                     </p>
                  </div>
               )}
@@ -876,19 +844,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
         )}
       </Modal>
 
+      <main>
       {/* HERO SECTION */}
-      <section id="home" className="relative pt-32 pb-20 lg:pt-44 lg:pb-28 px-6 overflow-hidden">
+      <section id="home" className="scroll-mt-28 relative pt-32 pb-20 lg:pt-44 lg:pb-28 px-6 overflow-hidden">
         <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-gold-400/10 dark:bg-gold-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-brand-900/5 dark:bg-brand-500/10 rounded-full blur-3xl -z-10"></div>
         
         <div className="max-w-4xl mx-auto text-center space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-base">
            <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black text-brand-900 dark:text-white tracking-tighter leading-[1.1]">
-              Automated Attendance & <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 via-gold-500 to-amber-600">Student Records Portal</span>
+              Your school attendance <br/>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-400 via-gold-500 to-amber-600">& student records</span>
            </h1>
 
            <p className="text-slate-600 dark:text-slate-300 text-sm lg:text-base font-medium max-w-2xl mx-auto leading-relaxed">
-              Streamlining campus ceremony check-ins, geofenced event verification, dynamic QR student identification, and automated sanction ledger management in one unified platform.
+              Show your student QR pass at school events, check your attendance, and follow your excuse requests. IARS helps you and your school keep records clear and easy to find.
            </p>
 
            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
@@ -905,14 +874,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
            </button>
         </div>
 
+        <div className="mx-auto mt-10 max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 text-left dark:border-slate-700 dark:bg-slate-900">
+          <h2 className="text-lg font-bold text-brand-900 dark:text-white">New to IARS?</h2>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Have your student number, email address, class details, emergency contact, and profile photo ready. Your school reviews your account application before you can use student services. If your section needs an enrollment key, ask your class officer for it.</p>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Already applied? Choose “Check enrollment progress” above to see an update, or log in to follow your application and respond to the school.</p>
+        </div>
+
         {/* HERO FEATURE HIGHLIGHT CARDS */}
         <div className="max-w-6xl mx-auto mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-base">
               <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 mb-4">
                  <QrCode size={24} />
               </div>
-              <h3 className="font-bold text-brand-900 dark:text-white text-lg mb-2">Dynamic QR Identification</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Encrypted student QR codes refreshed instantly for ultra-fast ceremony and assembly check-ins.</p>
+              <h3 className="font-bold text-brand-900 dark:text-white text-lg mb-2">Your pass for school events</h3>
+              <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">Open your current student QR code and show it to the officer recording attendance.</p>
            </div>
 
            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-base relative overflow-hidden">
@@ -920,16 +895,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
               <div className="w-12 h-12 bg-gold-50 dark:bg-gold-900/20 rounded-2xl flex items-center justify-center text-gold-600 dark:text-gold-400 mb-4">
                  <MapPin size={24} />
               </div>
-              <h3 className="font-bold text-brand-900 dark:text-white text-lg mb-2">Geofenced Check-In</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Scanner GPS is validated against the event boundary before attendance is saved.</p>
+              <h3 className="font-bold text-brand-900 dark:text-white text-lg mb-2">Know where to check in</h3>
+              <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">Check the event time and location. Some events require the scanning officer to be inside the event area.</p>
            </div>
 
            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 transform hover:-translate-y-2 transition-transform duration-base">
               <div className="w-12 h-12 bg-purple-50 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4">
                  <ShieldCheck size={24} />
               </div>
-              <h3 className="font-bold text-brand-900 dark:text-white text-lg mb-2">Automated Sanction Ledger</h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Real-time tardiness calculation, absence penalty hours logging, and excuse exemption management.</p>
+              <h3 className="font-bold text-brand-900 dark:text-white text-lg mb-2">Keep track of your records</h3>
+              <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">Review attendance, service hours, and excuse decisions. Contact the school if a record needs correcting.</p>
            </div>
         </div>
       </section>
@@ -956,14 +931,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       </Modal>
 
       {/* FEATURES SECTION */}
-      <section id="features" className="py-20 bg-white dark:bg-slate-900">
+      <section id="features" className="scroll-mt-28 py-20 bg-white dark:bg-slate-900">
         <div className="max-w-7xl mx-auto px-6 space-y-12">
            <div className="text-center max-w-2xl mx-auto">
               <h2 className="text-3xl lg:text-4xl font-black text-brand-900 dark:text-white tracking-tight leading-tight">
-                 Engineered for Institutional Precision & Accountability
+                 What you can do with IARS
               </h2>
               <p className="text-slate-500 dark:text-slate-400 text-sm mt-3 font-medium">
-                 Designed to modernize paper-based attendance logs with instant verification, automated sanctions, and transparent records.
+                 Keep attendance and school requests in one place, with records you can check and questions you can raise with the school.
               </p>
            </div>
 
@@ -977,7 +952,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                             <IconComponent size={24} />
                          </div>
                          <h3 className="font-black text-brand-900 dark:text-white text-lg mb-2 uppercase tracking-tight">{feat.title}</h3>
-                         <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed font-medium">{feat.desc}</p>
+                         <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed font-medium">{feat.desc}</p>
                       </div>
                       <div className="mt-6 pt-4 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
                          <span className="text-[10px] font-black uppercase tracking-wider text-gold-600 dark:text-gold-400">{feat.tag}</span>
@@ -991,10 +966,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       </section>
 
       {/* MODULES SECTION */}
-      <section id="modules" className="py-20 bg-slate-50 dark:bg-slate-950">
+      <section id="modules" className="scroll-mt-28 py-20 bg-slate-50 dark:bg-slate-950">
          <div className="max-w-7xl mx-auto px-6 space-y-12">
             <div className="text-center max-w-2xl mx-auto">
-               <h2 className="text-3xl lg:text-4xl font-black text-brand-900 dark:text-white tracking-tight">Tailored Interfaces for Every Campus Role</h2>
+               <h2 className="text-3xl lg:text-4xl font-black text-brand-900 dark:text-white tracking-tight">Tools for students and school officers</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -1008,14 +983,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                           </div>
                           <div>
                              <h3 className="text-xl font-black text-brand-900 dark:text-white uppercase tracking-tight">{mod.role}</h3>
-                             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">System Module 0{idx+1}</span>
+                             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">School access depends on assigned duties</span>
                           </div>
                        </div>
                        
                        <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed mb-6 font-medium">{mod.desc}</p>
 
                        <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-100 dark:border-slate-700/80 space-y-2">
-                          <h4 className="text-[10px] font-black uppercase tracking-widest text-gold-600 dark:text-gold-400">Key Functional Highlights</h4>
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-gold-600 dark:text-gold-400">Available tools</h4>
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                              {mod.highlights.map((h, hIdx) => (
                                <div key={hIdx} className="flex items-center gap-2 text-xs font-bold text-brand-900 dark:text-slate-200">
@@ -1033,10 +1008,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       </section>
 
       {/* WORKFLOW SECTION */}
-      <section id="workflow" className="py-20 bg-white dark:bg-slate-900">
+      <section id="workflow" className="scroll-mt-28 py-20 bg-white dark:bg-slate-900">
          <div className="max-w-7xl mx-auto px-6 space-y-12">
             <div className="text-center max-w-2xl mx-auto">
-               <h2 className="text-3xl font-black text-brand-900 dark:text-white">How Attendance Scanning Works</h2>
+               <h2 className="text-3xl font-black text-brand-900 dark:text-white">How to record your attendance</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -1044,7 +1019,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                   <div key={idx} className="relative p-8 rounded-3xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-4">
                      <span className="text-4xl font-black text-gold-500/30 dark:text-gold-400/20 block">{step.step}</span>
                      <h3 className="text-lg font-black text-brand-900 dark:text-white uppercase tracking-tight">{step.title}</h3>
-                     <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed font-medium">{step.desc}</p>
+                     <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed font-medium">{step.desc}</p>
                   </div>
                ))}
             </div>
@@ -1052,45 +1027,45 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       </section>
 
       {/* SECURITY & COMPLIANCE SECTION */}
-      <section id="security" className="py-20 bg-brand-900 dark:bg-black text-white relative overflow-hidden">
+      <section id="security" className="scroll-mt-28 py-20 bg-brand-900 dark:bg-black text-white relative overflow-hidden">
          <div className="max-w-7xl mx-auto px-6 relative z-10 text-center space-y-8">
             <h2 className="text-3xl lg:text-4xl font-black text-white max-w-2xl mx-auto tracking-tight">
-               Built for Data Integrity, Privacy & Instant Institutional Verification
+               Know how your information is used
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-4 text-left">
                <div className="bg-white/5 dark:bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 space-y-2">
                   <Lock className="text-gold-400 mb-2" size={24} />
-                  <h4 className="font-bold text-white text-sm uppercase">Role-Based Auth</h4>
-                  <p className="text-slate-300 text-xs">Strict access separation across Students, Mayors, SSG Officers, and Administrators.</p>
+                  <h4 className="font-bold text-white text-sm uppercase">Access by school duty</h4>
+                  <p className="text-slate-200 text-sm leading-relaxed">Students and school officers have different permissions based on their assigned duties.</p>
                </div>
                <div className="bg-white/5 dark:bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 space-y-2">
                   <ShieldCheck className="text-emerald-400 mb-2" size={24} />
-                  <h4 className="font-bold text-white text-sm uppercase">Anti-Forgery Passes</h4>
-                  <p className="text-slate-300 text-xs">Short-lived QR tokens limit screenshot reuse. Officers verify the displayed student identity before recording attendance.</p>
+                  <h4 className="font-bold text-white text-sm uppercase">Use your current pass</h4>
+                  <p className="text-slate-200 text-sm leading-relaxed">QR passes expire after a short time. Officers check the student's identity before saving attendance.</p>
                </div>
                <div className="bg-white/5 dark:bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 space-y-2">
                   <Clock className="text-amber-400 mb-2" size={24} />
-                  <h4 className="font-bold text-white text-sm uppercase">Timestamp Records</h4>
-                  <p className="text-slate-300 text-xs">Server-recorded attendance timestamps and officer attribution support discipline audits.</p>
+                  <h4 className="font-bold text-white text-sm uppercase">Recorded check-in times</h4>
+                  <p className="text-slate-200 text-sm leading-relaxed">Records include the attendance time and officer so the school can review a disputed entry.</p>
                </div>
                <div className="bg-white/5 dark:bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/10 space-y-2">
                   <Zap className="text-purple-400 mb-2" size={24} />
-                  <h4 className="font-bold text-white text-sm uppercase">High Availability</h4>
-                  <p className="text-slate-300 text-xs">Optimized for high-concurrency event check-ins during campus assemblies.</p>
+                  <h4 className="font-bold text-white text-sm uppercase">Your privacy choices</h4>
+                  <p className="text-slate-200 text-sm leading-relaxed">Read what information the app uses and how to request access, correction, or deletion in the pages below.</p>
                </div>
             </div>
          </div>
       </section>
 
       {/* CONTACT SECTION */}
-      <section id="contact" className="py-20 bg-slate-50 dark:bg-slate-950">
+      <section id="contact" className="scroll-mt-28 py-20 bg-slate-50 dark:bg-slate-950">
          <div className="max-w-6xl mx-auto px-6 space-y-12">
             <div className="text-center">
-               <h2 className="text-3xl font-black text-brand-900 dark:text-white">Connect with IARS Support</h2>
+               <h2 className="text-3xl font-black text-brand-900 dark:text-white">Need help?</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-               {!contactLinks.length && <p className="text-sm text-slate-500">Contact your school officer for enrollment and account assistance.</p>}
+               <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300 md:col-span-3">For registration or sign-in help, contact your class officer or school administration. For a missing attendance entry or an excuse decision, ask the officer responsible for that event.</p>
                {contactLinks.map((link, idx) => (
                  <div key={idx} onClick={link.action} className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-200/80 dark:border-slate-800 flex items-center gap-4 hover:shadow-lg transition-all group cursor-pointer">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${link.bg} ${link.color} group-hover:scale-110 transition-transform`}>
@@ -1109,15 +1084,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
          </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="bg-white px-4 py-12 text-center dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-         <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
-            <img src="https://i.imgur.com/K3T5yIT.jpeg" alt="IARS Seal" className="w-6 h-6 rounded-full object-cover" />
-            <p className="text-brand-900 dark:text-white font-black uppercase text-xs tracking-widest">IARS • Institution Attendance & Records System</p>
-         </div>
-         <p className="text-slate-400 text-[10px]">© 2026 Institution Attendance & Records System. All rights reserved.</p>
-         <p className="text-slate-300 dark:text-slate-600 text-[9px] mt-2">System Version 2.4 • Secured Verification Protocol</p>
-      </footer>
+      </main>
+      <PublicFooter />
     </div>
   );
 };

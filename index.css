@@ -235,6 +235,23 @@ a {
   min-width: 0;
 }
 
+/* Soft blue washes and a fine dotted texture for verification screens. */
+.auth-challenge-background {
+  background-color: var(--neutral-bg);
+  background-image:
+    radial-gradient(ellipse at 12% 18%, rgb(var(--palette-brand-200) / 0.25), transparent 48%),
+    radial-gradient(ellipse at 88% 82%, rgb(var(--palette-brand-100) / 0.4), transparent 48%),
+    radial-gradient(circle, rgb(var(--palette-brand-900) / 0.07) 0.7px, transparent 0.9px);
+  background-size: 100% 100%, 100% 100%, 18px 18px;
+}
+
+.dark .auth-challenge-background {
+  background-image:
+    radial-gradient(ellipse at 12% 18%, rgb(var(--palette-brand-700) / 0.16), transparent 48%),
+    radial-gradient(ellipse at 88% 82%, rgb(var(--palette-brand-800) / 0.2), transparent 48%),
+    radial-gradient(circle, rgb(var(--palette-brand-200) / 0.08) 0.7px, transparent 0.9px);
+}
+
 .app-skeleton { display: block; max-width: 100%; min-height: 0.5rem; overflow: hidden; background: linear-gradient(105deg, color-mix(in srgb, var(--color-border) 72%, transparent) 20%, color-mix(in srgb, var(--color-surface) 92%, white) 42%, color-mix(in srgb, var(--color-border) 72%, transparent) 64%); background-size: 220% 100%; animation: shimmer 1.7s ease-in-out infinite; }
 .app-loading-shell { min-height: 100dvh; width: 100%; overflow: hidden; background: var(--neutral-bg); color: var(--neutral-dark); }
 .app-loading-layout { display: flex; width: min(100%, 42rem); margin: 0 auto; gap: 0.875rem; padding: var(--space-page); }

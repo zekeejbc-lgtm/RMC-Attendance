@@ -864,6 +864,55 @@ describe('staff route UI behavior', () => {
     expect(staffState.logAttendance).toHaveBeenCalledWith('event-1', 'student-1', 'mayor-1', 'Section Mayor', undefined, 'in', expect.objectContaining({ manualReason: 'Student presented a valid school ID' }));
   });
 
+  it.each([
+    { age: 0, accuracy: 5, freshCalls: 1 },
+    { age: 20000, accuracy: 5, freshCalls: 2 },
+    { age: 0, accuracy: 200, freshCalls: 2 },
+  ])('validates watched GPS freshness and accuracy before recording ($age ms, $accuracy m)', async ({ age, accuracy, freshCalls }) => {
+    const originalGeolocation = Object.getOwnPropertyDescriptor(navigator, 'geolocation');
+    const position = (positionAge = 0, positionAccuracy = 5) => ({
+      timestamp: Date.now() - positionAge,
+      coords: { latitude: 7, longitude: 125, accuracy: positionAccuracy },
+    });
+    const getCurrentPosition = vi.fn(success => success(position()));
+    const watchPosition = vi.fn(success => { success(position(age, accuracy)); return 17; });
+    const clearWatch = vi.fn();
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition, watchPosition, clearWatch } });
+    let rendered: ReturnType<typeof render> | undefined;
+    try {
+      const user = userEvent.setup();
+      routeState.auth = {
+        isMock: true,
+        profile: { ...studentProfile, uid: 'mayor-1', name: 'Section Mayor', role: 'mayor' } as typeof studentProfile,
+        stats: null,
+        user: { uid: 'mayor-1' },
+      };
+      staffState.students = [studentProfile];
+      staffState.events = [{ id: 'event-1', title: 'Institutional Assembly', status: 'active', geofenceEnabled: true, location: { lat: 7, lng: 125, radius_meters: 100 } }];
+      staffState.logAttendance.mockReturnValue({ time_in: Date.now(), status: 'present', already_recorded: false });
+      rendered = renderRoute(<MayorScanner />);
+      await user.click(screen.getByRole('button', { name: /institutional assembly/i }));
+      await user.click(screen.getByRole('button', { name: /start scanning/i }));
+      await waitFor(() => expect(watchPosition).toHaveBeenCalledTimes(1));
+      await user.type(screen.getByRole('textbox', { name: /student id/i }), studentProfile.student_id);
+      await user.click(screen.getByRole('button', { name: /check student/i }));
+      await screen.findByRole('dialog', { name: /verify student identity/i });
+      await user.type(screen.getByRole('textbox', { name: /reason for manual entry/i }), 'Valid physical school ID');
+      await user.click(screen.getByRole('button', { name: /^record$/i }));
+      await waitFor(() => expect(staffState.logAttendance).toHaveBeenCalledTimes(1));
+      expect(getCurrentPosition).toHaveBeenCalledTimes(freshCalls);
+      expect(staffState.logAttendance).toHaveBeenCalledWith('event-1', 'student-1', 'mayor-1', 'Section Mayor', undefined, 'in', expect.objectContaining({
+        position: expect.objectContaining({ latitude: 7, longitude: 125, accuracy: 5 }),
+      }));
+      rendered.unmount();
+      expect(clearWatch).toHaveBeenCalledWith(17);
+    } finally {
+      rendered?.unmount();
+      if (originalGeolocation) Object.defineProperty(navigator, 'geolocation', originalGeolocation);
+      else Reflect.deleteProperty(navigator, 'geolocation');
+    }
+  });
+
   it('reports invalid QR passports without recording attendance', async () => {
     const user = userEvent.setup();
     useStaff();

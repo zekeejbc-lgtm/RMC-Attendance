@@ -12,7 +12,7 @@ export function AuthChallenge({ recovery = false, onComplete }: { recovery?: boo
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   useEffect(() => { if (!recovery) void supabase.auth.mfa.listFactors().then(({ data }) => setFactorId(data?.totp[0]?.id || '')); }, [recovery]);
-  return <div className="min-h-dvh grid place-items-center p-6"><form className="app-surface w-full max-w-md space-y-4 p-6" onSubmit={async event => {
+  return <div className="auth-challenge-background min-h-dvh grid place-items-center p-6"><form className="app-surface relative w-full max-w-md space-y-4 p-6" onSubmit={async event => {
     event.preventDefault(); setBusy(true); setError('');
     try {
       const result = recovery

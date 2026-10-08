@@ -1,7 +1,7 @@
 import { eventDisplayTitle } from '../lib/eventGroups';
 import { toast } from '../lib/toast';
 import { GeofenceMap } from '../components/events/GeofenceMap';
-import ProfileAvatar from '../components/ui/ProfileAvatar';
+import ScannerAvatar from '../components/attendance/ScannerAvatar';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
@@ -18,11 +18,13 @@ import Button from '../components/ui/Button';
 import CustomSelect from '../components/ui/CustomSelect';
 import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
+import OfflineAttendancePanel, { useOfflineAttendance } from '../components/attendance/OfflineAttendancePanel';
+import { lookupScannerStudent, prepareOfflineAttendance, queueAttendance, syncOfflineAttendance, type OfflineRoster } from '../lib/offlineAttendance';
 
 type EventGroup = 'current' | 'scheduled' | 'archived';
 type ScannerState = 'ready' | 'starting' | 'scanning' | 'paused' | 'stopping';
 type CameraOption = { value: string; label: string };
-type AttendanceReceipt = { time_out?: number; rendered_hours?: number; deducted_hours?: number; merit_earned_hours?: number; awarded_hours?: number; completion_pending?: boolean; time_in: number; status: 'present' | 'late'; already_recorded?: boolean };
+type AttendanceReceipt = { pendingId?: string; time_out?: number; rendered_hours?: number; deducted_hours?: number; merit_earned_hours?: number; awarded_hours?: number; completion_pending?: boolean; time_in: number; status: 'present' | 'late' | 'pending'; already_recorded?: boolean };
 
 const eventTime = (value: unknown, fallback: number) => {
   const parsed = typeof value === 'number' ? value : Date.parse(String(value || ''));
@@ -38,7 +40,8 @@ const groupEvent = (event: AppEvent, now = Date.now()): EventGroup => {
 };
 
 const MayorScanner: React.FC = () => {
-  const { profile, isMock, revision } = useAuth();
+  const { profile, isMock, revision, offlineScanner } = useAuth();
+  const offline = useOfflineAttendance(profile?.uid);
   const [direction, setDirection] = useState<'in' | 'out'>('in');
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [tab, setTab] = useState<EventGroup>('current');
@@ -63,18 +66,38 @@ const MayorScanner: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [manualReason, setManualReason] = useState('');
+  const [fallbackRoster, setFallbackRoster] = useState<OfflineRoster | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const freshPosition = useRef<GeolocationPosition | null>(null);
   const scannerStateRef = useRef<ScannerState>('ready');
   const handlingScan = useRef(false);
   const cameraSession = useRef(0);
   const verificationReturnState = useRef<'ready' | 'scanning' | 'paused'>('ready');
   const scannerId = 'mayor-camera-reader';
   scannerStateRef.current = scannerState;
+  const preparedRoster = offline.rosters.find(roster => roster.event.id === selectedEvent?.id && Date.now() + roster.clockOffset <= roster.captureUntil)
+    || (fallbackRoster?.actorUid === profile?.uid && fallbackRoster?.event.id === selectedEvent?.id && Date.now() + fallbackRoster.clockOffset <= fallbackRoster.captureUntil ? fallbackRoster : undefined);
+  const manualIndex = useMemo(() => new Map((profile && offline.online && !preparedRoster ? appData.getVisibleStudents(profile.uid) : []).filter(student => student.account_status === 'active').map(student => [student.student_id.trim().toLowerCase(), student])), [profile?.uid, revision, offline.online, Boolean(preparedRoster)]);
+
+  useEffect(() => {
+    freshPosition.current = null;
+    if (!scannerOpen || selectedEvent?.geofenceEnabled === false || typeof navigator.geolocation?.watchPosition !== 'function') return;
+    const watch = navigator.geolocation.watchPosition(position => { freshPosition.current = position; }, () => { freshPosition.current = null; }, { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 });
+    return () => { navigator.geolocation.clearWatch(watch); freshPosition.current = null; };
+  }, [scannerOpen, selectedEvent?.id, selectedEvent?.geofenceEnabled]);
+
+  useEffect(() => {
+    if (!attendanceReceipt?.pendingId) return;
+    const row = offline.queue.find(item => item.submission.id === attendanceReceipt.pendingId);
+    if (row?.state === 'synced' && row.receipt) setAttendanceReceipt(row.receipt as AttendanceReceipt);
+  }, [offline.queue, attendanceReceipt?.pendingId]);
 
   useEffect(() => {
     {
       const now = Date.now();
-      const visibleEvents = (profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents()).filter(event => !event.isGeneralEvent);
+      const visibleEvents = offline.online && !offlineScanner
+        ? (profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents()).filter(event => !event.isGeneralEvent)
+        : offline.rosters.filter(roster => Date.now() + roster.clockOffset <= roster.captureUntil).map(roster => roster.event).filter((event, index, all) => all.findIndex(candidate => candidate.id === event.id) === index);
       setEvents(visibleEvents.filter(event => event.approvalStatus !== 'pending' && event.approvalStatus !== 'rejected').map((event) => ({
         ...event,
         startTime: eventTime(event.startTime, now - 60000),
@@ -82,7 +105,7 @@ const MayorScanner: React.FC = () => {
         location: event.location || { lat: 7.0736, lng: 125.6126, radius_meters: 150 },
       })).sort((a, b) => a.startTime - b.startTime));
     }
-  }, [revision, profile]);
+  }, [revision, profile, offline.online, offline.rosters, offlineScanner]);
 
   useEffect(() => () => {
     cameraSession.current++;
@@ -140,6 +163,7 @@ const MayorScanner: React.FC = () => {
 
   const enterScanner = async () => {
     if (!insideGeofence || !selectedEvent) return;
+    if (!offline.online && !preparedRoster) { setScanError('Connect and download this event’s offline roster first.'); return; }
     setScannerOpen(true);
     setScannerState('ready');
     setScanError('');
@@ -166,7 +190,10 @@ const MayorScanner: React.FC = () => {
     if (handlingScan.current) return;
     handlingScan.current = true;
     try {
-      const student = await appData.resolveQr(decodedText);
+      let student: UserProfile;
+      if (preparedRoster) student = await lookupScannerStudent(preparedRoster, { qrToken: decodedText }) as UserProfile;
+      else if (offline.online) student = await appData.resolveQr(decodedText);
+      else throw new Error('Download this event’s roster while online first.');
       handlingScan.current = false;
       setQrToken(decodedText);
       if (student && selectedEvent && profile) identifyStudent(student);
@@ -175,7 +202,7 @@ const MayorScanner: React.FC = () => {
     }
   };
 
-  const checkManualStudent = (event?: React.FormEvent) => {
+  const checkManualStudent = async (event?: React.FormEvent) => {
     event?.preventDefault();
     if (handlingScan.current) return;
     const normalizedId = manualStudentId.trim().toLowerCase();
@@ -183,7 +210,20 @@ const MayorScanner: React.FC = () => {
       setManualError('Enter a student ID to continue.');
       return;
     }
-    const student = (profile ? appData.getVisibleStudents(profile.uid) : []).find((candidate) => candidate.account_status === 'active' && candidate.student_id.trim().toLowerCase() === normalizedId);
+    handlingScan.current = true;
+    let student: UserProfile | undefined;
+    try {
+      if (preparedRoster) student = await lookupScannerStudent(preparedRoster, { studentId: normalizedId }) as UserProfile;
+      else {
+        student = manualIndex.get(normalizedId);
+        if (!student && navigator.onLine && profile && selectedEvent) {
+          const roster = await prepareOfflineAttendance(profile.uid, selectedEvent.id);
+          setFallbackRoster(roster);
+          student = await lookupScannerStudent(roster, { studentId: normalizedId }) as UserProfile;
+        }
+      }
+    } catch (error) { setManualError(error instanceof Error ? error.message : 'Unable to verify this student.'); return; }
+    finally { handlingScan.current = false; }
     if (!student) {
       setManualError('No active student was found with that exact student ID.');
       return;
@@ -199,11 +239,25 @@ const MayorScanner: React.FC = () => {
     let record: AttendanceReceipt;
     setSaving(true);
     try {
-      const position = selectedEvent.geofenceEnabled === false ? null : await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }));
-      record = await appData.logAttendance(selectedEvent.id, scanResult.uid, profile.uid, profile.name, undefined, direction, {
+      const cachedPosition = freshPosition.current;
+      const usablePosition = cachedPosition && Number.isFinite(cachedPosition.timestamp) && Math.abs(Date.now() - cachedPosition.timestamp) <= 15000
+        && Number.isFinite(cachedPosition.coords.accuracy) && cachedPosition.coords.accuracy >= 0 && cachedPosition.coords.accuracy <= 100;
+      const position = selectedEvent.geofenceEnabled === false ? null : usablePosition ? cachedPosition
+        : await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }));
+      if (preparedRoster) {
+        const queued = await queueAttendance(preparedRoster, {
+          studentUid: scanResult.uid, direction, qrToken, manualReason,
+          position: position ? { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, timestamp: position.timestamp } : null,
+        });
+        record = { time_in: queued.submission.capturedAt, status: 'pending', pendingId: queued.submission.id };
+        if (navigator.onLine) void syncOfflineAttendance(profile.uid).catch(error => setScanError(error instanceof Error ? error.message : 'Saved locally. Sync could not finish.'));
+      } else {
+        if (!navigator.onLine) throw new Error('Connect to download this event’s offline roster before recording attendance.');
+        record = await appData.logAttendance(selectedEvent.id, scanResult.uid, profile.uid, profile.name, undefined, direction, {
         qrToken: qrToken || undefined, manualReason,
         position: position ? { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy, timestamp: position.timestamp } : null,
       }) as AttendanceReceipt;
+      }
     } catch (error) { setScanError(error instanceof Error ? error.message : 'Unable to record attendance.'); return; }
     finally { setSaving(false); }
     setAttendanceReceipt(record);
@@ -254,6 +308,7 @@ const MayorScanner: React.FC = () => {
     await stopScanner();
     setScannerOpen(false);
     setSelectedEvent(null);
+    setFallbackRoster(null);
     setScanResult(null);
     setAttendanceReceipt(null);
     setProposedRecordTime(null);
@@ -291,10 +346,12 @@ const MayorScanner: React.FC = () => {
           actions={<Button variant="secondary" className="sm:w-auto" onClick={closeScanner}><ArrowLeft size={17} /> Back to events</Button>}
         />
 
+        <OfflineAttendancePanel owner={profile?.uid} eventId={selectedEvent?.id} data={offline} />
+
         <div className="grid gap-4 sm:grid-cols-3">
           <Surface className="p-4"><CustomSelect label="Scan action" value={direction} onChange={value => setDirection(value as 'in' | 'out')} options={[{value:'in',label:'Scan in'},{value:'out',label:'Scan out / compute rendered hours'}]} />{scanError && <p role="alert" className="mt-2 text-sm text-red-600">{scanError}</p>}{attendanceReceipt?.time_out && <p role="status" className="mt-2 text-sm">Rendered: {attendanceReceipt.rendered_hours?.toFixed(2)} hours. Sanctions cleared: {attendanceReceipt.deducted_hours?.toFixed(2)} hours. Earned merit: {(attendanceReceipt.merit_earned_hours || 0).toFixed(2)} hours.{attendanceReceipt.completion_pending && ' Fixed merit is pending completion of all required sessions.'}</p>}</Surface>
       <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40"><ShieldCheck size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Location</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{selectedEvent?.geofenceEnabled === false ? 'Not required for this event' : 'Verified before each save'}</span></span></Surface>
-          <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-gold-50 text-gold-600 dark:bg-gold-950/40"><Users size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">This session</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{scannedCount} recorded</span></span></Surface>
+          <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-gold-50 text-gold-600 dark:bg-gold-950/40"><Users size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">This session</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{scannedCount} captured</span></span></Surface>
           <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40"><Clock3 size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Event closes</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{selectedEvent ? formatManilaTime(selectedEvent.endTime, { second: undefined }) : '—'}</span></span></Surface>
         </div>
 
@@ -337,10 +394,10 @@ const MayorScanner: React.FC = () => {
           </div>
         </div>
 
-        <Modal open={Boolean(scanResult)} onClose={continueScanning} title={attendanceReceipt?.already_recorded ? 'Already recorded' : attendanceReceipt ? 'Attendance recorded' : 'Verify student identity'} description={attendanceReceipt?.already_recorded ? 'This student already has an attendance record for this event.' : attendanceReceipt ? 'The attendance record was saved successfully.' : 'Confirm that this profile matches the student presenting the QR code.'} size="sm" footer={attendanceReceipt ? <Button variant="gold" onClick={continueScanning}><ScanLine size={17} /> Scan next student</Button> : <><Button variant="secondary" className="border-red-200 text-red-700 hover:bg-red-50" onClick={continueScanning}><UserX size={17} /> Waive</Button><Button variant="gold" disabled={saving || (!qrToken && manualReason.trim().length < 5)} onClick={recordAttendance}><CheckCircle2 size={17} /> Record</Button></>}>
+        <Modal open={Boolean(scanResult)} onClose={continueScanning} title={attendanceReceipt?.pendingId ? 'Saved on this device' : attendanceReceipt?.already_recorded ? 'Already recorded' : attendanceReceipt ? 'Attendance recorded' : 'Verify student identity'} description={attendanceReceipt?.pendingId ? 'Pending sync. Attendance is confirmed only after the server accepts this record.' : attendanceReceipt?.already_recorded ? 'This student already has an attendance record for this event.' : attendanceReceipt ? 'The attendance record was saved successfully.' : 'Confirm that this profile matches the student presenting the QR code.'} size="sm" footer={attendanceReceipt ? <Button variant="gold" onClick={continueScanning}><ScanLine size={17} /> Scan next student</Button> : <><Button variant="secondary" className="border-red-200 text-red-700 hover:bg-red-50" onClick={continueScanning}><UserX size={17} /> Waive</Button><Button variant="gold" disabled={saving || (!qrToken && manualReason.trim().length < 5)} onClick={recordAttendance}><CheckCircle2 size={17} /> Record</Button></>}>
           {!attendanceReceipt && !qrToken && <label className="block text-sm">Reason for manual entry<input className="input-field mt-2" value={manualReason} onChange={event => setManualReason(event.target.value)} minLength={5} required /></label>}
           {scanError && <p role="alert" className="mt-2 text-sm text-red-600">{scanError}</p>}
-          {scanResult && <div className="text-center"><div className="relative mx-auto w-fit"><ProfileAvatar src={scanResult.photo_url || undefined} alt={`${scanResult.name} profile`} className="h-28 w-28 rounded-3xl border-4 border-gold-100 object-cover shadow-lg dark:border-gold-900" />{attendanceReceipt && <span className="absolute -bottom-2 -right-2 grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-emerald-500 text-white shadow dark:border-slate-800"><Check size={17} strokeWidth={3} /></span>}</div><h3 className="mt-5 text-xl font-black text-brand-900 dark:text-white">{scanResult.name}</h3><p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-300">{scanResult.student_id}</p><p className="mt-1 text-xs text-slate-400">{scanResult.school_data.level} · {scanResult.school_data.section}</p>{!attendanceReceipt && <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-950/40"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black text-blue-800 dark:text-blue-200">Identity check required</p><p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">Choose <strong>Record</strong> only when the photo and student ID match. Choose <strong>Waive</strong> to dismiss without saving.</p></div>{proposedRecordTime && <div className="shrink-0 rounded-xl bg-white/70 px-3 py-2 text-right dark:bg-slate-900/40"><p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Record time</p><p className="mt-1 whitespace-nowrap text-sm font-black text-blue-900 dark:text-blue-100"><Clock3 size={13} className="mr-1 inline" />{formatManilaTime(proposedRecordTime)}</p><p className="mt-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-300">{formatManilaDate(proposedRecordTime, { month: 'short' })}</p></div>}</div></div>}{attendanceReceipt && <div className={`mt-5 rounded-2xl border p-4 ${attendanceReceipt.status === 'late' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'}`}><p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{attendanceReceipt.already_recorded ? 'Original record' : 'Status recorded'}</p><p className={`mt-1 text-2xl font-black capitalize ${attendanceReceipt.status === 'late' ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{attendanceReceipt.status}</p><p className="mt-2 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300"><Clock3 size={14} />{formatManilaDateTime(attendanceReceipt.time_in, { month: 'short' })}</p></div>}</div>}
+          {scanResult && <div className="text-center"><div className="relative mx-auto w-fit"><ScannerAvatar roster={preparedRoster} uid={scanResult.uid} src={scanResult.photo_url || undefined} alt={`${scanResult.name} profile`} className="h-28 w-28 rounded-3xl border-4 border-gold-100 object-cover shadow-lg dark:border-gold-900" />{attendanceReceipt && <span className="absolute -bottom-2 -right-2 grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-emerald-500 text-white shadow dark:border-slate-800"><Check size={17} strokeWidth={3} /></span>}</div><h3 className="mt-5 text-xl font-black text-brand-900 dark:text-white">{scanResult.name}</h3><p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-300">{scanResult.student_id}</p><p className="mt-1 text-xs text-slate-400">{scanResult.school_data.level} · {scanResult.school_data.section}</p>{!attendanceReceipt && <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-950/40"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black text-blue-800 dark:text-blue-200">Identity check required</p><p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">Choose <strong>Record</strong> only when the student ID and identity match. If the photo is unavailable offline, check a school ID. Choose <strong>Waive</strong> to dismiss without saving.</p></div>{proposedRecordTime && <div className="shrink-0 rounded-xl bg-white/70 px-3 py-2 text-right dark:bg-slate-900/40"><p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Record time</p><p className="mt-1 whitespace-nowrap text-sm font-black text-blue-900 dark:text-blue-100"><Clock3 size={13} className="mr-1 inline" />{formatManilaTime(proposedRecordTime)}</p><p className="mt-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-300">{formatManilaDate(proposedRecordTime, { month: 'short' })}</p></div>}</div></div>}{attendanceReceipt && <div className={`mt-5 rounded-2xl border p-4 ${attendanceReceipt.status === 'late' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'}`}><p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{attendanceReceipt.pendingId ? 'Pending server confirmation' : attendanceReceipt.already_recorded ? 'Original record' : 'Status recorded'}</p><p className={`mt-1 text-2xl font-black capitalize ${attendanceReceipt.status === 'late' ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{attendanceReceipt.status}</p><p className="mt-2 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300"><Clock3 size={14} />{formatManilaDateTime(attendanceReceipt.time_in, { month: 'short' })}</p></div>}</div>}
         </Modal>
       </Page>
     );
@@ -382,7 +439,9 @@ const MayorScanner: React.FC = () => {
         </div>
       </Surface>
 
-      <Modal open={Boolean(selectedEvent)} onClose={() => setSelectedEvent(null)} title={selectedEvent?.title || 'Event'} description="Confirm that you are within the authorized attendance area." size="xl" footer={<><Button variant="secondary" onClick={() => setSelectedEvent(null)}>Close</Button><Button variant="gold" onClick={enterScanner} disabled={!insideGeofence || groupEvent(selectedEvent!) !== 'current'}><ScanLine size={17} /> Start scanning</Button></>}>
+      <OfflineAttendancePanel owner={profile?.uid} data={offline} />
+      <Modal open={Boolean(selectedEvent)} onClose={() => setSelectedEvent(null)} title={selectedEvent?.title || 'Event'} description="Confirm that you are within the authorized attendance area." size="xl" footer={<><Button variant="secondary" onClick={() => setSelectedEvent(null)}>Close</Button><Button variant="gold" onClick={enterScanner} disabled={!insideGeofence || groupEvent(selectedEvent!) !== 'current' || (!offline.online && !preparedRoster)}><ScanLine size={17} /> Start scanning</Button></>}>
+        <OfflineAttendancePanel owner={profile?.uid} eventId={selectedEvent?.id} data={offline} />
         {selectedEvent && <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
           {selectedEvent.geofenceEnabled !== false ? <GeofenceMap value={{ lat: selectedEvent.location.lat, lng: selectedEvent.location.lng, radius: selectedEvent.location.radius_meters }} position={location} /> : <Surface className="grid min-h-48 place-items-center p-6 text-sm text-slate-500">This event does not require a location check.</Surface>}
           <div className="space-y-4">

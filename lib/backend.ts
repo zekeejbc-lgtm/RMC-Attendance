@@ -6,6 +6,7 @@ import { findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNo
 import { isEventRecipient, canManageEventInScope } from './eventAudience';
 import { publicDriveImageUrl } from './googleDrive';
 import { googleRequest } from './googleAuth';
+import { clearOfflineRosters } from './offlineAttendance';
 
 type Student = UserProfile & { stats: UserStats; sanction_logs: any[] };
 type Snapshot = {
@@ -61,8 +62,18 @@ export async function refreshData() {
   next.school_structure = tree(data.nodes);
   for (const [id, role] of Object.entries(data.roles)) (role as CoreRole).isBuiltIn ? next.core_roles[id] = role as CoreRole : next.custom_roles[id] = role as CustomRole;
   for (const s of data.sanctions) (next.sanction_logs[s.student_id] ||= []).push(s.data);
+  const attendanceByStudent = new Map<string, any[]>();
+  const meritByStudent = new Map<string, number>();
+  const organizationsByStudent = new Map<string, string[]>();
+  for (const credit of data.merit_credits || []) meritByStudent.set(credit.student_id, (meritByStudent.get(credit.student_id) ?? 0) + Number(credit.hours));
+  for (const membership of next.organization_members) if (membership.status === 'approved') {
+    const ids = organizationsByStudent.get(membership.student_id) || [];
+    ids.push(membership.organization_id); organizationsByStudent.set(membership.student_id, ids);
+  }
   for (const a of data.attendance) {
     next.attendance.push(a);
+    const studentRecords = attendanceByStudent.get(a.student_id) || [];
+    studentRecords.push(a); attendanceByStudent.set(a.student_id, studentRecords);
     const logs = next.attendance_logs[a.event_id] ||= {};
     const previous = logs[a.student_id];
     // Each window remains available in records; reports summarize the worst recorded status.
@@ -70,11 +81,11 @@ export async function refreshData() {
     if (!previous || rank[a.data.status as keyof typeof rank] > rank[previous.status as keyof typeof rank]) logs[a.student_id] = a.data;
   }
   for (const p of data.profiles as UserProfile[]) {
-    p.organizationIds = next.organization_members.filter(m => m.student_id === p.uid && m.status === 'approved').map(m => m.organization_id);
-    const attendance = data.attendance.filter((a: any) => a.student_id === p.uid);
+    p.organizationIds = organizationsByStudent.get(p.uid) || [];
+    const attendance = attendanceByStudent.get(p.uid) || [];
     const attended = new Set(attendance.filter((a: any) => ['present', 'late', 'excused'].includes(a.data.status)).map((a: any) => a.event_id)).size;
     const missed = new Set(attendance.filter((a: any) => a.data.status === 'absent').map((a: any) => a.event_id)).size;
-    next.users[p.uid] = { profile: p, stats: { merit_hours: (data.merit_credits || []).filter((credit: any) => credit.student_id === p.uid).reduce((sum: number, credit: any) => sum + Number(credit.hours), 0), events_attended: attended, events_missed: missed, attendance_rate: attendance.length ? Math.round(attendance.filter((a: any) => a.data.status !== 'absent').length / attendance.length * 100) : 0, sanction_hours: Math.max(0, (next.sanction_logs[p.uid] || []).reduce((sum, s) => sum + Number(s.change), 0)) } };
+    next.users[p.uid] = { profile: p, stats: { merit_hours: meritByStudent.get(p.uid) ?? 0, events_attended: attended, events_missed: missed, attendance_rate: attendance.length ? Math.round(attendance.filter((a: any) => a.data.status !== 'absent').length / attendance.length * 100) : 0, sanction_hours: Math.max(0, (next.sanction_logs[p.uid] || []).reduce((sum, s) => sum + Number(s.change), 0)) } };
   }
   for (const item of data.events) next.events[item.id] = item;
   for (const item of data.applications) next.applications[item.id] = item;
@@ -94,7 +105,8 @@ async function rpc<T = any>(name: string, args: Record<string, unknown> = {}): P
     const rpcError = error as typeof error & { status?: number };
     const loggedArgs = name === 'rmc_organization_command' ? {
       ...args, payload: { ...(args.payload as Record<string, unknown>), key: '[redacted]' },
-    } : args;
+    } : { ...args };
+    for (const field of ['token', 'qr_token', 'access_token', 'refresh_token']) if (field in loggedArgs) loggedArgs[field] = '[redacted]';
     console.error('[Supabase] RPC failed', {
       name,
       args: loggedArgs,
@@ -163,7 +175,7 @@ export const appAuth = {
   }, 'Sign in', undefined, ['Checking your sign-in details', 'Signing you in']);
 },
   async signOut() {
-  return toast.track(async (progress) => { const { error } = await supabase.auth.signOut(); if (error) throw error; resetData();
+  return toast.track(async (progress) => { const owner = currentUserId; const { error } = await supabase.auth.signOut(); if (error) throw error; resetData(); if (owner) await clearOfflineRosters(owner);
   }, 'Sign out');
 },
   getCurrentUser: () => currentUserId ? snapshot.users[currentUserId] || null : null,

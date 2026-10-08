@@ -18,6 +18,7 @@ import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { Collapsible } from '../components/ui/Collapsible';
 import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
+import PasskeySettings from '../components/PasskeySettings';
 
 const StudentProfile: React.FC = () => {
   const { profile, isMock } = useAuth();
@@ -384,6 +385,8 @@ const StudentProfile: React.FC = () => {
 
         {/* RIGHT: SECURITY & TOGGLES */}
         <div className="space-y-6">
+
+          <PasskeySettings />
 
           {/* PASSWORD RESET TOGGLE */}
           <Surface className="space-y-4 p-4 sm:p-6">
