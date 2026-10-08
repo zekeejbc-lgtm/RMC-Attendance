@@ -1,3 +1,5 @@
+import { DateTimeInput } from '../components/ui/TimeInput';
+import { parseManilaDateTime } from '../lib/dateTime';
 import { ClassScheduleEditor } from '../components/academic/ClassScheduleEditor';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 
@@ -215,8 +217,8 @@ const SSGPanel: React.FC = () => {
       description: eventData.description,
       status: 'active',
       created_by: profile?.name || 'System',
-      startTime: new Date(eventData.startTime).getTime(),
-      endTime: new Date(eventData.endTime).getTime(),
+      startTime: parseManilaDateTime(eventData.startTime),
+      endTime: parseManilaDateTime(eventData.endTime),
       penaltyValue: eventData.penaltyValue,
       penaltyUnit: eventData.penaltyUnit,
       participantsType,
@@ -573,7 +575,7 @@ const SSGPanel: React.FC = () => {
             variant="gold"
             className="sm:w-auto"
             onClick={handleCreateEvent}
-            disabled={!eventData.title || !eventData.startTime || !eventData.endTime || (audienceMode === 'directory_node' && eventAudiencePath.length === 0) || (audienceMode === 'specific' && eventData.specificPeople.length === 0)}
+            disabled={!eventData.title || !Number.isFinite(parseManilaDateTime(eventData.startTime)) || !Number.isFinite(parseManilaDateTime(eventData.endTime)) || parseManilaDateTime(eventData.endTime) <= parseManilaDateTime(eventData.startTime) || (audienceMode === 'directory_node' && eventAudiencePath.length === 0) || (audienceMode === 'specific' && eventData.specificPeople.length === 0)}
           >
             Deploy
           </Button>
@@ -612,11 +614,11 @@ const SSGPanel: React.FC = () => {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                        <div className="space-y-2">
                           <label htmlFor="deployment-start" className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Window Open</label>
-                          <input id="deployment-start" type="datetime-local" className="app-control w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.startTime} onChange={e => setEventData({...eventData, startTime: e.target.value})} />
+                          <DateTimeInput id="deployment-start" aria-label="Deployment start" required className="app-control w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.startTime} onChange={e => setEventData({...eventData, startTime: e.target.value})} />
                        </div>
                        <div className="space-y-2">
                           <label htmlFor="deployment-end" className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Window Close</label>
-                          <input id="deployment-end" type="datetime-local" className="app-control w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.endTime} onChange={e => setEventData({...eventData, endTime: e.target.value})} />
+                          <DateTimeInput id="deployment-end" aria-label="Deployment end" required className="app-control w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl font-bold text-brand-900 dark:text-slate-100 text-xs shadow-sm" value={eventData.endTime} onChange={e => setEventData({...eventData, endTime: e.target.value})} />
                        </div>
                     </div>
                  </div>
@@ -765,7 +767,7 @@ const SSGPanel: React.FC = () => {
                <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-700 text-center">
                      <p className="text-[7px] font-black uppercase text-slate-400 tracking-widest mb-1">Success Score</p>
-                     <p className="text-3xl font-black text-brand-900 dark:text-slate-100">98%</p>
+                     <p className="text-3xl font-black text-brand-900 dark:text-slate-100">{selectedStudent.stats.events_attended + selectedStudent.stats.events_missed > 0 && Number.isFinite(selectedStudent.stats.attendance_rate) ? `${selectedStudent.stats.attendance_rate}%` : 'N/A'}</p>
                   </div>
                   <div className="bg-red-50 dark:bg-red-950/60 p-4 rounded-xl border border-red-100 dark:border-red-900/50 text-center shadow-sm">
                      <p className="text-[7px] font-black uppercase text-red-400 tracking-widest mb-1">Service Hours</p>

@@ -1,3 +1,4 @@
+import { formatManilaDateTime } from '../../lib/dateTime';
 import { SelectField } from '../ui/SelectField';
 ﻿import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Eye, RefreshCw, UserRound } from 'lucide-react';
@@ -94,7 +95,7 @@ export default function ManagedAccountsTable({ accounts, access, loading, access
             </div>
           </td>
           <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-700"><span className="inline-block whitespace-nowrap rounded-full bg-gold-100 px-2.5 py-1 text-xs font-bold text-gold-800">{roleLabel(account.role)}</span></td>
-          <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 dark:border-slate-700">{access[account.uid]?.last_sign_in_at ? <span className="text-emerald-700 dark:text-emerald-300">{new Date(access[account.uid].last_sign_in_at!).toLocaleString()}</span> : <span className="text-slate-500">{access[account.uid] ? 'Never signed in' : loading ? 'Loading…' : 'Status unavailable'}</span>}</td>
+          <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 dark:border-slate-700">{access[account.uid]?.last_sign_in_at ? <span className="text-emerald-700 dark:text-emerald-300">{formatManilaDateTime(access[account.uid].last_sign_in_at!)}</span> : <span className="text-slate-500">{access[account.uid] ? 'Never signed in' : loading ? 'Loading…' : 'Status unavailable'}</span>}</td>
           <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-700"><Button className="w-auto" variant="secondary" aria-label={`View profile for ${account.name}`} onClick={() => onSelect(account)}><Eye size={15} /> View profile</Button></td>
         </tr>)}{!visible.length && <tr><td colSpan={4} className="px-4 py-12 text-center text-slate-500">{accounts.length ? 'No accounts match your search and filters.' : 'No managed accounts yet.'}</td></tr>}</tbody>
       </table>

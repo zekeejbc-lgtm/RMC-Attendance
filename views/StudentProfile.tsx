@@ -1,3 +1,4 @@
+import { formatManilaDate } from '../lib/dateTime';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
@@ -524,7 +525,7 @@ const StudentProfile: React.FC = () => {
                   <p className="text-slate-400 dark:text-slate-400 text-[10px] font-medium">
                     {is2FAEnabled ? 'Status: Active & Enrolled' : 'Status: Disabled'}
                   </p>
-                  {is2FAEnabled && factorCreatedAt && <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Added {new Date(factorCreatedAt).toLocaleDateString()}</p>}
+                  {is2FAEnabled && factorCreatedAt && <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500">Added {formatManilaDate(factorCreatedAt)}</p>}
                 </div>
               </div>
 

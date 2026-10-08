@@ -9,7 +9,7 @@ import {
   Clock3, LocateFixed, MapPin, Play, ScanLine, ShieldCheck, Square,
   UserX, Users, Wifi,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatManilaTime, formatManilaDate, formatManilaDateTime } from '../lib/dateTime';
 import { useAuth } from '../components/AuthContext';
 import { AppEvent, UserProfile } from '../types';
 import { getDistanceFromLatLonInMeters } from '../lib/geolocation';
@@ -29,7 +29,7 @@ const eventTime = (value: unknown, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const formatEventTime = (value: unknown) => format(eventTime(value, Date.now()), 'MMM d, h:mm a');
+const formatEventTime = (value: unknown) => formatManilaDateTime(eventTime(value, Date.now()), { month: 'short', day: 'numeric', year: undefined, second: undefined });
 
 const groupEvent = (event: AppEvent, now = Date.now()): EventGroup => {
   if (event.status === 'done' || event.endTime < now) return 'archived';
@@ -66,6 +66,7 @@ const MayorScanner: React.FC = () => {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerStateRef = useRef<ScannerState>('ready');
   const handlingScan = useRef(false);
+  const cameraSession = useRef(0);
   const verificationReturnState = useRef<'ready' | 'scanning' | 'paused'>('ready');
   const scannerId = 'mayor-camera-reader';
   scannerStateRef.current = scannerState;
@@ -84,6 +85,7 @@ const MayorScanner: React.FC = () => {
   }, [revision, profile]);
 
   useEffect(() => () => {
+    cameraSession.current++;
     const scanner = scannerRef.current;
     if (scanner?.isScanning) scanner.stop().catch(() => undefined);
   }, []);
@@ -128,7 +130,8 @@ const MayorScanner: React.FC = () => {
       const cameras = await Html5Qrcode.getCameras();
       if (cameras.length) {
         setCameraOptions(cameras.map((camera, index) => ({ value: camera.id, label: camera.label || `Camera ${index + 1}` })));
-        setCameraId(cameras[0].id);
+        const rearCamera = cameras.find(camera => /back|rear|environment/i.test(camera.label));
+        if (rearCamera) setCameraId(rearCamera.id);
       }
     } catch {
       // Browser permission is requested when the selected camera starts.
@@ -208,22 +211,38 @@ const MayorScanner: React.FC = () => {
   };
 
   const startScanner = async () => {
+    if (scannerStateRef.current !== 'ready') return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setScanError('Camera access requires HTTPS (or localhost). Open the secure site in your browser.');
+      return;
+    }
+    const session = ++cameraSession.current;
+    scannerStateRef.current = 'starting';
     setScannerState('starting');
     setScanError('');
     try {
       const scanner = scannerRef.current || new Html5Qrcode(scannerId);
       scannerRef.current = scanner;
       const source = cameraId === 'environment' || cameraId === 'user' ? { facingMode: cameraId } : cameraId;
-      await toast.track(() => scanner.start(source, { fps: 12, qrbox: { width: 260, height: 260 }, aspectRatio: 1.777 }, handleDecoded, () => undefined), 'Start camera', 'Camera ready');
+      // Scan the entire frame: a fixed crop can exceed a narrow phone's video height.
+      await toast.track(() => scanner.start(source, { fps: 12 }, handleDecoded, () => undefined), 'Start camera', 'Camera ready');
+      if (session !== cameraSession.current) {
+        if (scanner.isScanning) await scanner.stop();
+        return;
+      }
       setScannerState('scanning');
-      discoverCameras();
-    } catch {
+    } catch (error) {
+      if (session !== cameraSession.current) return;
       setScannerState('ready');
-      setScanError('Camera access failed. Check browser permission or select another camera.');
+      const name = (error as { name?: string })?.name;
+      setScanError(name === 'NotAllowedError'
+        ? 'Camera permission was denied. Allow camera access in your browser settings, then try again.'
+        : 'Camera access failed. Close other apps using the camera or select another camera, then try again.');
     }
   };
 
   const stopScanner = async () => {
+    cameraSession.current++;
     setScannerState('stopping');
     try { if (scannerRef.current?.isScanning) await scannerRef.current.stop(); } catch { /* already stopped */ }
     scannerRef.current = null;
@@ -276,7 +295,7 @@ const MayorScanner: React.FC = () => {
           <Surface className="p-4"><CustomSelect label="Scan action" value={direction} onChange={value => setDirection(value as 'in' | 'out')} options={[{value:'in',label:'Scan in'},{value:'out',label:'Scan out / compute rendered hours'}]} />{scanError && <p role="alert" className="mt-2 text-sm text-red-600">{scanError}</p>}{attendanceReceipt?.time_out && <p role="status" className="mt-2 text-sm">Rendered: {attendanceReceipt.rendered_hours?.toFixed(2)} hours. Sanctions cleared: {attendanceReceipt.deducted_hours?.toFixed(2)} hours. Earned merit: {(attendanceReceipt.merit_earned_hours || 0).toFixed(2)} hours.{attendanceReceipt.completion_pending && ' Fixed merit is pending completion of all required sessions.'}</p>}</Surface>
       <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40"><ShieldCheck size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Location</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{selectedEvent?.geofenceEnabled === false ? 'Not required for this event' : 'Verified before each save'}</span></span></Surface>
           <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-gold-50 text-gold-600 dark:bg-gold-950/40"><Users size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">This session</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{scannedCount} recorded</span></span></Surface>
-          <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40"><Clock3 size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Event closes</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{selectedEvent ? format(selectedEvent.endTime, 'h:mm a') : '—'}</span></span></Surface>
+          <Surface className="flex items-center gap-3 p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40"><Clock3 size={19} /></span><span><span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Event closes</span><span className="mt-0.5 block text-sm font-black text-brand-900 dark:text-white">{selectedEvent ? formatManilaTime(selectedEvent.endTime, { second: undefined }) : '—'}</span></span></Surface>
         </div>
 
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,.65fr)]">
@@ -321,7 +340,7 @@ const MayorScanner: React.FC = () => {
         <Modal open={Boolean(scanResult)} onClose={continueScanning} title={attendanceReceipt?.already_recorded ? 'Already recorded' : attendanceReceipt ? 'Attendance recorded' : 'Verify student identity'} description={attendanceReceipt?.already_recorded ? 'This student already has an attendance record for this event.' : attendanceReceipt ? 'The attendance record was saved successfully.' : 'Confirm that this profile matches the student presenting the QR code.'} size="sm" footer={attendanceReceipt ? <Button variant="gold" onClick={continueScanning}><ScanLine size={17} /> Scan next student</Button> : <><Button variant="secondary" className="border-red-200 text-red-700 hover:bg-red-50" onClick={continueScanning}><UserX size={17} /> Waive</Button><Button variant="gold" disabled={saving || (!qrToken && manualReason.trim().length < 5)} onClick={recordAttendance}><CheckCircle2 size={17} /> Record</Button></>}>
           {!attendanceReceipt && !qrToken && <label className="block text-sm">Reason for manual entry<input className="input-field mt-2" value={manualReason} onChange={event => setManualReason(event.target.value)} minLength={5} required /></label>}
           {scanError && <p role="alert" className="mt-2 text-sm text-red-600">{scanError}</p>}
-          {scanResult && <div className="text-center"><div className="relative mx-auto w-fit"><ProfileAvatar src={scanResult.photo_url || undefined} alt={`${scanResult.name} profile`} className="h-28 w-28 rounded-3xl border-4 border-gold-100 object-cover shadow-lg dark:border-gold-900" />{attendanceReceipt && <span className="absolute -bottom-2 -right-2 grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-emerald-500 text-white shadow dark:border-slate-800"><Check size={17} strokeWidth={3} /></span>}</div><h3 className="mt-5 text-xl font-black text-brand-900 dark:text-white">{scanResult.name}</h3><p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-300">{scanResult.student_id}</p><p className="mt-1 text-xs text-slate-400">{scanResult.school_data.level} · {scanResult.school_data.section}</p>{!attendanceReceipt && <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-950/40"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black text-blue-800 dark:text-blue-200">Identity check required</p><p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">Choose <strong>Record</strong> only when the photo and student ID match. Choose <strong>Waive</strong> to dismiss without saving.</p></div>{proposedRecordTime && <div className="shrink-0 rounded-xl bg-white/70 px-3 py-2 text-right dark:bg-slate-900/40"><p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Record time</p><p className="mt-1 whitespace-nowrap text-sm font-black text-blue-900 dark:text-blue-100"><Clock3 size={13} className="mr-1 inline" />{format(proposedRecordTime, 'h:mm:ss a')}</p><p className="mt-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-300">{format(proposedRecordTime, 'MMM d, yyyy')}</p></div>}</div></div>}{attendanceReceipt && <div className={`mt-5 rounded-2xl border p-4 ${attendanceReceipt.status === 'late' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'}`}><p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{attendanceReceipt.already_recorded ? 'Original record' : 'Status recorded'}</p><p className={`mt-1 text-2xl font-black capitalize ${attendanceReceipt.status === 'late' ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{attendanceReceipt.status}</p><p className="mt-2 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300"><Clock3 size={14} />{format(attendanceReceipt.time_in, 'MMM d, yyyy · h:mm:ss a')}</p></div>}</div>}
+          {scanResult && <div className="text-center"><div className="relative mx-auto w-fit"><ProfileAvatar src={scanResult.photo_url || undefined} alt={`${scanResult.name} profile`} className="h-28 w-28 rounded-3xl border-4 border-gold-100 object-cover shadow-lg dark:border-gold-900" />{attendanceReceipt && <span className="absolute -bottom-2 -right-2 grid h-9 w-9 place-items-center rounded-full border-4 border-white bg-emerald-500 text-white shadow dark:border-slate-800"><Check size={17} strokeWidth={3} /></span>}</div><h3 className="mt-5 text-xl font-black text-brand-900 dark:text-white">{scanResult.name}</h3><p className="mt-1 text-sm font-bold text-slate-500 dark:text-slate-300">{scanResult.student_id}</p><p className="mt-1 text-xs text-slate-400">{scanResult.school_data.level} · {scanResult.school_data.section}</p>{!attendanceReceipt && <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left dark:border-blue-800 dark:bg-blue-950/40"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black text-blue-800 dark:text-blue-200">Identity check required</p><p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">Choose <strong>Record</strong> only when the photo and student ID match. Choose <strong>Waive</strong> to dismiss without saving.</p></div>{proposedRecordTime && <div className="shrink-0 rounded-xl bg-white/70 px-3 py-2 text-right dark:bg-slate-900/40"><p className="text-[9px] font-black uppercase tracking-widest text-blue-500">Record time</p><p className="mt-1 whitespace-nowrap text-sm font-black text-blue-900 dark:text-blue-100"><Clock3 size={13} className="mr-1 inline" />{formatManilaTime(proposedRecordTime)}</p><p className="mt-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-300">{formatManilaDate(proposedRecordTime, { month: 'short' })}</p></div>}</div></div>}{attendanceReceipt && <div className={`mt-5 rounded-2xl border p-4 ${attendanceReceipt.status === 'late' ? 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'}`}><p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{attendanceReceipt.already_recorded ? 'Original record' : 'Status recorded'}</p><p className={`mt-1 text-2xl font-black capitalize ${attendanceReceipt.status === 'late' ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>{attendanceReceipt.status}</p><p className="mt-2 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300"><Clock3 size={14} />{formatManilaDateTime(attendanceReceipt.time_in, { month: 'short' })}</p></div>}</div>}
         </Modal>
       </Page>
     );

@@ -1,3 +1,4 @@
+import { formatManilaDateTime, formatClockTime } from '../lib/dateTime';
 import EventLocationDetails from '../components/events/EventLocationDetails';
 import EventBanner from '../components/events/EventBanner';
 import { EventGroups } from '../components/events/EventGroups';
@@ -31,7 +32,7 @@ function EventCard({ event, kind, onOpen, onSelect }: { event: AppEvent; kind: '
     {event.bannerUrl && <EventBanner src={event.bannerUrl} alt={`${event.title} banner`} />}
     {dark && <span className="absolute right-0 top-0 rounded-bl-xl bg-gold-gradient px-4 py-1.5 text-[9px] font-black uppercase text-brand-900">Live Event</span>}
     <div className="flex items-start gap-3 pr-14"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${dark ? 'border border-gold-400/40 bg-gold-400/15 text-gold-300' : 'bg-brand-50 text-brand-900 dark:bg-brand-900/40 dark:text-brand-300'}`}><Calendar size={19}/></span><span className="min-w-0"><span className={`block text-sm font-bold ${dark ? 'text-white' : 'text-brand-900 dark:text-white'}`}>{eventDisplayTitle(event, appData.getEvents())}</span><span className={`mt-1 line-clamp-2 block text-xs leading-5 ${dark ? 'text-slate-300' : 'text-slate-500 dark:text-slate-400'}`}>{event.description || 'No event details provided.'}</span></span></div>
-    <div className={`mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-xs font-bold ${dark ? 'border-white/10' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}><span className="flex items-center gap-1.5"><Clock size={14}/> {kind === 'scheduled' ? 'Starts' : 'Ends'}: {new Date(kind === 'scheduled' ? event.startTime : event.endTime).toLocaleString()}</span><span className="flex items-center gap-1.5"><AlertTriangle size={14}/> Penalty: {absentRule(event).value} {absentRule(event).unit}</span><span className="flex items-center gap-1.5"><Users size={14}/>{recipients(event)}</span></div>
+    <div className={`mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-xs font-bold ${dark ? 'border-white/10' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}><span className="flex items-center gap-1.5"><Clock size={14}/> {kind === 'scheduled' ? 'Starts' : 'Ends'}: {formatManilaDateTime(kind === 'scheduled' ? event.startTime : event.endTime)}</span><span className="flex items-center gap-1.5"><AlertTriangle size={14}/> Penalty: {absentRule(event).value} {absentRule(event).unit}</span><span className="flex items-center gap-1.5"><Users size={14}/>{recipients(event)}</span></div>
   </button></article>;
 }
 
@@ -44,10 +45,10 @@ function EventDetails({ event, onClose }: { event: AppEvent | null; onClose: () 
       {event.bannerUrl && <EventBanner src={event.bannerUrl} alt={`${event.title} banner`} />}
       {event.status === 'done' && <p className="rounded-xl bg-slate-100 p-3 font-semibold dark:bg-slate-700">Read-only archived record</p>}
       {event.venue && <p><b>Location:</b> {event.venue}</p>}
-      {event.attendanceWindows?.map((window, index) => <p key={window.id}>{window.label || `Window ${index + 1}`}: {window.timeIn}?{window.timeOut}</p>)}
+      {event.attendanceWindows?.map((window, index) => <p key={window.id}>{window.label || `Window ${index + 1}`}: {formatClockTime(window.timeIn)} – {formatClockTime(window.timeOut)}</p>)}
       <p>{event.description || 'No event details provided.'}</p>
       <EventLocationDetails event={event} />
-      <div className="grid gap-3 sm:grid-cols-2"><div><b>Starts</b><p>{new Date(event.startTime).toLocaleString()}</p></div><div><b>Ends</b><p>{new Date(event.endTime).toLocaleString()}</p></div><div><b>Recipients</b><p>{recipients(event)}</p></div><div><b>Geofence</b><p>{event.geofenceEnabled === false ? 'Disabled' : `${event.location.radius_meters} meters`}</p></div><div><b>Late sanction</b><p>{event.sanctionRules?.late.value || 0} {event.sanctionRules?.late.unit || 'minutes'}</p></div><div><b>Absent sanction</b><p>{absentRule(event).value} {absentRule(event).unit}</p></div></div>
+      <div className="grid gap-3 sm:grid-cols-2"><div><b>Starts</b><p>{formatManilaDateTime(event.startTime)}</p></div><div><b>Ends</b><p>{formatManilaDateTime(event.endTime)}</p></div><div><b>Recipients</b><p>{recipients(event)}</p></div><div><b>Geofence</b><p>{event.geofenceEnabled === false ? 'Disabled' : `${event.location.radius_meters} meters`}</p></div><div><b>Late sanction</b><p>{event.sanctionRules?.late.value || 0} {event.sanctionRules?.late.unit || 'minutes'}</p></div><div><b>Absent sanction</b><p>{absentRule(event).value} {absentRule(event).unit}</p></div></div>
       {event.status !== 'done' && canManageEventInScope(profile, event, appData.getSchoolStructure()) && <Button variant="gold" onClick={() => { onClose(); navigate(`/ssg/events/${event.id}/edit`); }}>Edit</Button>}
     </div>
   </Modal>;

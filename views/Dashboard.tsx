@@ -1,3 +1,4 @@
+import { formatManilaTime, formatManilaDateTime, formatManilaDate } from '../lib/dateTime';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../components/AuthContext';
@@ -49,11 +50,11 @@ const Dashboard: React.FC = () => {
         <div className="absolute top-0 right-0 w-64 h-64 bg-gold-400/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="relative shrink-0">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <div className="relative h-12 w-12 shrink-0 sm:h-14 sm:w-14">
               <ProfileAvatar
                 src={profile?.photo_url || '/avatar-placeholder.svg'}
-                className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl object-cover border border-gold-400 shadow-md"
+                className="h-full w-full rounded-xl object-cover border border-gold-400 shadow-md"
                 alt="Profile"
               />
               <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white p-0.5 rounded-md shadow">
@@ -61,11 +62,11 @@ const Dashboard: React.FC = () => {
               </span>
             </div>
 
-            <div>
-              <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white leading-tight">
+            <div className="min-w-0 flex-1">
+              <h2 className="break-words text-lg sm:text-xl font-bold uppercase tracking-tight text-white leading-tight">
                 Welcome back, {profile?.name ? profile.name.replace(/^Mayor\s+/i, '') : ''}!
               </h2>
-              <p className="text-slate-300 text-[11px] font-medium mt-0.5">
+              <p className="break-words text-slate-300 text-[11px] font-medium mt-0.5">
                 ID: <span className="font-mono font-bold text-gold-300">{profile?.student_id}</span> • Section: <span className="font-bold text-white">{profile?.school_data?.section}</span>
               </p>
             </div>
@@ -75,7 +76,7 @@ const Dashboard: React.FC = () => {
       </section>
 
       <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 lg:grid-cols-4" aria-label="Student metrics">
-        <MetricCard icon={<TrendingUp size={20} />} label="Attendance" value={`${stats?.attendance_rate || 98}%`} detail="Current attendance rate" />
+        <MetricCard icon={<TrendingUp size={20} />} label="Attendance" value={stats && stats.events_attended + stats.events_missed > 0 && Number.isFinite(stats.attendance_rate) ? `${stats.attendance_rate}%` : 'N/A'} detail="Current attendance rate" />
         <MetricCard icon={<ShieldAlert size={20} />} label="Sanctions" value={`${stats?.sanction_hours || 0}h`} detail="Community service balance" />
         <MetricCard icon={<CheckCircle2 size={20} />} label="Events Attended" value={stats?.events_attended || 0} detail="Verified check-ins" />
         <MetricCard icon={<AlertTriangle size={20} />} label="Events Missed" value={stats?.events_missed || 0} detail="Recorded absences" />
@@ -187,7 +188,7 @@ const Dashboard: React.FC = () => {
                   </p>
 
                   <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs font-bold text-gold-300">
-                    <span className="flex items-center gap-1"><Clock size={12} /> Ends: {new Date(event.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="flex items-center gap-1"><Clock size={12} /> Ends: {formatManilaTime(event.endTime, { hour: '2-digit', minute: '2-digit' })}</span>
                     <span className="flex items-center gap-1 group-hover:translate-x-1 transition-transform">Open Geofence Map <ArrowRight size={12} /></span>
                   </div>
                 </div>
@@ -216,7 +217,7 @@ const Dashboard: React.FC = () => {
 
             {ceremonies.length ? ceremonies.slice(0, 3).map(ceremony => <button key={ceremony.id} onClick={() => navigate('/student/ceremonies')} className="block w-full rounded-xl bg-slate-50 p-4 text-left dark:bg-slate-900">
               <span className="block text-xs font-bold">{ceremony.title}</span>
-              <span className="mt-1 block text-xs text-slate-500">{new Date(ceremony.startTime).toLocaleString()}</span>
+              <span className="mt-1 block text-xs text-slate-500">{formatManilaDateTime(ceremony.startTime)}</span>
             </button>) : <p className="text-sm text-slate-500">No upcoming ceremonies.</p>}
           </Surface>
         </div>
@@ -256,7 +257,7 @@ const Dashboard: React.FC = () => {
 
             <div className="space-y-2">
               {recent.length ? recent.map(record => <div key={record.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-900">
-                <div className="min-w-0"><p className="font-bold">{record.event?.title || 'Attendance'}</p><p className="text-slate-500">{new Date(record.time_in || record.recorded_at).toLocaleDateString()}</p></div>
+                <div className="min-w-0"><p className="font-bold">{record.event?.title || 'Attendance'}</p><p className="text-slate-500">{formatManilaDate(record.time_in || record.recorded_at)}</p></div>
                 <span className="capitalize">{record.status}</span>
               </div>) : <p className="text-sm text-slate-500">No attendance recorded yet.</p>}
             </div>

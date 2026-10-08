@@ -1,3 +1,4 @@
+import { formatManilaTime, formatClockTime } from '../lib/dateTime';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, MapPin, Plus } from 'lucide-react';
@@ -50,7 +51,7 @@ export default function GeneralEvent({ student = false }: { student?: boolean })
         const progress = occurrenceProgress(row, now);
         return <button key={row.event.id} type="button" onClick={() => setSelected({ id: row.event.id, day })} className="min-w-0 space-y-3 rounded-xl border border-slate-200 p-4 text-left transition hover:border-gold-500 dark:border-slate-700">
           <h3 className="text-base font-bold">{row.event.title}</h3>
-          <p className="text-sm">{new Date(row.start).toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' })} - {new Date(row.end).toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' })}</p>
+          <p className="text-sm">{formatManilaTime(row.start, { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' })} - {formatManilaTime(row.end, { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' })}</p>
           <p className="flex items-center gap-2 text-sm"><MapPin size={16} />{row.event.venue || 'View location details'}</p>
           <p className="text-sm font-semibold">{progress.label}</p>
           <div role="progressbar" aria-label={`${row.event.title} schedule progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent} className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><div className="h-full bg-gold-500" style={{ width: `${progress.percent}%` }} /></div>
@@ -64,7 +65,7 @@ export default function GeneralEvent({ student = false }: { student?: boolean })
         {selectedRow.event.bannerUrl && <EventBanner src={selectedRow.event.bannerUrl} alt={`${selectedRow.event.title} banner`} />}
         <p className="font-bold">{occurrenceProgress(selectedRow, now).label}</p>
         <p className="whitespace-pre-wrap">{selectedRow.event.description || 'No additional instructions.'}</p>
-        <section className="space-y-2"><h3 className="font-bold">Attendance windows · Philippine time</h3>{selectedRow.event.attendanceWindows?.map((window, index) => <p key={window.id}>{window.label || `Window ${index + 1}`}: {window.timeIn} - {window.timeOut}. Late after {window.lateAfterMinutes} minutes.</p>)}<p>Recipients: {selectedRow.event.recipientGroups?.join(', ') || selectedRow.event.targetValue || 'Assigned attendees'}</p></section>
+        <section className="space-y-2"><h3 className="font-bold">Attendance windows · Philippine time</h3>{selectedRow.event.attendanceWindows?.map((window, index) => <p key={window.id}>{window.label || `Window ${index + 1}`}: {formatClockTime(window.timeIn)} - {formatClockTime(window.timeOut)}. Late after {window.lateAfterMinutes} minutes.</p>)}<p>Recipients: {selectedRow.event.recipientGroups?.join(', ') || selectedRow.event.targetValue || 'Assigned attendees'}</p></section>
         <EventLocationDetails event={selectedRow.event} />
         <section><h3 className="font-bold">Attendance rules</h3><p>Late: {selectedRow.event.sanctionRules?.late.value || 0} {selectedRow.event.sanctionRules?.late.unit || 'minutes'}</p><p>Absent: {selectedRow.event.sanctionRules?.absent.value ?? selectedRow.event.penaltyValue} {selectedRow.event.sanctionRules?.absent.unit || selectedRow.event.penaltyUnit}</p></section>
       </div>

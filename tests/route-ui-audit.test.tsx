@@ -1,7 +1,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ThemeProvider } from '../components/ThemeContext';
 import LandingPage from '../views/LandingPage';
@@ -204,6 +204,10 @@ function renderRoute(element: React.ReactElement) {
     </ThemeProvider>,
   );
 }
+
+beforeEach(() => {
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn() } });
+});
 
 afterEach(() => {
   cleanup();
@@ -470,11 +474,11 @@ describe('student route UI behavior', () => {
     expect(screen.getByRole('combobox', { name: /filter by category/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /filter by status/i })).toBeInTheDocument();
     expect(screen.getByRole('table', { name: /attendance ledger/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('article', { name: /weekly institutional flag raising ceremony/i })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^weekly institutional flag raising ceremony$/i })).toHaveLength(1);
 
     await user.type(search, 'Disaster Risk');
-    expect(screen.queryByRole('article', { name: /weekly institutional flag raising ceremony/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('article', { name: /disaster risk & safety drill/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^weekly institutional flag raising ceremony$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^disaster risk & safety drill$/i })).toBeInTheDocument();
   });
 
   it('labels profile, password, two-factor, and session controls', async () => {
@@ -757,6 +761,7 @@ describe('staff route UI behavior', () => {
     );
     expect(screen.getByRole('button', { name: /stop scanner/i })).toBeInTheDocument();
     await waitFor(() => expect(scannerState.start).toHaveBeenCalledTimes(1));
+    expect(scannerState.start.mock.calls[0][1]).toEqual({ fps: 12 });
 
     scannerState.decoded?.('RMC1.test-token');
     expect(await screen.findByRole('dialog', { name: /verify student identity/i })).toBeInTheDocument();
@@ -1159,14 +1164,22 @@ describe('staff route UI behavior', () => {
     const radius = within(form).getByRole('spinbutton', { name: /geofence radius/i });
     await user.clear(radius);
     await user.type(radius, '275');
-    fireEvent.change(within(form).getByLabelText(/time in 1/i), { target: { value: '08:00' } });
-    fireEvent.change(within(form).getByLabelText(/time out 1/i), { target: { value: '10:00' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time In 1 hour' }), { target: { value: '8' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time In 1 minute' }), { target: { value: '00' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time In 1 AM/PM' }), { target: { value: 'AM' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time Out 1 hour' }), { target: { value: '10' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time Out 1 minute' }), { target: { value: '00' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time Out 1 AM/PM' }), { target: { value: 'AM' } });
     const firstLateThreshold = within(form).getByLabelText(/late after minutes 1/i);
     await user.clear(firstLateThreshold);
     await user.type(firstLateThreshold, '30');
     await user.click(within(form).getByRole('button', { name: /add attendance window/i }));
-    fireEvent.change(within(form).getByLabelText(/time in 2/i), { target: { value: '13:00' } });
-    fireEvent.change(within(form).getByLabelText(/time out 2/i), { target: { value: '16:00' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time In 2 hour' }), { target: { value: '1' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time In 2 minute' }), { target: { value: '00' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time In 2 AM/PM' }), { target: { value: 'PM' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time Out 2 hour' }), { target: { value: '4' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time Out 2 minute' }), { target: { value: '00' } });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Time Out 2 AM/PM' }), { target: { value: 'PM' } });
     const lateSanction = within(form).getByRole('spinbutton', { name: /late sanction value/i });
     await user.clear(lateSanction);
     await user.type(lateSanction, '30');
@@ -1209,16 +1222,26 @@ describe('staff route UI behavior', () => {
     fireEvent.change(screen.getByLabelText(/event details/i), { target: { value: 'Morning and afternoon' } });
     fireEvent.change(screen.getByLabelText(/^start date$/i), { target: { value: '2026-10-01' } });
     fireEvent.change(screen.getByLabelText(/^end date$/i), { target: { value: '2026-10-01' } });
-    fireEvent.change(screen.getByLabelText(/time in 1/i), { target: { value: '13:00' } });
-    fireEvent.change(screen.getByLabelText(/time out 1/i), { target: { value: '16:00' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time In 1 hour' }), { target: { value: '1' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time In 1 minute' }), { target: { value: '00' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time In 1 AM/PM' }), { target: { value: 'PM' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 1 hour' }), { target: { value: '4' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 1 minute' }), { target: { value: '00' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 1 AM/PM' }), { target: { value: 'PM' } });
     await user.click(screen.getByRole('button', { name: /add attendance window/i }));
-    fireEvent.change(screen.getByLabelText(/time in 2/i), { target: { value: '08:00' } });
-    fireEvent.change(screen.getByLabelText(/time out 2/i), { target: { value: '14:00' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time In 2 hour' }), { target: { value: '8' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time In 2 minute' }), { target: { value: '00' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time In 2 AM/PM' }), { target: { value: 'AM' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 hour' }), { target: { value: '2' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 minute' }), { target: { value: '00' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 AM/PM' }), { target: { value: 'PM' } });
     expect(screen.getByRole('alert')).toHaveTextContent('Attendance windows must not overlap.');
     expect(screen.getByRole('button', { name: /schedule event/i })).toBeDisabled();
     fireEvent.submit(screen.getByRole('form'));
     expect(staffState.createEvent).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText(/time out 2/i), { target: { value: '10:00' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 hour' }), { target: { value: '10' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 minute' }), { target: { value: '00' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 AM/PM' }), { target: { value: 'AM' } });
     await user.click(screen.getByRole('button', { name: /schedule event/i }));
     expect(staffState.createEvent).toHaveBeenCalledWith(expect.objectContaining({
       startTime: new Date('2026-10-01T08:00:00+08:00').getTime(),

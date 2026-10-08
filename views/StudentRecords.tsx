@@ -1,5 +1,8 @@
+import { formatManilaDate, formatManilaTime, formatManilaDateTime } from '../lib/dateTime';
+import { Modal } from '../components/ui/Modal';
+import { AppEvent } from '../types';
 import { attendanceWindowTitle, eventDisplayTitle } from '../lib/eventGroups';
-import { escapeHtml } from '../lib/export';
+import { toast } from '../lib/toast';
 import { appData } from '../lib/backend';
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
@@ -21,6 +24,14 @@ interface AttendanceRecord {
   status: 'present' | 'late' | 'absent' | 'excused';
   scannedBy: string;
   sanctionIncurred?: number; // hours
+  event?: AppEvent;
+  slot: string;
+  timeOut: string;
+  recordedAt: string;
+  renderedHours?: number;
+  deductedHours?: number;
+  meritHours?: number;
+  completionPending?: boolean;
 }
 
 interface SanctionEntry {
@@ -30,6 +41,7 @@ interface SanctionEntry {
   dateAssigned: string;
   status: 'active' | 'resolved' | 'waived';
   approvedBy: string;
+  assignedAt: string;
 }
 
 const StudentRecords: React.FC = () => {
@@ -37,18 +49,27 @@ const StudentRecords: React.FC = () => {
   const activityCredits = useMemo(() => appData.getAttendanceRecords(profile?.uid || '').filter(r => ['service', 'merit'].includes(r.event?.kind || '')), [profile?.uid, revision]);
   const records: AttendanceRecord[] = useMemo(() => appData.getAttendanceRecords(profile?.uid || '').map(r => ({
     id: r.id, title: r.event ? [eventDisplayTitle(r.event, appData.getEvents()), attendanceWindowTitle(r.event, r.slot)].filter(Boolean).join(' / ') : 'Archived event', category: r.event?.kind === 'flag_ceremony' ? 'Ceremony' : 'Event',
-    date: r.slot === 'default' ? new Date(r.event?.startTime || r.time_in).toLocaleDateString() : r.slot.split(':')[0],
-    timeIn: r.time_in ? new Date(r.time_in).toLocaleTimeString() : '?', status: r.status, scannedBy: r.scanned_by_name || 'System',
+    date: /^\d{4}-\d{2}-\d{2}/.test(r.slot) ? r.slot.split(':')[0] : formatManilaDate(r.event?.startTime || r.time_in || r.recorded_at),
+    timeIn: r.time_in ? formatManilaTime(r.time_in) : 'Not recorded', status: r.status, scannedBy: r.scanned_by_name || 'System',
+    event: r.event, slot: r.slot, timeOut: r.time_out ? formatManilaDateTime(r.time_out) : 'Not recorded',
+    recordedAt: r.recorded_at ? formatManilaDateTime(r.recorded_at) : 'Not recorded',
+    renderedHours: r.rendered_hours, deductedHours: r.deducted_hours, meritHours: r.merit_earned_hours,
+    completionPending: r.completion_pending,
   })), [profile?.uid, revision]);
   const sanctions: SanctionEntry[] = (appData.getUserDetail(profile?.uid || '')?.sanction_logs || []).map(s => ({
-    id: s.id, reason: s.reason, hours: s.change, dateAssigned: new Date(s.timestamp).toLocaleDateString(),
+    id: s.id, reason: s.reason, hours: s.change, dateAssigned: formatManilaDate(s.timestamp),
     status: s.change < 0 ? 'resolved' : 'active', approvedBy: s.performed_by,
+    assignedAt: formatManilaDateTime(s.timestamp),
   }));
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [selectedSanctionId, setSelectedSanctionId] = useState<string | null>(null);
+  const selectedRecord = records.find(record => record.id === selectedRecordId);
+  const selectedSanction = sanctions.find(sanction => sanction.id === selectedSanctionId);
 
   const filteredRecords = useMemo(() => {
     return records.filter(record => {
@@ -72,109 +93,32 @@ const StudentRecords: React.FC = () => {
     return { presentCount, lateCount, absentCount, excusedCount, rate, totalSanctionHours };
   }, [records, revision]);
 
-  const handleExportPDF = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+  const [exporting, setExporting] = useState(false);
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>RMC Attendance & Sanction Official Transcript - ${escapeHtml(profile?.student_id)}</title>
-          <style>
-            body { font-family: system-ui, sans-serif; padding: 40px; color: #0E1B42; }
-            .header { text-align: center; border-bottom: 3px solid #D4AF37; padding-bottom: 20px; margin-bottom: 30px; }
-            .header h1 { margin: 0; font-size: 24px; text-transform: uppercase; }
-            .header p { margin: 5px 0 0; color: #64748B; font-size: 14px; font-weight: bold; }
-            .profile-box { background: #F8FAFC; padding: 20px; border-radius: 12px; margin-bottom: 30px; display: grid; grid-template-cols: 1fr 1fr; gap: 10px; font-size: 13px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
-            th, td { border: 1px solid #E2E8F0; padding: 10px; text-align: left; }
-            th { background: #0E1B42; color: white; text-transform: uppercase; font-size: 11px; }
-            .status-present { color: #16A34A; font-weight: bold; }
-            .status-late { color: #D97706; font-weight: bold; }
-            .status-absent { color: #DC2626; font-weight: bold; }
-            .status-excused { color: #2563EB; font-weight: bold; }
-            .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #94A3B8; border-top: 1px solid #E2E8F0; padding-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>Rizal Memorial Colleges</h1>
-            <p>PROJECT REGALIA • OFFICIAL STUDENT ATTENDANCE TRANSCRIPT</p>
-          </div>
-
-          <div class="profile-box">
-            <div><strong>Student Name:</strong> ${escapeHtml(profile?.name)}</div>
-            <div><strong>Student ID:</strong> ${escapeHtml(profile?.student_id)}</div>
-            <div><strong>Department:</strong> ${escapeHtml(profile?.school_data?.department)}</div>
-            <div><strong>Section:</strong> ${escapeHtml(profile?.school_data?.section)}</div>
-            <div><strong>Attendance Rate:</strong> ${stats.rate}%</div>
-            <div><strong>Active Sanction Hours:</strong> ${stats.totalSanctionHours} Hours</div>
-          </div>
-
-          <h3>Official Attendance Log</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Activity / Ceremony Title</th>
-                <th>Category</th>
-                <th>Time-In</th>
-                <th>Status</th>
-                <th>Verifier / Logger</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${records.map(r => `
-                <tr>
-                  <td>${r.date}</td>
-                  <td>${escapeHtml(r.title)}</td>
-                  <td>${r.category}</td>
-                  <td>${r.timeIn}</td>
-                  <td class="status-${r.status}">${r.status.toUpperCase()}</td>
-                  <td>${escapeHtml(r.scannedBy)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          <h3 style="margin-top: 30px;">Sanctions & Demerits Ledger</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Reason / Infraction</th>
-                <th>Sanction Value</th>
-                <th>Status</th>
-                <th>Authorizing Official</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${sanctions.map(s => `
-                <tr>
-                  <td>${s.dateAssigned}</td>
-                  <td>${escapeHtml(s.reason)}</td>
-                  <td>${s.hours > 0 ? `+${s.hours} Hours` : `${s.hours} Hours`}</td>
-                  <td>${s.status.toUpperCase()}</td>
-                  <td>${escapeHtml(s.approvedBy)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          <div class="footer">
-            Generated from RMC Project Regalia System on ${new Date().toLocaleString()} • Certified Official Electronic Record
-          </div>
-
-          <script>
-            window.onload = function() { window.print(); }
-          </script>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
+  const handleExportPDF = async () => {
+    if (!profile || exporting) return;
+    setExporting(true);
+    const progress = toast.start('Export PDF', ['Preparing transcript', 'Creating PDF']);
+    try {
+      const { downloadAttendanceTranscript } = await import('../lib/attendanceTranscript');
+      progress.step(1);
+      await downloadAttendanceTranscript({
+        student: {
+          name: profile.name, id: profile.student_id || '',
+          department: profile.school_data?.department || '',
+          section: profile.school_data?.section || '',
+        },
+        attendanceRate: stats.rate,
+        sanctionHours: stats.totalSanctionHours,
+        records,
+        sanctions,
+      });
+      progress.complete('PDF download started');
+    } catch (error) {
+      progress.fail(error, 'Could not export the PDF. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -187,8 +131,8 @@ const StudentRecords: React.FC = () => {
         description="Consolidated attendance history for mandatory campus events, ceremonies, and sanction hour balances."
         actions={
           <div className="w-[calc(100vw-2rem)] max-w-full sm:w-auto">
-            <Button onClick={handleExportPDF} className="border border-gold-400/30 uppercase tracking-wider sm:w-auto">
-              <Download size={15} className="text-gold-400" /> Export
+            <Button onClick={handleExportPDF} disabled={exporting || !profile} className="border border-gold-400/30 uppercase tracking-wider sm:w-auto">
+              <Download size={15} className="text-gold-400" /> {exporting ? 'Preparing PDF...' : 'Export PDF'}
             </Button>
           </div>
         }
@@ -231,7 +175,10 @@ const StudentRecords: React.FC = () => {
             <article
               key={record.id}
               aria-labelledby={`mobile-record-${record.id}`}
-              className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/60"
+              role="button" tabIndex={0} aria-haspopup="dialog"
+              onClick={() => setSelectedRecordId(record.id)}
+              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedRecordId(record.id); } }}
+              className="cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 p-4 hover:border-gold-500 focus-visible:outline-gold-500 dark:border-slate-700 dark:bg-slate-900/60"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <time className="font-mono text-sm font-bold text-slate-500 dark:text-slate-400" dateTime={record.date}>{record.date}</time>
@@ -245,7 +192,7 @@ const StudentRecords: React.FC = () => {
                   {record.status === 'late' && <Clock size={12} />}
                   {record.status === 'absent' && <XCircle size={12} />}
                   {record.status === 'excused' && <FileText size={12} />}
-                  {record.status === 'late' ? `Late (+${record.sanctionIncurred}h)` : record.status === 'absent' ? `Unexcused (+${record.sanctionIncurred}h)` : record.status}
+                  {record.status === 'absent' ? 'Unexcused' : record.status}
                 </span>
               </div>
               <div className="mt-3">
@@ -262,6 +209,7 @@ const StudentRecords: React.FC = () => {
                   <dd className="min-w-0 text-right font-medium text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{record.scannedBy}</dd>
                 </div>
               </dl>
+              <p className="mt-3 text-xs font-semibold text-gold-700 dark:text-gold-300">View details <ArrowUpRight size={12} className="inline" /></p>
             </article>
           ))}
           {filteredRecords.length === 0 ? <p className="py-8 text-center text-sm text-slate-500 dark:text-slate-400">No attendance records match these filters.</p> : null}
@@ -281,9 +229,9 @@ const StudentRecords: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
               {filteredRecords.map(record => (
-                <tr key={record.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors">
+                <tr key={record.id} onClick={() => setSelectedRecordId(record.id)} className="cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition-colors">
                   <td className="p-4 pl-6 font-mono font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">{record.date}</td>
-                  <td className="p-4 font-black text-brand-900 dark:text-slate-100 uppercase tracking-tight">{record.title}</td>
+                  <td className="p-4 font-black text-brand-900 dark:text-slate-100 uppercase tracking-tight"><button type="button" aria-haspopup="dialog" className="text-left hover:underline focus-visible:outline-gold-500" onClick={event => { event.stopPropagation(); setSelectedRecordId(record.id); }}>{record.title}<span className="mt-1 block text-[10px] font-semibold text-gold-700 dark:text-gold-300">View details</span></button></td>
                   <td className="p-4 whitespace-nowrap">
                     <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
                       {record.category}
@@ -298,12 +246,12 @@ const StudentRecords: React.FC = () => {
                     )}
                     {record.status === 'late' && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/60 px-2.5 py-0.5 rounded-full">
-                        <Clock size={12} /> Late (+{record.sanctionIncurred}h)
+                        <Clock size={12} /> Late
                       </span>
                     )}
                     {record.status === 'absent' && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/60 px-2.5 py-0.5 rounded-full">
-                        <XCircle size={12} /> Unexcused (+{record.sanctionIncurred}h)
+                        <XCircle size={12} /> Unexcused
                       </span>
                     )}
                     {record.status === 'excused' && (
@@ -337,7 +285,10 @@ const StudentRecords: React.FC = () => {
             {sanctions.map(sanc => (
               <div 
                 key={sanc.id}
-                className={`p-5 rounded-2xl border ${
+                role="button" tabIndex={0} aria-haspopup="dialog" aria-label={`View sanction details: ${sanc.reason}`}
+                onClick={() => setSelectedSanctionId(sanc.id)}
+                onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedSanctionId(sanc.id); } }}
+                className={`cursor-pointer p-5 rounded-2xl border hover:border-gold-500 focus-visible:outline-gold-500 ${
                   sanc.status === 'active' ? 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50' : 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700'
                 }`}
               >
@@ -358,12 +309,41 @@ const StudentRecords: React.FC = () => {
                 </p>
 
                 <p className="text-[10px] text-slate-400 dark:text-slate-400 font-medium mt-1">Authorized by: {sanc.approvedBy}</p>
+                <p className="mt-3 text-xs font-semibold text-gold-700 dark:text-gold-300">View details</p>
               </div>
             ))}
           </div>
         </div>
       </Surface>
 
+      <Modal open={Boolean(selectedRecord)} onClose={() => setSelectedRecordId(null)} title="Attendance details" description="All times are in Manila local time (UTC+8)." size="lg">
+        {selectedRecord && <div className="space-y-5 text-sm">
+          <div><h3 className="font-bold text-brand-900 dark:text-white">{selectedRecord.title}</h3><p className="mt-1 capitalize text-slate-500">{selectedRecord.category} · {selectedRecord.status}</p></div>
+          <dl className="grid gap-4 sm:grid-cols-2">
+            {[
+              ['Attendance date', selectedRecord.date], ['Time-In', selectedRecord.timeIn],
+              ['Time-Out', selectedRecord.timeOut], ['Verified by', selectedRecord.scannedBy],
+              ['Recorded at', selectedRecord.recordedAt],
+              ['Session', selectedRecord.event ? attendanceWindowTitle(selectedRecord.event, selectedRecord.slot) || 'Default session' : selectedRecord.slot],
+              ['Event starts', selectedRecord.event ? formatManilaDateTime(selectedRecord.event.startTime) : 'Unavailable'],
+              ['Event ends', selectedRecord.event ? formatManilaDateTime(selectedRecord.event.endTime) : 'Unavailable'],
+              ['Location', selectedRecord.event?.venue || 'Not specified'],
+              ...(selectedRecord.renderedHours != null ? [['Rendered hours', Number(selectedRecord.renderedHours).toFixed(2)]] : []),
+              ...(selectedRecord.deductedHours != null ? [['Sanctions cleared', `${Number(selectedRecord.deductedHours).toFixed(2)} hours`]] : []),
+              ...(selectedRecord.meritHours != null ? [['Merit earned', `${Number(selectedRecord.meritHours).toFixed(2)} hours`]] : []),
+            ].map(([label, value]) => <div key={label}><dt className="font-semibold text-slate-500 dark:text-slate-400">{label}</dt><dd className="mt-1 break-words text-slate-800 dark:text-slate-100">{value}</dd></div>)}
+          </dl>
+          {selectedRecord.event?.description && <div><h4 className="font-semibold">Activity description</h4><p className="mt-1 whitespace-pre-line text-slate-600 dark:text-slate-300">{selectedRecord.event.description}</p></div>}
+          {selectedRecord.completionPending && <p role="status" className="rounded-xl bg-amber-50 p-3 text-amber-800 dark:bg-amber-950 dark:text-amber-200">Merit is pending activity completion.</p>}
+        </div>}
+      </Modal>
+      <Modal open={Boolean(selectedSanction)} onClose={() => setSelectedSanctionId(null)} title="Sanction details" description="All times are in Manila local time (UTC+8)." size="md">
+        {selectedSanction && <dl className="grid gap-4 text-sm">{[
+          ['Reason', selectedSanction.reason], ['Assigned at', selectedSanction.assignedAt],
+          ['Impact', `${selectedSanction.hours > 0 ? '+' : ''}${selectedSanction.hours} hours`],
+          ['Status', selectedSanction.status], ['Authorized by', selectedSanction.approvedBy || 'System'],
+        ].map(([label, value]) => <div key={label}><dt className="font-semibold text-slate-500 dark:text-slate-400">{label}</dt><dd className="mt-1 break-words text-slate-800 dark:text-slate-100">{value}</dd></div>)}</dl>}
+      </Modal>
     </Page>
   );
 };

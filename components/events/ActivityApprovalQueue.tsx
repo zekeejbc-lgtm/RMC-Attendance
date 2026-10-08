@@ -1,3 +1,4 @@
+import { formatManilaDateTime, formatClockTime } from '../../lib/dateTime';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -38,7 +39,7 @@ export default function ActivityApprovalQueue({ purpose }: { purpose?: 'event' |
     {!requests.length && <p className="text-sm text-slate-500">No activity requests to review.</p>}
     <div className="grid gap-3 md:grid-cols-2">{requests.map(event => <article key={event.id} className="space-y-2 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
       <h3 className="font-bold">{event.title}</h3>
-      <p className="text-sm">{event.kind === 'flag_ceremony' ? 'Ceremony' : 'Event'} · {new Date(event.startTime).toLocaleString()}</p>
+      <p className="text-sm">{event.kind === 'flag_ceremony' ? 'Ceremony' : 'Event'} · {formatManilaDateTime(event.startTime)}</p>
       <p className={`text-sm font-bold ${event.approvalStatus === 'approved' ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>{event.approvalStatus === 'pending' ? 'Pending OSSA review · Inactive' : event.approvalStatus === 'rejected' ? 'Rejected · Inactive' : event.status === 'active' ? 'OSSA approved · Active' : 'OSSA approved · Scheduled'}</p>
       {event.reviewNotes && <p className="text-sm">OSSA feedback: {event.reviewNotes}</p>}
       <div className="flex flex-wrap gap-2"><Button fullWidth={false} variant="secondary" onClick={() => { setSelectedId(event.id); setNotes(''); setError(''); }}>{canReview(event) ? 'Review request' : 'View request'}</Button>
@@ -47,11 +48,11 @@ export default function ActivityApprovalQueue({ purpose }: { purpose?: 'event' |
     <Modal open={Boolean(selected)} onClose={() => { if (!busy) setSelectedId(null); }} title={selected?.title || 'Activity request'} description="Review the activity before it becomes available for attendance." size="lg">
       {selected && <div className="space-y-4 text-sm">
         <p>{selected.description || 'No description provided.'}</p>
-        <dl className="grid gap-3 sm:grid-cols-2"><div><dt className="font-bold">Schedule</dt><dd>{new Date(selected.startTime).toLocaleString()} – {new Date(selected.endTime).toLocaleString()}</dd></div>
+        <dl className="grid gap-3 sm:grid-cols-2"><div><dt className="font-bold">Schedule</dt><dd>{formatManilaDateTime(selected.startTime)} – {formatManilaDateTime(selected.endTime)}</dd></div>
           <div><dt className="font-bold">Recipients</dt><dd>{selected.recipientGroups?.join(', ') || selected.targetValue || selected.participantsType}</dd></div>
           <div><dt className="font-bold">Late sanction</dt><dd>{selected.sanctionRules?.late.value || 0} {selected.sanctionRules?.late.unit || 'hours'}</dd></div>
           <div><dt className="font-bold">Absent sanction</dt><dd>{selected.sanctionRules?.absent.value ?? selected.penaltyValue} {selected.sanctionRules?.absent.unit || selected.penaltyUnit}</dd></div>
-          <div><dt className="font-bold">Attendance windows</dt><dd>{selected.attendanceWindows?.map(window => `${window.timeIn}–${window.timeOut}`).join(', ') || 'Scheduled duration'}</dd></div>
+          <div><dt className="font-bold">Attendance windows</dt><dd>{selected.attendanceWindows?.map(window => `${formatClockTime(window.timeIn)}–${formatClockTime(window.timeOut)}`).join(', ') || 'Scheduled duration'}</dd></div>
           <div><dt className="font-bold">Geofence</dt><dd>{selected.geofenceEnabled ? `${selected.location.radius_meters} meters (${selected.location.lat}, ${selected.location.lng})` : 'Disabled'}</dd></div>
         </dl>
         {selected.ceremony && <p>Exempt students: {selected.ceremony.exemptStudentIds.length}. Class schedules: {Object.keys(selected.ceremony.classWindows).length}. Volunteer merit: {selected.ceremony.allowVolunteerMerit ? `${selected.ceremony.volunteerMeritHours} hours` : 'Disabled'}.</p>}

@@ -27,7 +27,8 @@ try {
  for(const node of [...ancestors(existing).slice(0,-1),fixture]) {
   const h=await page.waitForFunction(name=>[...document.querySelectorAll('h4')].find(h=>h.textContent.trim()===name)?.closest('button'),{},node.data.name);await h.asElement().click();
  }
- await page.waitForSelector('[aria-label="Monday class status"]');
+ await click('Configure weekly class schedule');
+ await page.waitForSelector('[role="dialog"] [aria-label="Monday class status"]');
  await page.select('[aria-label="Monday class status"]','classes');
  await set('[aria-label="Monday timeIn"]','10:00');await set('[aria-label="Monday timeOut"]','12:00');
  await page.select('[aria-label="Friday class status"]','no_class');
@@ -35,7 +36,7 @@ try {
  await page.waitForFunction(()=>document.body.textContent.includes('Class schedule saved.'));
  const saved=checked(await db.from('rmc_nodes').select('data').eq('id',id).single());
  assert.deepEqual(saved.data.metadata.classSchedule,{'1':{status:'classes',timeIn:'10:00',timeOut:'12:00'},'5':{status:'no_class'}});
- await page.$eval('[aria-label="Monday class status"]',el=>el.closest('section').scrollIntoView({block:'start'}));
+ await page.$eval('[aria-label="Monday class status"]',el=>el.closest('fieldset').scrollIntoView({block:'start'}));
  await page.screenshot({path:'artifacts/class-schedule-desktop.png'});
  await page.setViewport({width:390,height:844});await page.waitForFunction(()=>document.querySelector('main').getBoundingClientRect().left<1);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Class editor mobile overflow');

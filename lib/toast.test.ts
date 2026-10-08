@@ -4,6 +4,9 @@ import { classifyError, toast, toastStore } from './toast';
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => { toastStore.getSnapshot().forEach(item => toast.dismiss(item.id)); vi.useRealTimers(); });
 describe('action feedback', () => {
+  it('identifies a missing server function instead of a deleted student record', () => {
+    expect(classifyError({ status: 404, code: 'PGRST202' })).toEqual({ code: 'SYS-002', message: 'This feature is unavailable. The server needs an update.' });
+  });
   it('replaces progress with success and automatically dismisses it', async () => {
     let finish!: (value: number) => void;
     const operation = toast.track(() => new Promise<number>(resolve => { finish = resolve; }), 'Save');

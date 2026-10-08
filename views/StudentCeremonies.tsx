@@ -1,3 +1,4 @@
+import { formatManilaDate, formatManilaTime } from '../lib/dateTime';
 import ActivityApprovalQueue from '../components/events/ActivityApprovalQueue';
 import { appData, uploadDocument } from '../lib/backend';
 import React, { useState, useMemo } from 'react';
@@ -68,8 +69,8 @@ const StudentCeremonies: React.FC = () => {
       ? canManage || ['ossa', 'ossa_staff'].includes(profile.role) ? appData.getVisibleEvents(profile.uid) : appData.getEvents().filter(event => appData.isEventRecipient(event, profile) || isCeremonyVolunteer(event, profile, appData.getSchoolStructure()))
       : [];
     const ceremonies: SchoolCeremony[] = events.filter(event => event.kind === 'flag_ceremony' && !event.cancellationStatus && event.approvalStatus !== 'pending' && event.approvalStatus !== 'rejected').map(event => ({
-      id: event.id, title: event.title, required: Boolean(profile && appData.isEventRecipient(event, profile)), volunteerMerit: event.ceremony?.allowVolunteerMerit ? event.ceremony.volunteerMeritHours : 0, date: manilaDate(event.startTime), geofenceEnabled: event.geofenceEnabled !== false, canEdit: canManage && canManageEventInScope(profile, event, appData.getSchoolStructure()) && event.status !== 'done', type: event.ceremony?.flagKind === 'retreat' ? 'flag_retreat' : 'flag_raising', scheduleDay: new Date(event.startTime).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' }),
-      timeFrame: `${new Date(event.startTime).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })} - ${new Date(event.endTime).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })}`,
+      id: event.id, title: event.title, required: Boolean(profile && appData.isEventRecipient(event, profile)), volunteerMerit: event.ceremony?.allowVolunteerMerit ? event.ceremony.volunteerMeritHours : 0, date: manilaDate(event.startTime), geofenceEnabled: event.geofenceEnabled !== false, canEdit: canManage && canManageEventInScope(profile, event, appData.getSchoolStructure()) && event.status !== 'done', type: event.ceremony?.flagKind === 'retreat' ? 'flag_retreat' : 'flag_raising', scheduleDay: formatManilaDate(event.startTime, { timeZone: 'Asia/Manila' }),
+      timeFrame: `${formatManilaTime(event.startTime, { timeZone: 'Asia/Manila' })} - ${formatManilaTime(event.endTime, { timeZone: 'Asia/Manila' })}`,
       locationName: event.geofenceEnabled ? 'Designated event area' : 'See event instructions', geofenceRadius: event.location.radius_meters,
       attire: 'See event instructions', description: event.description || '', penaltyValue: event.penaltyUnit === 'minutes' ? event.penaltyValue / 60 : event.penaltyValue,
       status: event.status === 'upcoming' ? 'scheduled' : event.status === 'done' ? 'archived' : 'active',

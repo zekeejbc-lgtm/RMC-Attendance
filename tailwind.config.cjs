@@ -10,6 +10,7 @@ module.exports = {
   ],
   theme: {
     extend: {
+      screens: { xs: '360px' },
       transitionDuration: { DEFAULT: 'var(--motion-fast)', fast: 'var(--motion-fast)', base: 'var(--motion-base)' },
       transitionTimingFunction: { DEFAULT: 'var(--motion-snappy)', standard: 'var(--motion-standard)' },
       fontFamily: {

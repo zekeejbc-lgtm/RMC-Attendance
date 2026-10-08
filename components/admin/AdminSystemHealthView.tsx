@@ -1,3 +1,4 @@
+import { formatManilaDateTime } from '../../lib/dateTime';
 import React, { useState, useEffect } from 'react';
 import { Activity, Database, HardDrive, Cpu, ShieldCheck, Zap, Server, RefreshCw, CheckCircle2, AlertTriangle, FileText, Users, Calendar, QrCode } from 'lucide-react';
 import { appData } from '../../lib/backend';
@@ -195,7 +196,7 @@ export const AdminSystemHealthView: React.FC = () => {
                   </div>
                 </div>
                 <span className="text-[10px] text-slate-400 font-mono">
-                  {new Date(log.timestamp).toLocaleString()}
+                  {formatManilaDateTime(log.timestamp)}
                 </span>
               </div>
             ))

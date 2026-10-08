@@ -1,3 +1,4 @@
+import { formatManilaDate, formatManilaTime, parseManilaDateTime, startOfManilaPeriod } from '../lib/dateTime';
 import { attendanceWindowTitle, eventDisplayTitle } from '../lib/eventGroups';
 import { toast } from '../lib/toast';
 
@@ -107,10 +108,9 @@ const AttendanceDashboard: React.FC = () => {
   const attendanceData = useMemo<AttendanceRecord[]>(() => {
     if (!profile) return [];
     const students = appData.getVisibleStudents(profile.uid);
-    const now = new Date();
-    const cutoff = timeFilter === 'this_month' ? new Date(now.getFullYear(), now.getMonth(), 1).getTime() : timeFilter === 'this_week' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() + 6) % 7).getTime() : 0;
+    const cutoff = timeFilter === 'this_month' ? startOfManilaPeriod('month') : timeFilter === 'this_week' ? startOfManilaPeriod('week') : 0;
     return events.filter(event => !event.cancellationStatus && (!selectedEvents.length || selectedEvents.includes(event.id)) && event.startTime >= cutoff
-      && (timeFilter !== 'custom' || ((!dateRange.start || event.startTime >= new Date(`${dateRange.start}T00:00`).getTime()) && (!dateRange.end || event.startTime <= new Date(`${dateRange.end}T23:59:59`).getTime()))))
+      && (timeFilter !== 'custom' || ((!dateRange.start || event.startTime >= parseManilaDateTime(`${dateRange.start}T00:00`)) && (!dateRange.end || event.startTime <= parseManilaDateTime(`${dateRange.end}T23:59:59.999`)))))
       .flatMap(event => {
         const logs = appData.getAttendanceLogs(event.id);
         return students.filter(student => appData.isEventRecipient(event, student)).filter(student => {
@@ -182,7 +182,7 @@ const AttendanceDashboard: React.FC = () => {
     doc.setFontSize(22);
     doc.text('RMC SSG Attendance Report', 14, 25);
     doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 32);
+    doc.text(`Generated: ${formatManilaDate(Date.now())}`, 14, 32);
 
     let yPos = 50;
 
@@ -243,7 +243,7 @@ const AttendanceDashboard: React.FC = () => {
         r.status.toUpperCase(),
         r.section,
         r.level,
-        r.timeIn ? new Date(r.timeIn).toLocaleTimeString() : '-'
+        r.timeIn ? formatManilaTime(r.timeIn) : '-'
       ]);
 
       autoTable(doc, {
@@ -270,7 +270,7 @@ const AttendanceDashboard: React.FC = () => {
       r.status,
       r.section,
       r.level,
-      r.timeIn ? new Date(r.timeIn).toLocaleTimeString() : ''
+      r.timeIn ? formatManilaTime(r.timeIn) : ''
     ]);
     
     const csvContent = "data:text/csv;charset=utf-8," 
@@ -423,7 +423,7 @@ const AttendanceDashboard: React.FC = () => {
               <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900" key={record.id}>
                 <span aria-hidden="true" className={`h-10 w-2 shrink-0 rounded-full ${record.status === 'present' ? 'bg-emerald-500' : record.status === 'late' ? 'bg-amber-500' : record.status === 'absent' ? 'bg-red-500' : 'bg-slate-300'}`} />
                 <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></p><p className="text-[10px] uppercase tracking-wider text-slate-500">{record.studentId}</p></div>
-                <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-500">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
+                <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-500">{record.timeIn ? formatManilaTime(record.timeIn, { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
               </div>
             ))}
           </div>
@@ -439,7 +439,7 @@ const AttendanceDashboard: React.FC = () => {
           <table aria-label="Attendance records" className="w-full min-w-[720px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-900 dark:text-slate-300"><tr><th className="px-5 py-3">Student</th><th className="px-5 py-3">ID</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Section</th><th className="px-5 py-3">Level</th><th className="px-5 py-3">Time In</th></tr></thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-              {attendanceData.map((record) => <tr key={record.id}><td className="px-5 py-3 font-semibold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></td><td className="px-5 py-3 font-mono text-xs text-slate-500">{record.studentId}</td><td className="px-5 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.section}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.level}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString() : '-'}</td></tr>)}
+              {attendanceData.map((record) => <tr key={record.id}><td className="px-5 py-3 font-semibold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></td><td className="px-5 py-3 font-mono text-xs text-slate-500">{record.studentId}</td><td className="px-5 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.section}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.level}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.timeIn ? formatManilaTime(record.timeIn) : '-'}</td></tr>)}
             </tbody>
           </table>
         </div>
@@ -447,7 +447,7 @@ const AttendanceDashboard: React.FC = () => {
           {attendanceData.map((record) => (
             <article aria-label={`${record.studentName} attendance record`} className="mobile-data-card rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900" key={record.id}>
               <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="font-bold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></h3><p className="font-mono text-xs text-slate-500">{record.studentId}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></div>
-              <dl className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt className="font-semibold text-slate-500">Section</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.section}</dd></div><div><dt className="font-semibold text-slate-500">Level</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.level}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">Time In</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.timeIn ? new Date(record.timeIn).toLocaleTimeString() : '-'}</dd></div></dl>
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt className="font-semibold text-slate-500">Section</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.section}</dd></div><div><dt className="font-semibold text-slate-500">Level</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.level}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">Time In</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.timeIn ? formatManilaTime(record.timeIn) : '-'}</dd></div></dl>
             </article>
           ))}
         </div>

@@ -1,3 +1,4 @@
+import { formatClockTime } from '../../lib/dateTime';
 import EventBanner from './EventBanner';
 import React from 'react';
 import { AppEvent } from '../../types';
@@ -24,7 +25,7 @@ export function EventGroups({ events, onOpen, onAdd, groupIds }: { groupIds?: st
           <button type="button" onClick={() => onOpen(event)} className="w-full rounded-lg bg-slate-50 p-3 text-left hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700">
             <span className="block font-semibold">{event.title}</span>
             <span className="block text-sm">{event.startDate} to {event.endDate} · {event.venue || (event.geofenceEnabled ? 'Geofenced location' : 'No location specified')} · {event.status}</span>
-            {event.attendanceWindows?.map((window, index) => <span key={window.id} className="block text-xs text-slate-500">{window.label || `Window ${index + 1}`}: {window.timeIn}–{window.timeOut}</span>)}
+            {event.attendanceWindows?.map((window, index) => <span key={window.id} className="block text-xs text-slate-500">{window.label || `Window ${index + 1}`}: {formatClockTime(window.timeIn)}–{formatClockTime(window.timeOut)}</span>)}
           </button>
         </li>)}</ul>
         {!children.length && <p className="mt-3 text-sm text-slate-500">No specific events available yet.</p>}

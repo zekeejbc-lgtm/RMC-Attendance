@@ -1,3 +1,4 @@
+import { formatManilaDate, formatManilaDateTime } from '../../lib/dateTime';
 import { SelectField } from '../ui/SelectField';
 import React, { useState, useEffect } from 'react';
 import { CreditCard, BellRing, Calendar, Send, CheckCircle2, Clock, AlertTriangle, ShieldCheck, Mail, DollarSign, History } from 'lucide-react';
@@ -116,7 +117,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
         <MetricCard
           icon={<Calendar size={20} className="text-amber-500" />}
           label="Due Date"
-          value={paymentInfo.dueDate ? new Date(paymentInfo.dueDate).toLocaleDateString() : 'Not configured'}
+          value={paymentInfo.dueDate ? formatManilaDate(paymentInfo.dueDate) : 'Not configured'}
           detail={daysUntilDue > 0 ? `${daysUntilDue} days remaining` : 'Overdue!'}
         />
         <MetricCard
@@ -170,7 +171,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
                     <span className="font-bold text-slate-900 dark:text-white">{rem.subject}</span>
                   </div>
                   <span className="text-[10px] text-slate-400 font-mono">
-                    Posted: {new Date(rem.sentAt).toLocaleString()}
+                    Posted: {formatManilaDateTime(rem.sentAt)}
                   </span>
                 </div>
 

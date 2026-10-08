@@ -1,10 +1,11 @@
+import { formatManilaDate } from '../../lib/dateTime';
 import ProfileAvatar from './ProfileAvatar';
 import type { AppPermission } from '../../types';
 import { appData } from '../../lib/backend';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Award, BarChart3, Bell, Building2, Calendar, CalendarPlus, ChevronDown, ChevronRight, FileText,
+  Award, BarChart3, Building2, Calendar, CalendarPlus, ChevronDown, ChevronRight, FileText,
   LayoutDashboard, Menu, PanelLeftClose, QrCode,
   ScanLine, ShieldCheck, Sliders, User, X,
 } from 'lucide-react';
@@ -13,6 +14,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { Collapsible } from './Collapsible';
 import { hasPermission } from '../../lib/accessControl';
 import { FreezeBanner } from '../admin/FreezeBanner';
+import { Notifications } from './Notifications';
 
 const mobileDrawerId = 'mobile-main-navigation';
 
@@ -362,10 +364,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <div className="flex items-center gap-2">
           <ThemeToggle className="min-h-11 min-w-11" />
           {isMock && <span className="text-[8px] bg-gold-400/20 text-gold-400 px-2 py-0.5 rounded-full font-extrabold tracking-wider">LOCAL TEST</span>}
-          <button type="button" aria-label="Notifications" className="relative min-h-11 min-w-11 inline-flex items-center justify-center rounded-full hover:bg-brand-800 transition-colors">
-            <Bell size={18} className="text-gold-100" />
-            <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-          </button>
+          <Notifications />
         </div>
       </header>
 
@@ -437,7 +436,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
       </aside>
       <FreezeBanner />
-      {['ossa', 'ossa_staff'].includes(role) && appData.getPaymentInfo().reminders.slice(0, 1).map(reminder => <div key={reminder.id} role="status" className="border-b border-amber-200 bg-amber-50 p-4 text-amber-950"><strong>{reminder.subject}</strong><p className="mt-1 whitespace-pre-line text-sm">{reminder.message}</p><p className="mt-1 text-xs">Payment due: {new Date(appData.getPaymentInfo().dueDate).toLocaleDateString()}</p></div>)}
+      {['ossa', 'ossa_staff'].includes(role) && appData.getPaymentInfo().reminders.slice(0, 1).map(reminder => <div key={reminder.id} role="status" className="border-b border-amber-200 bg-amber-50 p-4 text-amber-950"><strong>{reminder.subject}</strong><p className="mt-1 whitespace-pre-line text-sm">{reminder.message}</p><p className="mt-1 text-xs">Payment due: {formatManilaDate(appData.getPaymentInfo().dueDate)}</p></div>)}
 
       <main className="min-w-0 flex-1 overflow-x-hidden">{profile?.role !== 'admin' && appData.isUserScopeFrozen(profile) ? <div role="alert" className="m-6 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900"><h1 className="text-xl font-bold">Access temporarily frozen</h1><p className="mt-2">Contact your school administration to restore access.</p></div> : children}</main>
     </div>

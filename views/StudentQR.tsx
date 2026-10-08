@@ -1,3 +1,4 @@
+import { formatManilaDate } from '../lib/dateTime';
 import { toast } from '../lib/toast';
 import React, { useEffect, useRef, useState } from 'react';
 import { appData } from '../lib/backend';
@@ -58,6 +59,7 @@ const StudentQR: React.FC = () => {
   };
 
   const handleDownloadPNG = () => {
+    if (downloading || !printQrToken) return;
     const toastId = toast.progress('Preparing QR download...');
     const failed = (error: unknown) => { toast.error(error, toastId); setDownloading(false); };
     setDownloading(true);
@@ -170,7 +172,6 @@ const StudentQR: React.FC = () => {
       const centerX = cardX + cardW / 2;
       const logoImg = new Image();
       logoImg.crossOrigin = 'anonymous';
-      logoImg.src = 'https://i.imgur.com/K3T5yIT.jpeg';
 
       // Identity section is intentionally compact, leaving the QR as the visual focus.
       drawCentered(profile.name.toUpperCase(), centerX, cardY + 324, cardW - 100, 900, 30, ink, 18);
@@ -198,7 +199,6 @@ const StudentQR: React.FC = () => {
         if (!svgElement) { failed(new Error('QR image unavailable')); return; }
         const svgData = new XMLSerializer().serializeToString(svgElement);
         const qrImage = new Image();
-        qrImage.src = 'data:image/svg+xml;base64,' + btoa(svgData);
         qrImage.onload = () => {
           try {
             const qrFrameX = centerX - 205;
@@ -224,12 +224,14 @@ const StudentQR: React.FC = () => {
             ctx.fillText('IARS  |  Keep this card available during active attendance scanning', centerX, cardBottom - 22);
             ctx.fillStyle = '#94A3B8';
             ctx.font = '500 9px Arial, sans-serif';
-            ctx.fillText(`Generated ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, centerX, cardBottom - 8);
+            ctx.fillText(`Generated ${formatManilaDate(Date.now(), { month: 'short', day: 'numeric', year: 'numeric' })}`, centerX, cardBottom - 8);
 
             const link = document.createElement('a');
             link.download = `RMC_Student_QR_${profile.student_id}.png`;
             link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
             link.click();
+            link.remove();
             toast.success('QR download started', toastId);
             setDownloading(false);
             setDownloadSuccess(true);
@@ -237,12 +239,15 @@ const StudentQR: React.FC = () => {
           } catch (error) { failed(error); }
         };
         qrImage.onerror = () => failed(new Error('QR image could not be rendered'));
+        qrImage.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
       };
 
       let logoRendered = false;
+      let logoTimeout: ReturnType<typeof setTimeout>;
       const drawLogoAndContinue = () => {
         if (logoRendered) return;
         logoRendered = true;
+        clearTimeout(logoTimeout);
         if (logoImg.complete && logoImg.naturalWidth > 0) {
           ctx.save();
           ctx.beginPath();
@@ -270,6 +275,8 @@ const StudentQR: React.FC = () => {
 
       logoImg.onload = drawLogoAndContinue;
       logoImg.onerror = drawLogoAndContinue;
+      logoTimeout = setTimeout(drawLogoAndContinue, 2500);
+      logoImg.src = 'https://i.imgur.com/K3T5yIT.jpeg';
       if (logoImg.complete) drawLogoAndContinue();
     } catch (error) {
       failed(error);

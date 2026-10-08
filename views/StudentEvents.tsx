@@ -1,3 +1,4 @@
+import { formatManilaTime, formatManilaDate, formatClockTime } from '../lib/dateTime';
 import { useNavigate } from 'react-router-dom';
 import EventLocationDetails from '../components/events/EventLocationDetails';
 import EventBanner from '../components/events/EventBanner';
@@ -149,7 +150,7 @@ const StudentEvents: React.FC = () => {
                 <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px]">
                   <div className="flex items-center gap-1.5 text-gold-300 font-bold">
                     <Clock size={12} />
-                    <span>Ends: {new Date(event.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>Ends: {formatManilaTime(event.endTime, { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5 text-red-300 font-bold">
@@ -211,7 +212,7 @@ const StudentEvents: React.FC = () => {
                           Scheduled
                         </span>
                         <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400">
-                          {new Date(event.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {formatManilaDate(event.startTime, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       </div>
                       <h3 className="text-sm font-black uppercase tracking-tight text-brand-900 [overflow-wrap:anywhere] dark:text-slate-100">{eventDisplayTitle(event, allEvents)}</h3>
@@ -219,7 +220,7 @@ const StudentEvents: React.FC = () => {
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 text-[11px] font-bold text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                      <span className="flex items-center gap-1"><Clock size={12} /> {new Date(event.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="flex items-center gap-1"><Clock size={12} /> {formatManilaTime(event.startTime, { hour: '2-digit', minute: '2-digit' })}</span>
                       <span className="text-brand-900 dark:text-slate-100 font-bold hover:text-gold-600 dark:hover:text-gold-400 flex items-center gap-1">Details <ArrowRight size={12} /></span>
                     </div>
                   </button>
@@ -270,7 +271,7 @@ const StudentEvents: React.FC = () => {
                         {event.status}
                       </span>
                       <span className="text-[10px] font-bold text-slate-400">
-                        {new Date(event.startTime).toLocaleDateString()}
+                        {formatManilaDate(event.startTime)}
                       </span>
                     </div>
                     <h3 className="text-sm font-black uppercase tracking-tight text-brand-900 [overflow-wrap:anywhere] dark:text-slate-100">{eventDisplayTitle(event, allEvents)}</h3>
@@ -315,7 +316,7 @@ const StudentEvents: React.FC = () => {
             </span>
               {selectedEvent.isGeneralEvent && <p className="text-sm">Attendance is recorded for the specific events listed under this general event.</p>}
               {selectedEvent.venue && <p><b>Location:</b> {selectedEvent.venue}</p>}
-              {selectedEvent.attendanceWindows?.map((window, index) => <p key={window.id}>{window.label || `Window ${index + 1}`}: {window.timeIn}?{window.timeOut} ? Late after {window.lateAfterMinutes} minutes</p>)}
+              {selectedEvent.attendanceWindows?.map((window, index) => <p key={window.id}>{window.label || `Window ${index + 1}`}: {formatClockTime(window.timeIn)} – {formatClockTime(window.timeOut)} · Late after {window.lateAfterMinutes} minutes</p>)}
               <EventLocationDetails event={selectedEvent} />
               {/* Description */}
               <div>
@@ -334,7 +335,7 @@ const StudentEvents: React.FC = () => {
                   <div>
                     <p className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Event Schedule</p>
                     <p className="text-xs font-bold text-brand-900 dark:text-slate-100">
-                      {new Date(selectedEvent.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(selectedEvent.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatManilaTime(selectedEvent.startTime, { hour: '2-digit', minute: '2-digit' })} - {formatManilaTime(selectedEvent.endTime, { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
