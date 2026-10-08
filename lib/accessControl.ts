@@ -10,6 +10,7 @@ export interface PermissionDefinition {
 }
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
+  { id: 'directory.transfer_students', name: 'Transfer Students', category: 'Directory', description: 'Export student assignments and transfer, promote, or demote students individually or in batches within the assigned scope.' },
   { id: 'directory.create_units', name: 'Create Directory Units', category: 'Directory', description: 'Create units and apply templates within the assigned scope. Also requires Manage Directory Structure. Disabled for SSG by default.' },
   { id: 'events.require_ossa_approval', name: 'Require OSSA Approval', category: 'Events', description: 'Workflow rule: events and ceremonies submitted or changed by this role remain inactive until OSSA approves. Enabled for SSG by default. Turning it off does not approve existing requests.' },
   { id: 'events.approve', name: 'Review Event & Ceremony Requests', category: 'OSSA', description: 'Allow OSSA administrators or OSSA staff to approve or reject activities within their scope. Authors cannot approve their own requests.' },
@@ -38,7 +39,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     description: 'Full administrative access across all system nodes and controls',
     isPositionOnly: false,
     permissions: [
-      'system.manage_accounts', 'system.view_audit', 'system.freeze', 'system.health',
+      'directory.transfer_students', 'system.manage_accounts', 'system.view_audit', 'system.freeze', 'system.health',
       'system.payment_reminders', 'system.manage_rbac', 'directory.manage_structure', 'directory.create_units',
       'directory.delete_structure', 'directory.manage_members', 'attendance.scan',
       'directory.add_members_manually', 'directory.change_member_designation', 'directory.manage_student_sanctions',
@@ -52,7 +53,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     description: 'Directs student discipline, excuses, and institutional sanction cases',
     isPositionOnly: false,
     permissions: [
-      'directory.manage_structure', 'directory.create_units', 'directory.manage_members', 'attendance.scan', 'events.approve',
+      'directory.transfer_students', 'directory.manage_structure', 'directory.create_units', 'directory.manage_members', 'attendance.scan', 'events.approve',
       'directory.add_members_manually', 'directory.change_member_designation', 'directory.manage_student_sanctions',
       'attendance.manage', 'events.manage', 'ossa.manage_cases', 'system.health',
     ],

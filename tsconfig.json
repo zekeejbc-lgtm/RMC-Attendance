@@ -1,5 +1,5 @@
 {
-  "exclude": ["node_modules", "dist", ".superpowers", ".worktrees", ".git", "supabase/functions"],
+  "exclude": ["node_modules", "dist", ".superpowers", ".worktrees", ".git", "supabase/functions", "video-explainer"],
   "compilerOptions": {
     "target": "ES2022",
     "experimentalDecorators": true,

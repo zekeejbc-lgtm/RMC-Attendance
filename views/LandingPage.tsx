@@ -6,6 +6,7 @@ import { useAuth } from '../components/AuthContext';
 import { useTheme } from '../components/ThemeContext';
 import PublicHeader from '../components/ui/PublicHeader';
 import PublicFooter from '../components/ui/PublicFooter';
+import ExplainerVideo from '../components/ui/ExplainerVideo';
 import { appAuth, appData, refreshData, lookupEnrollment, EnrollmentLookup } from '../lib/backend';
 import { TEST_ACCOUNTS } from '../lib/seed';
 import { SchoolNode } from '../types';
@@ -879,6 +880,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
           <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Have your student number, email address, class details, emergency contact, and profile photo ready. Your school reviews your account application before you can use student services. If your section needs an enrollment key, ask your class officer for it.</p>
           <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Already applied? Choose “Check enrollment progress” above to see an update, or log in to follow your application and respond to the school.</p>
         </div>
+
+        <ExplainerVideo />
 
         {/* HERO FEATURE HIGHLIGHT CARDS */}
         <div className="max-w-6xl mx-auto mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">

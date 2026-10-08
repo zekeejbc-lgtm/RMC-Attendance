@@ -25,6 +25,12 @@
     "typescript": "5.9.3"
   },
   "scripts": {
+    "ad:preview": "remotion studio --port=3100",
+    "ad:audio": "python scripts/advertisement-audio.py",
+    "ad:stills": "node scripts/advertisement-render.mjs stills",
+    "ad:test": "node scripts/advertisement-render.mjs test",
+    "ad:render": "node scripts/advertisement-render.mjs final",
+    "ad:verify": "python scripts/advertisement-verify.py",
     "dev": "remotion studio",
     "build": "remotion bundle",
     "upgrade": "remotion upgrade",

@@ -68,7 +68,7 @@ const normalizeHeader = (value: string) => value
   .toLowerCase()
   .replace(/[^a-z0-9]/g, '');
 
-const parseRecords = (source: string): string[][] => {
+export const parseCsvRecords = (source: string): string[][] => {
   const text = source.replace(/^\uFEFF/, '');
   const records: string[][] = [];
   let record: string[] = [];
@@ -134,7 +134,7 @@ export const createMemberCsvTemplate = (): string => (
 );
 
 export const parseMemberCsv = (text: string): MemberCsvRow[] => {
-  const records = parseRecords(text);
+  const records = parseCsvRecords(text);
   const headerRecord = records.shift();
   if (!headerRecord) throw new Error('The CSV file is empty.');
 

@@ -15,6 +15,7 @@ export type AppPermission =
   | 'directory.manage_members'
   | 'directory.add_members_manually'
   | 'directory.change_member_designation'
+  | 'directory.transfer_students'
   | 'directory.manage_student_sanctions'
   | 'attendance.scan'
   | 'attendance.manage'

@@ -1,6 +1,7 @@
 import { DateTimeInput } from '../components/ui/TimeInput';
 import { parseManilaDateTime } from '../lib/dateTime';
 import { ClassScheduleEditor } from '../components/academic/ClassScheduleEditor';
+import StudentTransferModal from '../components/members/StudentTransferModal';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 
 import React, { useState, useEffect } from 'react';
@@ -63,6 +64,7 @@ const SSGPanel: React.FC = () => {
   const [showEventModal, setShowEventModal] = useState(false);
   const [pendingAdjustment, setPendingAdjustment] = useState<{ delta: number; action: string } | null>(null);
   const [showMemberModal, setShowMemberModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const [memberError, setMemberError] = useState('');
   const [memberData, setMemberData] = useState({ name: '', email: '', username: '', studentId: '', password: '' });
   const [showMemberPassword, setShowMemberPassword] = useState(false);
@@ -93,6 +95,7 @@ const SSGPanel: React.FC = () => {
   const canCreateUnits = canManageStructure && hasPermission(profile?.role, 'directory.create_units');
   const canDeleteStructure = hasPermission(profile?.role, 'directory.delete_structure');
   const canManageMembers = hasPermission(profile?.role, 'directory.manage_members');
+  const canTransferStudents = hasPermission(profile?.role, 'directory.transfer_students', appData.getCustomRoles(), appData.getCoreRoles());
   const canAddMembersManually = hasPermission(profile?.role, 'directory.add_members_manually', appData.getCustomRoles(), appData.getCoreRoles());
   const canManageOfficers = profile?.role === 'admin' || profile?.role === 'ossa' || profile?.role === 'ssg';
   const canReviewApplicants = hasPermission(profile?.role, 'directory.manage_members');
@@ -332,6 +335,7 @@ const SSGPanel: React.FC = () => {
       <PageHeader
         eyebrow={`${workspaceName} administration`}
         title={profile?.role === 'admin' ? 'School Hierarchy & Accounts' : isOSSA ? 'OSSA Control Panel' : profile?.role === 'mayor' ? 'My Classroom' : 'Institution Control Hub'}
+        actions={canTransferStudents ? <Button className="sm:w-auto" onClick={() => setShowTransferModal(true)}>Transfer students</Button> : undefined}
         description={isOSSA
           ? 'Manage student services and everything inside your assigned school scope.'
           : profile?.role === 'admin'
@@ -340,6 +344,7 @@ const SSGPanel: React.FC = () => {
               ? 'View only your assigned classroom and its member registry.'
               : 'Manage only the departments, classrooms, members, and events inside your assigned scope.'}
       />
+      {showTransferModal && canTransferStudents && <StudentTransferModal nodes={structure} initialNodeId={currentNode && ['section', 'block'].includes(currentNode.type) ? currentNode.id : undefined} onClose={() => { setShowTransferModal(false); refresh(); }} />}
       <Surface className="relative overflow-hidden !border-brand-800 !bg-brand-900 p-5 text-white shadow-xl sm:p-6">
         <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-gold-400/15 blur-3xl" />
         <div className="absolute -bottom-20 left-1/3 h-40 w-40 rounded-full bg-emerald-400/10 blur-3xl" />

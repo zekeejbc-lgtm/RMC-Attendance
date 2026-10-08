@@ -12,3 +12,9 @@ product-explainer-30fps-rosa.mp4
 product-explainer-*.mp4
 qa/references/*.mp4
 qa/references/*.info.json
+
+# Generated 15-second advertisement exports and renderer cache.
+IARS-Advertisement-4K-60FPS.mp4
+qa/advertisement/bundle/
+qa/advertisement/*.mp4
+qa/advertisement/*-decoded-audio.wav

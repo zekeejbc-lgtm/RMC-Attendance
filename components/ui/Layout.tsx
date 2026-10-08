@@ -187,6 +187,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     permissionAny: [
       'directory.manage_structure',
       'directory.manage_members',
+      'directory.transfer_students',
       'attendance.scan',
       'events.manage'
     ],
@@ -243,7 +244,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (
     item.roles &&
     item.roles.length > 0 &&
-    !item.roles.includes(userRole)
+    !item.roles.includes(userRole) && !(item.path === '/ssg/panel' && hasPermission(userRole, 'directory.transfer_students'))
   ) {
     return false;
   }

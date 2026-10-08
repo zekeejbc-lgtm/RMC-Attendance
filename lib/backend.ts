@@ -290,6 +290,12 @@ export const appData = {
 getApplications: () => Object.values(getDB().applications),
 getExcuseApplications: () => Object.values(getDB().excuse_applications || {}),
 getSchoolStructure: () => getDB().school_structure,
+getTransferRoster: () => rpc<import('./studentTransfers').TransferStudent[]>('rmc_transfer_roster'),
+transferStudents: (changes: import('./studentTransfers').StudentTransfer[]) => trackWrite(async progress => {
+    const count = await rpc<number>('rmc_transfer_students', { changes });
+    await refreshAfterWrite(progress);
+    return count;
+  }, 'Transfer students'),
 getSchoolNodePath: (nodeId: string) => findNodePath(getDB().school_structure, nodeId) || [],
 getVisibleSchoolStructure: (actorUid: string) => {
     const db = getDB();

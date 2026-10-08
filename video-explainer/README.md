@@ -1,5 +1,11 @@
 # IARS product explainer — 60-second review edition
 
+## New: 15-second advertisement
+
+The separate **IARS-Advertisement** composition is native 3840 × 2160, 60 fps, 900 frames. Its editable scenes are under `src/advertisement/`; narration, score and effects are under `public/advertisement/`.
+
+Use `npm run ad:preview` and select **IARS-Advertisement**. Export with `npm run ad:render`, then check the actual MP4 with `npm run ad:verify`. Deliverable: `IARS-Advertisement-4K-60FPS.mp4`. See `advertisement-storyboard.md`, `advertisement-script.md`, `advertisement-audio-cues.md` and `advertisement-verification.md` for production details and checks. The original 60-second composition remains available.
+
 The requested six-scene product explainer, based on verified application features. The delivered master is 3840 × 2160 (4K UHD), 60 fps, exactly 3,600 frames, with H.264 video and a complete AAC soundtrack. The revised review uses normal-rate conversational US-English Emma neural narration and adapts the three supplied motion references.
 
 ## Files

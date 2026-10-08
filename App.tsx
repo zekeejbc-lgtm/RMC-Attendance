@@ -149,7 +149,7 @@ const App: React.FC = () => {
           } />
 
           <Route path="/ssg/panel" element={
-            <ProtectedRoute permissionAny={['directory.manage_structure', 'directory.manage_members', 'attendance.scan', 'events.manage']} roles={['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
+            <ProtectedRoute permissionAny={['directory.manage_structure', 'directory.manage_members', 'directory.transfer_students', 'attendance.scan', 'events.manage']} roles={['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
               <SSGPanel />
             </ProtectedRoute>
           } />
