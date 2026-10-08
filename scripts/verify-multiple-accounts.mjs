@@ -1,3 +1,4 @@
+import { testStudentId } from './test-student-id.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
@@ -33,7 +34,7 @@ try {
     for (const index of [1, 2]) {
       const identity = `${prefix}-${role}-${index}`;
       const assignment = role === 'admin' ? undefined : `${prefix}-${'campus'}`;
-      const profile = { name: identity, email: `${identity}@example.test`, username: identity, student_id: identity, role,
+      const profile = { name: identity, email: `${identity}@example.test`, username: identity, student_id: testStudentId(), role,
         school_data: { type: 'College', level: 'Administration', section: '' },
         ...(assignment ? { official_data: { body: role === 'ssg' ? 'SSG' : 'OSSA', assignment_node_id: assignment } } : {}) };
       const result = await checked(await admin.functions.invoke('rmc-accounts', { body: { action: 'create', data: { members: [{ profile, password }] } } }));

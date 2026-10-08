@@ -250,7 +250,7 @@ export const getDB = (): MockDB => {
           email: acc.email,
           role: acc.role as any,
           account_status: 'active',
-          student_id: acc.user === 'student' ? '2024-00123' : (acc.user === 'ossa' ? 'OSSA-DIR-01' : `ID-${Math.floor(Math.random() * 9000) + 1000}`),
+          student_id: acc.user === 'student' ? '2024-00123A' : (acc.user === 'ossa' ? 'OSSA-DIR-01' : `ID-${Math.floor(Math.random() * 9000) + 1000}`),
           photo_url: acc.user === 'ossa' ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' : `https://i.pravatar.cc/150?u=${uid}`,
           official_data: acc.role === 'ssg'
             ? { body: 'SSG', position: 'Officer', scope: 'Institution' }
@@ -279,11 +279,11 @@ export const getDB = (): MockDB => {
 
   // Ensure extra students exist for OSSA roster review
   const extraStudents = [
-    { uid: 'mock_uid_juan', name: 'Juan Dela Cruz', student_id: '2024-00101', email: 'juan.delacruz@rmc.edu.ph', dept: 'Senior High School', level: 'Grade 11', section: 'Pascal', sanction_hours: 8, attendance_rate: 91 },
-    { uid: 'mock_uid_clara', name: 'Clara Santos', student_id: '2024-00102', email: 'clara.santos@rmc.edu.ph', dept: 'Senior High School', level: 'Grade 12', section: 'Einstein', sanction_hours: 0, attendance_rate: 99 },
-    { uid: 'mock_uid_marco', name: 'Marco Antonio Polo', student_id: '2024-00103', email: 'marco.polo@rmc.edu.ph', dept: 'College of Arts and Sciences', level: '2nd Year', section: 'CS-2A', sanction_hours: 18, attendance_rate: 76 },
-    { uid: 'mock_uid_bea', name: 'Beatriz Alonzo', student_id: '2024-00104', email: 'beatriz.alonzo@rmc.edu.ph', dept: 'Senior High School', level: 'Grade 12', section: 'Newton', sanction_hours: 4, attendance_rate: 94 },
-    { uid: 'mock_uid_andres', name: 'Andres Bonifacio', student_id: '2024-00105', email: 'andres.bonifacio@rmc.edu.ph', dept: 'Junior High School', level: 'Grade 10', section: 'Kamagong', sanction_hours: 0, attendance_rate: 100 }
+    { uid: 'mock_uid_juan', name: 'Juan Dela Cruz', student_id: '2024-00101A', email: 'juan.delacruz@rmc.edu.ph', dept: 'Senior High School', level: 'Grade 11', section: 'Pascal', sanction_hours: 8, attendance_rate: 91 },
+    { uid: 'mock_uid_clara', name: 'Clara Santos', student_id: '2024-00102A', email: 'clara.santos@rmc.edu.ph', dept: 'Senior High School', level: 'Grade 12', section: 'Einstein', sanction_hours: 0, attendance_rate: 99 },
+    { uid: 'mock_uid_marco', name: 'Marco Antonio Polo', student_id: '2024-00103A', email: 'marco.polo@rmc.edu.ph', dept: 'College of Arts and Sciences', level: '2nd Year', section: 'CS-2A', sanction_hours: 18, attendance_rate: 76 },
+    { uid: 'mock_uid_bea', name: 'Beatriz Alonzo', student_id: '2024-00104A', email: 'beatriz.alonzo@rmc.edu.ph', dept: 'Senior High School', level: 'Grade 12', section: 'Newton', sanction_hours: 4, attendance_rate: 94 },
+    { uid: 'mock_uid_andres', name: 'Andres Bonifacio', student_id: '2024-00105A', email: 'andres.bonifacio@rmc.edu.ph', dept: 'Junior High School', level: 'Grade 10', section: 'Kamagong', sanction_hours: 0, attendance_rate: 100 }
   ];
 
   extraStudents.forEach(s => {
@@ -339,7 +339,7 @@ export const getDB = (): MockDB => {
         id: 'exc_01',
         student_uid: 'mock_uid_student',
         student_name: 'Pedro Penduko',
-        student_id: '2024-00123',
+        student_id: '2024-00123A',
         department: 'Senior High School',
         section: 'Newton',
         event_title: 'University Convocation 2024',
@@ -355,7 +355,7 @@ export const getDB = (): MockDB => {
         id: 'exc_02',
         student_uid: 'mock_uid_juan',
         student_name: 'Juan Dela Cruz',
-        student_id: '2024-00101',
+        student_id: '2024-00101A',
         department: 'Senior High School',
         section: 'Pascal',
         event_title: 'Intramural Games Opening',
@@ -667,7 +667,7 @@ export const mockSeed = () => {
         email: acc.email,
         role: acc.role as any,
         account_status: 'active',
-        student_id: acc.user === 'student' ? '2024-00123' : (acc.user === 'ossa' ? 'OSSA-DIR-01' : `ID-${Math.floor(Math.random() * 9000) + 1000}`),
+        student_id: acc.user === 'student' ? '2024-00123A' : (acc.user === 'ossa' ? 'OSSA-DIR-01' : `ID-${Math.floor(Math.random() * 9000) + 1000}`),
         photo_url: acc.user === 'ossa' ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' : `https://i.pravatar.cc/150?u=${uid}`,
         official_data: acc.role === 'ssg'
           ? { body: 'SSG', position: 'Officer', scope: 'Institution' }
@@ -698,7 +698,7 @@ export const mockSeed = () => {
     {
       uid: 'mock_uid_juan',
       name: 'Juan Dela Cruz',
-      student_id: '2024-00101',
+      student_id: '2024-00101A',
       email: 'juan.delacruz@rmc.edu.ph',
       dept: 'Senior High School',
       level: 'Grade 11',
@@ -709,7 +709,7 @@ export const mockSeed = () => {
     {
       uid: 'mock_uid_clara',
       name: 'Clara Santos',
-      student_id: '2024-00102',
+      student_id: '2024-00102A',
       email: 'clara.santos@rmc.edu.ph',
       dept: 'Senior High School',
       level: 'Grade 12',
@@ -720,7 +720,7 @@ export const mockSeed = () => {
     {
       uid: 'mock_uid_marco',
       name: 'Marco Antonio Polo',
-      student_id: '2024-00103',
+      student_id: '2024-00103A',
       email: 'marco.polo@rmc.edu.ph',
       dept: 'College of Arts and Sciences',
       level: '2nd Year',
@@ -731,7 +731,7 @@ export const mockSeed = () => {
     {
       uid: 'mock_uid_bea',
       name: 'Beatriz Alonzo',
-      student_id: '2024-00104',
+      student_id: '2024-00104A',
       email: 'beatriz.alonzo@rmc.edu.ph',
       dept: 'Senior High School',
       level: 'Grade 12',
@@ -742,7 +742,7 @@ export const mockSeed = () => {
     {
       uid: 'mock_uid_andres',
       name: 'Andres Bonifacio',
-      student_id: '2024-00105',
+      student_id: '2024-00105A',
       email: 'andres.bonifacio@rmc.edu.ph',
       dept: 'Junior High School',
       level: 'Grade 10',
@@ -790,7 +790,7 @@ export const mockSeed = () => {
       id: 'exc_01',
       student_uid: 'mock_uid_student',
       student_name: 'Pedro Penduko',
-      student_id: '2024-00123',
+      student_id: '2024-00123A',
       department: 'Senior High School',
       section: 'Grade 12 - Newton',
       event_title: 'Weekly Flag Raising Ceremony',
@@ -804,7 +804,7 @@ export const mockSeed = () => {
       id: 'exc_02',
       student_uid: 'mock_uid_marco',
       student_name: 'Marco Antonio Polo',
-      student_id: '2024-00103',
+      student_id: '2024-00103A',
       department: 'College of Arts and Sciences',
       section: 'CS-2A',
       event_title: 'Institutional Convocation Assembly',

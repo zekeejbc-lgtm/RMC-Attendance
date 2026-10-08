@@ -171,7 +171,7 @@ export default function BulkMemberImportModal({
           <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 px-4 py-5 text-center transition-colors hover:border-gold-400 dark:border-slate-600 dark:hover:border-gold-400">
             <Upload aria-hidden="true" className="text-slate-400" size={24} />
             <span className="mt-2 text-sm font-semibold text-brand-900 dark:text-white">Upload completed CSV</span>
-            <span className="mt-1 text-xs text-slate-500 dark:text-slate-400">{readingFile ? `Reading ${fileName}…` : fileName || 'Choose a .csv file'}</span>
+            <span className="mt-1 text-xs text-slate-500 dark:text-slate-400">{readingFile ? `Reading ${fileName}â€¦` : fileName || 'Choose a .csv file'}</span>
             <input
               accept=".csv,text/csv,application/csv"
               aria-label="Upload completed CSV"
@@ -233,6 +233,7 @@ export default function BulkMemberImportModal({
                         aria-invalid={Boolean(errors[key])}
                         className={`app-control ${`h-11 w-full rounded-xl border bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:bg-slate-900 dark:text-white ${errors[key] ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-slate-700'}`}`}
                         onChange={(event) => updateRow(rowIndex, key, event.target.value)}
+                        placeholder={key === 'student_id' ? 'YYYY-XXXXXL' : undefined}
                         type={type}
                         value={row[key]}
                       />

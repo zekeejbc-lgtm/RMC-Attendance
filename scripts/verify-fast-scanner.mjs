@@ -1,3 +1,4 @@
+import { testStudentId } from './test-student-id.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -12,7 +13,7 @@ const check=result=>{if(result.error)throw new Error(result.error.message);retur
 const deny=async(label,request)=>{assert.ok((await request).error,`${label} must fail`);pass(label);};
 const command=async(action,args)=>check(await admin.rpc('rmc_command',{action,args}));
 async function person(label,node,role='student') {
- const profile={name:`${prefix} ${label}`,username:`${prefix}-${label}`,email:`${prefix}-${label}@example.test`,student_id:`${prefix}-${label}`,role,school_data:{type:'College',level:'1',section:label,academic_assignment:{campusId:nodes[0],terminalGroupId:node,nodePathIds:[nodes[0],node]}},...(role==='mayor'?{official_data:{body:'SSG',assignment_node_id:node}}:{})};
+ const profile={name:`${prefix} ${label}`,username:`${prefix}-${label}`,email:`${prefix}-${label}@example.test`,student_id:testStudentId(),role,school_data:{type:'College',level:'1',section:label,academic_assignment:{campusId:nodes[0],terminalGroupId:node,nodePathIds:[nodes[0],node]}},...(role==='mayor'?{official_data:{body:'SSG',assignment_node_id:node}}:{})};
  const ids=check(await admin.functions.invoke('rmc-accounts',{body:{action:'create',data:{members:[{profile,password}]}}})).ids;users.push(...ids);
  const who=client();check(await who.auth.signInWithPassword({email:profile.email,password}));return{uid:ids[0],profile,who};
 }

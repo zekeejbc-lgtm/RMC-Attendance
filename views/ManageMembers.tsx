@@ -584,6 +584,7 @@ const ManageMembers: React.FC = () => {
               <input
                 className="app-control h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                 id={id}
+                placeholder={key === 'studentId' ? 'YYYY-XXXXXL' : undefined}
                 aria-describedby={memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors] ? `${id}-error` : undefined}
                 aria-invalid={Boolean(memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors])}
                 onChange={(event) => {

@@ -6,7 +6,7 @@ import { CeremonyAttendanceSettings } from '../components/events/CeremonyAttenda
 import { AppEvent, SchoolNode, UserProfile } from '../types';
 afterEach(cleanup);
 it('ranks exact names first and matches reordered tokens, accents and compact IDs', () => {
- const options=[{id:'1',label:'Jose Rivera',detail:'2025-00047 / Psychology / 2SP - B'},{id:'2',label:'José',detail:'2024-009 / Nursing'},{id:'3',label:'Someone else',detail:'Jose section'}];
+ const options=[{id:'1',label:'Jose Rivera',detail:'2025-00047A / Psychology / 2SP - B'},{id:'2',label:'José',detail:'2024-009 / Nursing'},{id:'3',label:'Someone else',detail:'Jose section'}];
  expect(rankSuggestions(options,'JOSE').map(p=>p.id)).toEqual(['2','1','3']);
  expect(rankSuggestions(options,'rivera jose').map(p=>p.id)).toEqual(['1']);
  expect(rankSuggestions(options,'202500047').map(p=>p.id)).toEqual(['1']);
@@ -30,7 +30,7 @@ it('supports keyboard selection, Escape and no-match Enter without submitting th
 });
 it('adds/removes exemptions and class overrides without listing everyone or offering duplicates', () => {
  const roots:SchoolNode[]=[{id:'campus',name:'Campus',type:'school',children:[{id:'a',name:'2SP - B',type:'section'},{id:'archived',name:'Old',type:'section',metadata:{archived:true}}]}];
- const students=[{uid:'alice',name:'Alice',student_id:'2025-00047',school_data:{section:'2SP - B',academic_assignment:{terminalGroupId:'a'}}}] as UserProfile[];
+ const students=[{uid:'alice',name:'Alice',student_id:'2025-00047A',school_data:{section:'2SP - B',academic_assignment:{terminalGroupId:'a'}}}] as UserProfile[];
  function Harness(){const [settings,setSettings]=useState<NonNullable<AppEvent['ceremony']>>({exemptStudentIds:[],classWindows:{},allowVolunteerMerit:false,volunteerMeritHours:1});return <CeremonyAttendanceSettings value={settings} onChange={setSettings} roots={roots} students={students} defaultWindows={[{id:'default',timeIn:'16:30',timeOut:'17:00',lateAfterMinutes:5}]}/>;}
  render(<Harness/>);
  expect(screen.queryByText('Alice')).not.toBeInTheDocument();

@@ -1,3 +1,4 @@
+import { testStudentId } from './test-student-id.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -22,7 +23,7 @@ try {
     const id=`${prefix}-${label}`;const result=await admin.rpc('rmc_command',{action:'addSchoolNode',args:[parent?`${prefix}-${parent}`:null,{id,name:`Browser fixture ${label}`,type}]});if(result.error)throw result.error;fixtureNodes.push(id);
   }
   for(const role of ['student','mayor']) {
-    const profile={name:`${prefix} ${role}`,username:`${prefix}-${role}`,email:`${prefix}-${role}@example.test`,student_id:`${prefix}-${role}`,role,school_data:{type:'College',level:'1',section:'Browser fixture',academic_assignment:{campusId:fixtureNodes[0],terminalGroupId:fixtureNodes[1],nodePathIds:fixtureNodes}},...(role==='mayor'?{official_data:{body:'SSG',assignment_node_id:fixtureNodes[1]}}:{})};
+    const profile={name:`${prefix} ${role}`,username:`${prefix}-${role}`,email:`${prefix}-${role}@example.test`,student_id:testStudentId(),role,school_data:{type:'College',level:'1',section:'Browser fixture',academic_assignment:{campusId:fixtureNodes[0],terminalGroupId:fixtureNodes[1],nodePathIds:fixtureNodes}},...(role==='mayor'?{official_data:{body:'SSG',assignment_node_id:fixtureNodes[1]}}:{})};
     const result=await admin.functions.invoke('rmc-accounts',{body:{action:'create',data:{members:[{profile,password}]}}});if(result.error)throw result.error;fixtureUsers.push(...result.data.ids);
     if(role==='mayor')account={username:profile.username,password};
   }

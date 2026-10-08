@@ -168,15 +168,15 @@ it('previews a selected logo and releases it when removed', () => {
 it('finds organization heads by student ID and shows their profile pictures', async () => {
   state.auth.profile.role = 'admin';
   state.people.mockResolvedValue([
-    { uid: 'student', name: 'Alex Rivera', student_id: '2024-00123' },
-    { uid: 'other', name: 'Other Student', student_id: '2024-00999' },
+    { uid: 'student', name: 'Alex Rivera', student_id: '2024-00123A' },
+    { uid: 'other', name: 'Other Student', student_id: '2024-00999A' },
   ]);
   render(<OrganizationForm initialNodeId="school" profile={state.auth.profile as any} onClose={() => {}} />);
   fireEvent.click(screen.getByLabelText('Organization heads'));
   await screen.findByRole('option', { name: /Alex Rivera/ });
   fireEvent.change(screen.getByLabelText('Search Organization heads options'), { target: { value: '00123' } });
   const person = screen.getByRole('option', { name: /Alex Rivera/ });
-  expect(person).toHaveTextContent('2024-00123');
+  expect(person).toHaveTextContent('2024-00123A');
   expect(person.querySelector('img')).toHaveAttribute('src', 'https://example.com/student.png');
   expect(screen.queryByRole('option', { name: /Other Student/ })).not.toBeInTheDocument();
   fireEvent.click(person);

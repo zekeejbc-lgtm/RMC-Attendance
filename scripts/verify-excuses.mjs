@@ -1,3 +1,4 @@
+import { testStudentId } from './test-student-id.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
@@ -34,7 +35,7 @@ function event(extra = {}) {
 async function account(role, node) {
   const who = client(), password = `${crypto.randomUUID()}Aa!`;
   const profile = { name: `${prefix} ${role}`, username: `${prefix}-${role}`, email: `${prefix}-${role}@example.test`, role,
-    student_id: `${prefix}-${role}`, school_data: { academic_assignment: { terminalGroupId: node } },
+    student_id: testStudentId(), school_data: { academic_assignment: { terminalGroupId: node } },
     ...(role !== 'student' ? { official_data: { body: 'SSG', assignment_node_id: node } } : {}) };
   const response = await admin.functions.invoke('rmc-accounts', { body: { action: 'create', data: { members: [{ profile, password }] } } });
   if (response.error) throw new Error((await response.error.context?.json?.())?.error || response.error.message);

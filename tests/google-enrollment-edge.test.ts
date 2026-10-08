@@ -5,7 +5,7 @@ import { enrollmentHandler } from '../supabase/functions/_shared/enrollment';
 
 const nonce = 'a'.repeat(64);
 afterEach(() => vi.unstubAllGlobals());
-const profile = { email: 'spoofed@example.test', name: 'Student', username: 'student', student_id: '2026-12345' };
+const profile = { email: 'spoofed@example.test', name: 'Student', username: 'student', student_id: '2026-12345A' };
 let admin: any, client: any, verify: any, find: any, rpc: any;
 beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto);

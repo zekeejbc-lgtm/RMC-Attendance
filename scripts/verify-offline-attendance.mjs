@@ -1,3 +1,4 @@
+import { testStudentId } from './test-student-id.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -21,7 +22,7 @@ const sql = statement => {
   catch(error) { throw new Error(`Fixture SQL failed: ${error.stderr?.toString() || error.message}`); }
 };
 async function person(label,node,role='student') {
-  const profile={name:`${prefix} ${label}`,username:`${prefix}-${label}`,email:`${prefix}-${label}@example.test`,student_id:`${prefix}-${label}`,role,school_data:{type:'College',level:'1',section:label,academic_assignment:{campusId:`${prefix}-campus`,terminalGroupId:node,nodePathIds:[`${prefix}-campus`,node]}},...(role!=='student'?{official_data:{body:'SSG',assignment_node_id:node}}:{})};
+  const profile={name:`${prefix} ${label}`,username:`${prefix}-${label}`,email:`${prefix}-${label}@example.test`,student_id:testStudentId(),role,school_data:{type:'College',level:'1',section:label,academic_assignment:{campusId:`${prefix}-campus`,terminalGroupId:node,nodePathIds:[`${prefix}-campus`,node]}},...(role!=='student'?{official_data:{body:'SSG',assignment_node_id:node}}:{})};
   const result=await admin.functions.invoke('rmc-accounts',{body:{action:'create',data:{members:[{profile,password}]}}});
   if(result.error) throw new Error(`Provision ${label}: ${result.error.message}`);
   users.push(...result.data.ids); const who=client();

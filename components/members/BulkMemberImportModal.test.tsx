@@ -31,7 +31,7 @@ describe('BulkMemberImportModal', () => {
     render(<BulkMemberImportModal open sectionName="Newton" onClose={vi.fn()} onConfirm={onConfirm} />);
     const csv = [
       MEMBER_CSV_COLUMNS.join(','),
-      'Ada Lovelace,invalid-email,ada.lovelace,RMC-1001,mayor,09170000000,Ann Lovelace,09171111111,ann@example.edu',
+      'Ada Lovelace,invalid-email,ada.lovelace,2026-01001A,mayor,09170000000,Ann Lovelace,09171111111,ann@example.edu',
     ].join('\r\n');
     const file = new File([csv], 'newton-members.csv', { type: 'text/csv' });
     Object.defineProperty(file, 'text', { value: async () => csv });
@@ -62,7 +62,7 @@ describe('BulkMemberImportModal', () => {
   it('lets the officer remove a detected person before confirmation', async () => {
     const user = userEvent.setup();
     render(<BulkMemberImportModal open sectionName="Newton" onClose={vi.fn()} onConfirm={vi.fn()} />);
-    const csv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nAda,ada@example.edu,ada,RMC-1,student,,,,\r\nGrace,grace@example.edu,grace,RMC-2,student,,,,`;
+    const csv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nAda,ada@example.edu,ada,2026-00001A,student,,,,\r\nGrace,grace@example.edu,grace,2026-00002A,student,,,,`;
     const file = new File([csv], 'members.csv', { type: 'text/csv' });
     Object.defineProperty(file, 'text', { value: async () => csv });
     await user.upload(screen.getByLabelText(/upload completed csv/i), file);
@@ -85,9 +85,9 @@ describe('BulkMemberImportModal', () => {
     const studentId = await screen.findByRole('textbox', { name: /student id for person 1/i });
 
     await user.clear(studentId);
-    await user.type(studentId, 'RMC-2026-1001');
+    await user.type(studentId, '2026-01001A');
 
-    expect(studentId).toHaveValue('RMC-2026-1001');
+    expect(studentId).toHaveValue('2026-01001A');
     expect(studentId).toHaveFocus();
   });
 
@@ -95,17 +95,17 @@ describe('BulkMemberImportModal', () => {
     const user = userEvent.setup();
     render(<BulkMemberImportModal open sectionName="Newton" onClose={vi.fn()} onConfirm={vi.fn()} />);
     const input = screen.getByLabelText(/upload completed csv/i);
-    const initialCsv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nInitial,initial@example.edu,initial,RMC-1,student,,,,`;
+    const initialCsv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nInitial,initial@example.edu,initial,2026-00001A,student,,,,`;
     const initial = new File([initialCsv], 'initial.csv', { type: 'text/csv' });
     Object.defineProperty(initial, 'text', { value: async () => initialCsv });
     await user.upload(input, initial);
     await screen.findByDisplayValue('Initial');
 
     let resolveSlow!: (value: string) => void;
-    const slowCsv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nSlow,slow@example.edu,slow,RMC-2,student,,,,`;
+    const slowCsv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nSlow,slow@example.edu,slow,2026-00002A,student,,,,`;
     const slow = new File([slowCsv], 'slow.csv', { type: 'text/csv' });
     Object.defineProperty(slow, 'text', { value: () => new Promise<string>((resolve) => { resolveSlow = resolve; }) });
-    const latestCsv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nLatest,latest@example.edu,latest,RMC-3,student,,,,`;
+    const latestCsv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nLatest,latest@example.edu,latest,2026-00003A,student,,,,`;
     const latest = new File([latestCsv], 'latest.csv', { type: 'text/csv' });
     Object.defineProperty(latest, 'text', { value: async () => latestCsv });
 

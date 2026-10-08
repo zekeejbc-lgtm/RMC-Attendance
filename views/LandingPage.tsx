@@ -16,7 +16,7 @@ import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { serializeAcademicAssignment, findNodePath } from '../lib/academicDirectory';
 import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 import { createDriveImage, driveFileIdFromUrl, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
-import { enrollmentUsername, validEmergencyPhone, validStudentId } from '../lib/enrollment';
+import { enrollmentUsername, STUDENT_ID_ERROR, validEmergencyPhone, validStudentId } from '../lib/enrollment';
 import GoogleSignIn from '../components/GoogleSignIn';
 import PasskeySignIn from '../components/PasskeySignIn';
 import { checkGoogle, submitGoogleEnrollment, type GoogleEnrollment } from '../lib/googleAuth';
@@ -229,7 +229,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const handleEnrollmentLookup = async (event: React.FormEvent) => {
     event.preventDefault();
     setLookupError(''); setLookupResult(null);
-    if (!validStudentId(lookupId)) { setLookupError('Use Student ID format YYYY-NNNNN, for example 2025-00046.'); return; }
+    if (!validStudentId(lookupId)) { setLookupError(STUDENT_ID_ERROR); return; }
     setLookingUp(true);
     try { setLookupResult(await lookupEnrollment(lookupId)); }
     catch (error) { setLookupError(error instanceof Error && error.message ? error.message : 'Unable to check enrollment status.'); }
@@ -280,7 +280,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     };
 
     try {
-      if (!validStudentId(regData.student_id)) throw new Error('Use Student ID format YYYY-NNNNN, for example 2025-00046.');
+      if (!validStudentId(regData.student_id)) throw new Error(STUDENT_ID_ERROR);
       if (regData.guardianName.trim().length < 2 || !validEmergencyPhone(regData.guardianPhone)) throw new Error('Enter the emergency contact’s full name and a valid mobile number.');
       if (!photoFile && !savedPhotoUrl) throw new Error('Choose a profile picture before registering.');
       await appData.validateEnrollment(profile, securityKey.trim(), 3);
@@ -692,7 +692,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                     <div className="space-y-1">
                        <label htmlFor="landing-register-student-id" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Official Student ID #</label>
-                       <input id="landing-register-student-id" required placeholder="2024-XXXXX" className="app-control w-full min-w-0 p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
+                       <input id="landing-register-student-id" required placeholder="YYYY-XXXXXL" className="app-control w-full min-w-0 p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-base text-brand-900 dark:text-white focus:border-gold-400 focus:outline-none" value={regData.student_id} onChange={e => setRegData({...regData, student_id: e.target.value})} />
                     </div>
 
                     <AcademicPathPicker roots={structure} value={academicPath.map((node) => node.id)} onChange={setAcademicPath} purpose="registration" />
@@ -801,7 +801,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                      }
                      if (regStep === 2) {
                        if (!validStudentId(regData.student_id)) {
-                         setRegError('Use Student ID format YYYY-NNNNN, for example 2025-00046.');
+                         setRegError(STUDENT_ID_ERROR);
                          return;
                        }
                        const terminalNode = academicPath[academicPath.length - 1];
@@ -914,7 +914,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
           <p className="text-sm text-slate-500 dark:text-slate-400">Enter your Student ID to see your latest application status.</p>
           <form className="space-y-3" onSubmit={handleEnrollmentLookup}>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500" htmlFor="enrollment-lookup-id">Student ID</label>
-            <input id="enrollment-lookup-id" value={lookupId} onChange={event => setLookupId(event.target.value)} placeholder="YYYY-NNNNN" autoFocus className="app-control w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800" />
+            <input id="enrollment-lookup-id" value={lookupId} onChange={event => setLookupId(event.target.value)} placeholder="YYYY-XXXXXL" autoFocus className="app-control w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800" />
             <Button type="submit" variant="gold" disabled={lookingUp} className="w-full">{lookingUp ? 'Checking…' : 'Check status'}</Button>
           </form>
           {lookupError && <p role="alert" className="text-xs font-semibold text-red-600">{lookupError}</p>}

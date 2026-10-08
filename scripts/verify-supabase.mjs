@@ -1,3 +1,4 @@
+import { testStudentId } from './test-student-id.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -17,7 +18,7 @@ const credentials = JSON.parse(fs.readFileSync('.demo-accounts.local', 'utf8')).
 const ok = async (name, result) => { if (result.error) { const body = await result.error.context?.json?.().catch(() => null); throw new Error(`${name}: ${body?.error || result.error.message}`); } checks.push(name); console.log(`PASS ${name}`); return result.data; };
 const deny = (name, result) => { assert.ok(result.error, `${name} should be denied`); checks.push(name); console.log(`PASS ${name}`); };
 const command = async (action, args, who = admin) => { const r = await who.rpc('rmc_command', { action, args }); if (r.error) throw new Error(`${action}: ${r.error.message}`); return r.data; };
-const person = (name, node = `${prefix}-section`, role = 'student') => ({ name: `${prefix} ${name}`, username: `${prefix}-${name}`, email: `${prefix}-${name}@example.test`, student_id: `${prefix}-${name}`, role, school_data: { type: 'College', level: '1', section: 'Test section', academic_assignment: { campusId: `${prefix}-campus`, terminalGroupId: node, nodePathIds: [`${prefix}-campus`, `${prefix}-department`, node] } }, ...(role !== 'student' ? { official_data: { body: 'SSG', assignment_node_id: node } } : {}) });
+const person = (name, node = `${prefix}-section`, role = 'student') => ({ name: `${prefix} ${name}`, username: `${prefix}-${name}`, email: `${prefix}-${name}@example.test`, student_id: testStudentId(), role, school_data: { type: 'College', level: '1', section: 'Test section', academic_assignment: { campusId: `${prefix}-campus`, terminalGroupId: node, nodePathIds: [`${prefix}-campus`, `${prefix}-department`, node] } }, ...(role !== 'student' ? { official_data: { body: 'SSG', assignment_node_id: node } } : {}) });
 const password = crypto.randomBytes(24).toString('base64url');
 async function enrollmentTicket(email) {
   const ticket = crypto.randomUUID();
@@ -62,7 +63,6 @@ try {
   const admissionProfile = person('admission');
   // Public signup enforces the current enrollment fields; provisioning does not
   // follow the applicant workflow. Keep this test independent of real images.
-  admissionProfile.student_id = `2026-${String(crypto.randomInt(100000)).padStart(5, '0')}`;
   admissionProfile.guardian = { name: 'Verification Guardian', contact: '09123456789' };
   admissionProfile.photo_url = `https://drive.google.com/thumbnail?id=${prefix}_photo&sz=w1600`;
   const admission = await ok('admission trigger', await service.auth.admin.createUser({ email: admissionProfile.email, password, email_confirm: true, user_metadata: { profile: { ...admissionProfile, role: 'admin', account_status: 'active' }, enrollment_ticket: await enrollmentTicket(admissionProfile.email) } }));

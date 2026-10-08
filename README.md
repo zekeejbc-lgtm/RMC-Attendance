@@ -9,6 +9,8 @@ npm run dev
 
 The local environment is already configured. For another workstation, copy `.env.example` to `.env.local` and supply the project's publishable key. Only `VITE_SUPABASE_URL` and the publishable key belong in the frontend environment. Never put a service-role key in a `VITE_` variable.
 
+Student IDs use `YYYY-XXXXXL`: four year digits, a hyphen, five numbers, and one letter, for example `2025-00046A`. Registration and student/mayor member imports require this format; letter matching is case-insensitive. Apply the `student_id_letter_suffix` database migration before using the updated enrollment flow.
+
 ## Connected workflows
 
 - Supabase Auth login by username or email, persistent sessions, password changes, password recovery, and authenticator MFA.

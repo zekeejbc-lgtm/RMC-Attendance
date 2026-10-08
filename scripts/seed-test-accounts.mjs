@@ -1,3 +1,4 @@
+import { testStudentId } from './test-student-id.mjs';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -18,7 +19,7 @@ for (const [role, name] of accounts) {
   const { error: reservationError } = await client.rpc('rmc_reserve_test_account', { email });
   if (reservationError) throw reservationError;
   const password = crypto.randomBytes(24).toString('base64url');
-  const profile = { name, username: role, email, student_id: `TEST-${role.toUpperCase()}`, photo_url: '', role: 'student', account_status: 'pending', school_data: { type: 'College', level: '', section: '' } };
+  const profile = { name, username: role, email, student_id: testStudentId(), photo_url: '', role: 'student', account_status: 'pending', school_data: { type: 'College', level: '', section: '' } };
   const { data, error } = await client.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { profile }, app_metadata: { rmc_provisioned: true } });
   if (error) throw error;
   profile.uid = data.user.id; profile.role = role; profile.account_status = 'active';

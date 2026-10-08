@@ -29,7 +29,7 @@ const studentProfile = {
   username: 'juan.delacruz',
   role: 'student',
   account_status: 'active',
-  student_id: 'RMC-2026-0001',
+  student_id: '2026-00001A',
   photo_url: '',
   email: 'juan.delacruz@example.edu',
   phone: '0917 000 0000',
@@ -978,8 +978,8 @@ describe('staff route UI behavior', () => {
     await user.click(screen.getByRole('button', { name: /bulk create members/i }));
 
     const csv = 'name,email,username,student_id,role,phone,guardian_name,guardian_contact,guardian_email\r\n'
-      + 'Ada Lovelace,ada@example.edu,ada,RMC-10,student,,,,\r\n'
-      + 'Grace Hopper,grace@example.edu,grace,RMC-11,mayor,09170000000,Parent Hopper,09171111111,parent@example.edu';
+      + 'Ada Lovelace,ada@example.edu,ada,2026-00010A,student,,,,\r\n'
+      + 'Grace Hopper,grace@example.edu,grace,2026-00011A,mayor,09170000000,Parent Hopper,09171111111,parent@example.edu';
     const file = new File([csv], 'newton.csv', { type: 'text/csv' });
     Object.defineProperty(file, 'text', { value: async () => csv });
     const dialog = screen.getByRole('dialog', { name: /bulk create members in newton/i });
@@ -1023,7 +1023,7 @@ describe('staff route UI behavior', () => {
     await user.type(within(form).getByRole('textbox', { name: /legal full name/i }), 'Ada Lovelace');
     await user.type(within(form).getByRole('textbox', { name: /email address/i }), 'ada@rmc.edu.ph');
     await user.type(within(form).getByRole('textbox', { name: /username/i }), 'ada.lovelace');
-    await user.type(within(form).getByRole('textbox', { name: /student id/i }), 'RMC-COL-1001');
+    await user.type(within(form).getByRole('textbox', { name: /student id/i }), '2026-01001A');
     await user.click(within(form).getByRole('button', { name: /create member/i }));
 
     expect(staffState.createSectionMembers).toHaveBeenCalledWith([{
@@ -1033,7 +1033,7 @@ describe('staff route UI behavior', () => {
         email: 'ada@rmc.edu.ph',
         username: 'ada.lovelace',
         role: 'student',
-        student_id: 'RMC-COL-1001',
+        student_id: '2026-01001A',
         school_data: {
         type: 'College',
         level: '',
@@ -1063,7 +1063,7 @@ describe('staff route UI behavior', () => {
     fireEvent.change(within(form).getByRole('textbox', { name: /legal full name/i }), { target: { value: '   ' } });
     fireEvent.change(within(form).getByRole('textbox', { name: /email address/i }), { target: { value: 'invalid' } });
     fireEvent.change(within(form).getByRole('textbox', { name: /username/i }), { target: { value: 'new.user' } });
-    fireEvent.change(within(form).getByRole('textbox', { name: /student id/i }), { target: { value: 'RMC-NEW' } });
+    fireEvent.change(within(form).getByRole('textbox', { name: /student id/i }), { target: { value: '2026-90001A' } });
     await user.click(within(form).getByRole('button', { name: /create member/i }));
 
     expect(within(form).getByText(/field is required/i)).toBeInTheDocument();
@@ -1518,22 +1518,22 @@ describe('staff route UI behavior', () => {
     staffState.excuses = [
       {
         id: 'medical-pending', student_uid: 'student-1', student_name: 'Medical Pending',
-        student_id: 'RMC-1', department: 'SHS', section: 'Newton', event_title: 'Assembly',
+        student_id: '2026-00001A', department: 'SHS', section: 'Newton', event_title: 'Assembly',
         category: 'medical', reason: 'Illness', submission_date: Date.now(), status: 'pending',
       },
       {
         id: 'personal-approved', student_uid: 'student-2', student_name: 'Personal Approved',
-        student_id: 'RMC-2', department: 'SHS', section: 'Newton', event_title: 'Assembly',
+        student_id: '2026-00002A', department: 'SHS', section: 'Newton', event_title: 'Assembly',
         category: 'personal', reason: 'Family matter', submission_date: Date.now(), status: 'approved',
       },
       {
         id: 'emergency-rejected', student_uid: 'student-3', student_name: 'Emergency Rejected',
-        student_id: 'RMC-3', department: 'SHS', section: 'Newton', event_title: 'Assembly',
+        student_id: '2026-00003A', department: 'SHS', section: 'Newton', event_title: 'Assembly',
         category: 'emergency', reason: 'Emergency', submission_date: Date.now(), status: 'rejected',
       },
       {
         id: 'institutional-approved', student_uid: 'student-4', student_name: 'Institutional Approved',
-        student_id: 'RMC-4', department: 'SHS', section: 'Newton', event_title: 'Assembly',
+        student_id: '2026-00004A', department: 'SHS', section: 'Newton', event_title: 'Assembly',
         category: 'institutional', reason: 'Official duty', submission_date: Date.now(), status: 'approved',
       },
     ];

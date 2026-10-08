@@ -17,15 +17,15 @@ describe('member CSV contract', () => {
 
   it('parses BOM-prefixed normalized headers and RFC 4180 quoted fields', () => {
     const csv = '\uFEFFLegal Name,Email Address,Username,Student ID,Role,Phone,Guardian Name,Guardian Contact,Guardian Email\r\n'
-      + '"Dela Cruz, Juan",juan@example.edu,JUAN.DC,RMC-001,,"+63 900 000 0000","Cruz, Maria","0917,123","maria@example.edu"\r\n'
-      + '"Reyes\nAna",ana@example.edu,ana.reyes,RMC-002,MAYOR,,,,\r\n';
+      + '"Dela Cruz, Juan",juan@example.edu,JUAN.DC,2026-00001A,,"+63 900 000 0000","Cruz, Maria","0917,123","maria@example.edu"\r\n'
+      + '"Reyes\nAna",ana@example.edu,ana.reyes,2026-00002A,MAYOR,,,,\r\n';
 
     expect(parseMemberCsv(csv)).toEqual([
       {
         name: 'Dela Cruz, Juan',
         email: 'juan@example.edu',
         username: 'JUAN.DC',
-        student_id: 'RMC-001',
+        student_id: '2026-00001A',
         role: 'student',
         phone: '+63 900 000 0000',
         guardian_name: 'Cruz, Maria',
@@ -36,7 +36,7 @@ describe('member CSV contract', () => {
         name: 'Reyes\nAna',
         email: 'ana@example.edu',
         username: 'ana.reyes',
-        student_id: 'RMC-002',
+        student_id: '2026-00002A',
         role: 'mayor',
         phone: '',
         guardian_name: '',
@@ -53,8 +53,8 @@ describe('member CSV contract', () => {
   it('reports field errors and case-insensitive duplicates on each affected row', () => {
     const rows = parseMemberCsv([
       MEMBER_CSV_COLUMNS.join(','),
-      'Ada,not-an-email,Same,RMC-1,president,,,,',
-      'Grace,grace@example.edu,same,rmc-1,student,,,,',
+      'Ada,not-an-email,Same,2026-00001A,president,,,,',
+      'Grace,grace@example.edu,same,2026-00001a,student,,,,',
     ].join('\r\n'));
 
     const result = validateMemberCsvRows(rows);
@@ -76,7 +76,7 @@ describe('member CSV contract', () => {
   });
 
   it('requires officers to choose at most one mayor in a section import', () => {
-    const rows = parseMemberCsv(`${MEMBER_CSV_COLUMNS.join(',')}\r\nAda,ada@example.edu,ada,RMC-1,mayor,,,,\r\nGrace,grace@example.edu,grace,RMC-2,mayor,,,,`);
+    const rows = parseMemberCsv(`${MEMBER_CSV_COLUMNS.join(',')}\r\nAda,ada@example.edu,ada,2026-00001A,mayor,,,,\r\nGrace,grace@example.edu,grace,2026-00002A,mayor,,,,`);
 
     const result = validateMemberCsvRows(rows);
 
@@ -86,10 +86,10 @@ describe('member CSV contract', () => {
   });
 
   it('flags identities that already belong to an existing account', () => {
-    const rows = parseMemberCsv(`${MEMBER_CSV_COLUMNS.join(',')}\r\nAda,existing@example.edu,new-user,RMC-NEW,student,,,,`);
+    const rows = parseMemberCsv(`${MEMBER_CSV_COLUMNS.join(',')}\r\nAda,existing@example.edu,new-user,2026-90001A,student,,,,`);
 
     const result = validateMemberCsvRows(rows, [{
-      email: 'EXISTING@example.edu', username: 'existing-user', student_id: 'RMC-OLD',
+      email: 'EXISTING@example.edu', username: 'existing-user', student_id: '2026-90002A',
     }]);
 
     expect(result.valid).toBe(false);
@@ -97,10 +97,10 @@ describe('member CSV contract', () => {
   });
 
   it.each([
-    ['quote inside an unquoted field', 'name,email,username,student_id\r\nA"da,ada@example.edu,ada,RMC-1'],
-    ['characters after a closing quote', 'name,email,username,student_id\r\n"Ada"x,ada@example.edu,ada,RMC-1'],
+    ['quote inside an unquoted field', 'name,email,username,student_id\r\nA"da,ada@example.edu,ada,2026-00001A'],
+    ['characters after a closing quote', 'name,email,username,student_id\r\n"Ada"x,ada@example.edu,ada,2026-00001A'],
     ['inconsistent record width', 'name,email,username,student_id\r\nAda,ada@example.edu,ada'],
-    ['duplicate mapped headers', 'name,legal_name,email,username,student_id\r\nAda,Ada,ada@example.edu,ada,RMC-1'],
+    ['duplicate mapped headers', 'name,legal_name,email,username,student_id\r\nAda,Ada,ada@example.edu,ada,2026-00001A'],
   ])('rejects malformed CSV with %s', (_case, csv) => {
     expect(() => parseMemberCsv(csv)).toThrow(/CSV|column|field|header/i);
   });

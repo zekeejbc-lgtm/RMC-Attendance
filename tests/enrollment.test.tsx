@@ -57,7 +57,7 @@ async function reachPhoto(google = false) {
   fill('password', 'StrongPassword123!'); fill('confirm-password', 'StrongPassword123!');
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
   await screen.findByLabelText('Official Student ID #');
-  fill('student-id', '2026-12345');
+  fill('student-id', '2026-12345A');
   fireEvent.click(screen.getByRole('button', { name: 'Choose section' }));
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
   await screen.findByLabelText('Guardian Name');

@@ -1,3 +1,5 @@
+import { STUDENT_ID_ERROR, validStudentId } from './enrollment';
+
 export const MEMBER_CSV_COLUMNS = [
   'name',
   'email',
@@ -191,6 +193,7 @@ export const validateMemberCsvRows = (rows: MemberCsvRow[], existingMembers: Exi
     requiredColumns.forEach((field) => {
       if (!row[field].trim()) errors[field] = 'This field is required.';
     });
+    if (row.student_id.trim() && !validStudentId(row.student_id)) errors.student_id = STUDENT_ID_ERROR;
     if (row.email && !emailPattern.test(row.email)) errors.email = 'Enter a valid email address.';
     if (row.guardian_email && !emailPattern.test(row.guardian_email)) errors.guardian_email = 'Enter a valid guardian email address.';
     if (!['student', 'mayor'].includes(row.role.toLowerCase())) errors.role = 'Role must be student or mayor.';

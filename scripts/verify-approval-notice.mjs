@@ -1,3 +1,4 @@
+import { testStudentId } from './test-student-id.mjs';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -22,7 +23,7 @@ try {
   assert.ok(section, 'A section is required for the temporary verification account');
   const path = [];
   for (let node = section; node; node = nodes.find(parent => parent.id === node.parent_id)) path.unshift(node.id);
-  const profile = { name, email, username: name, student_id: name, role: 'student', school_data: { type: 'College', academic_assignment: { campusId: path[0], terminalGroupId: section.id, nodePathIds: path } } };
+  const profile = { name, email, username: name, student_id: testStudentId(), role: 'student', school_data: { type: 'College', academic_assignment: { campusId: path[0], terminalGroupId: section.id, nodePathIds: path } } };
   const result = await admin.functions.invoke('rmc-accounts', { body: { action: 'create', data: { members: [{ profile, password }] } } });
   if (result.error) throw new Error(JSON.stringify(await result.error.context?.json?.()) || result.error.message);
   const created = check(result);

@@ -5,7 +5,7 @@ import { createAttendanceTranscript, type AttendanceTranscript } from './attenda
 const logo = new Uint8Array(readFileSync('public/academic-seal.jpeg'));
 const generatedAt = new Date('2026-10-08T04:09:00Z');
 const sample: AttendanceTranscript = {
-  student: { name: 'Juan Dela Cruz', id: '2025-00047', department: 'College Department', section: '2SP - B' },
+  student: { name: 'Juan Dela Cruz', id: '2025-00047A', department: 'College Department', section: '2SP - B' },
   attendanceRate: 100,
   sanctionHours: 0,
   records: [{ date: '2026-10-03', title: 'Intramurals 2026 / Morning Session', category: 'Event', timeIn: '08:08 AM', status: 'present', scannedBy: 'Regal Admin' }],
