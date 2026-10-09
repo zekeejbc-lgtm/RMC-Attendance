@@ -47,11 +47,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const refreshRosters = () => {
       const owner = identity, version = identityVersion;
       const profile = appAuth.getCurrentUser()?.profile;
-      if (!owner || rosterAuthorizedVersion !== version || profile?.account_status !== 'active') return;
+      if (!owner || rosterAuthorizedVersion !== version || profile?.account_status !== 'active' || appData.isUserScopeFrozen(profile) || appData.getSystemFreezeStatus().isFrozen) return;
       const organizations = appData.getOrganizations().filter(org => org.can_manage);
       if (!hasPermission(profile.role, 'attendance.scan') && !organizations.length) return;
-      const events = appData.getVisibleEvents(owner).filter(event => hasPermission(profile.role, 'attendance.scan') || organizations.some(org => org.id === event.organizationId));
-      const isCurrent = () => !disposed && identity === owner && identityVersion === version && rosterAuthorizedVersion === version;
+      const events = appData.getVisibleEvents(owner).filter(event => (!event.scopeNodeId || !appData.isNodeOrParentFrozen(event.scopeNodeId)) && (hasPermission(profile.role, 'attendance.scan') || organizations.some(org => org.id === event.organizationId)));
+      const isCurrent = () => !disposed && identity === owner && identityVersion === version && rosterAuthorizedVersion === version && !appData.isUserScopeFrozen(appAuth.getCurrentUser()?.profile) && !appData.getSystemFreezeStatus().isFrozen;
       const update = hasPermission(profile.role, 'attendance.scan') ? refreshCachedRosterProfiles(owner, appData.getVisibleStudents(owner), isCurrent) : Promise.resolve();
       void update.then(() => refreshAutomaticRosters(owner, events, isCurrent)).catch(error => {
         console.warn('Automatic roster storage is unavailable.', error instanceof Error ? error.message : 'Storage unavailable.');
@@ -102,14 +102,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const account = appAuth.getCurrentUser();
         rosterAuthorizedVersion = !needsMfa && account?.profile.account_status === 'active' ? version : -1;
         refreshRosters();
-        if (welcomePending === identity && account?.profile.account_status === 'active' && !needsMfa) {
+        if (welcomePending === identity && account?.profile.account_status === 'active' && !needsMfa && !appData.isUserScopeFrozen(account.profile)) {
           welcomePending = null;
           toast.success(`Welcome back, ${account.profile.name}! Open the notification bell for your latest updates.`);
         }
         // Publish the loaded profile together with readiness so route guards never
         // mistake an account still being hydrated for an admission applicant.
-        setState(s => ({ ...s, profile: account?.profile.account_status === 'active' ? account.profile : null, stats: account?.stats || null, loading: false, error: null, offlineScanner: false }));
-        if (identity) void syncOfflineAttendance(identity).catch(error => {
+        setState(s => ({ ...s, profile: account && (account.profile.account_status === 'active' || appData.isUserScopeFrozen(account.profile)) ? account.profile : null, stats: account?.stats || null, loading: false, error: null, offlineScanner: false }));
+        if (identity && !appData.isUserScopeFrozen(account?.profile) && !appData.getSystemFreezeStatus().isFrozen) void syncOfflineAttendance(identity).catch(error => {
           if (!disposed) console.warn('Attendance remains on this device until synchronization succeeds.', error instanceof Error ? error.message : 'Sync unavailable.');
         });
       }
@@ -119,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribeData = subscribeData(() => {
       if (disposed) return;
       const account = appAuth.getCurrentUser();
-      setState(s => ({ ...s, profile: account?.profile.account_status === 'active' ? account.profile : null, stats: account?.stats || null, revision: (s.revision || 0) + 1 }));
+      setState(s => ({ ...s, profile: account && (account.profile.account_status === 'active' || appData.isUserScopeFrozen(account.profile)) ? account.profile : null, stats: account?.stats || null, revision: (s.revision || 0) + 1 }));
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (disposed) return;
@@ -162,8 +162,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (configurationError) failed(new Error(configurationError));
     return () => { disposed = true; idleSession.dispose(); clearInterval(poll); clearInterval(rosterPoll); subscription.unsubscribe(); unsubscribeData(); window.removeEventListener('focus', onFocus); window.removeEventListener('online', onFocus); window.removeEventListener('unhandledrejection', onRejection); window.removeEventListener('rmc_sync_error', onSyncError); };
   }, []);
+  const scopeFrozen = appData.isUserScopeFrozen(state.profile);
   useEffect(() => {
-    if (!state.profile?.uid || state.offlineScanner) return;
+    if (!state.profile?.uid || !scopeFrozen) return;
+    void clearOfflineRosters(state.profile.uid).catch(() => console.warn('Cached scanner data could not be cleared. Access remains frozen.'));
+  }, [state.profile?.uid, scopeFrozen]);
+  useEffect(() => {
+    if (!state.profile?.uid || state.offlineScanner || scopeFrozen) return;
     let disposed = false;
     let refreshing = false;
     let pending = false;
@@ -175,7 +180,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     const unsubscribe = subscribeAttendance(state.profile.uid, () => { if (!disposed) void refresh(); });
     return () => { disposed = true; unsubscribe(); };
-  }, [state.profile?.uid, state.offlineScanner]);
+  }, [state.profile?.uid, state.offlineScanner, scopeFrozen]);
   return <AuthContext.Provider value={{ ...state, markApprovalNoticeSeen: () => setState(s => ({ ...s, approvalNoticeSeen: true })) }}>
     {state.error && <div role="alert" className="border-b border-red-300 bg-red-50 p-3 text-sm text-red-900">{state.error} <button className="underline" onClick={() => window.location.reload()}>Retry connection</button></div>}
     {challenge ? <AuthChallenge recovery={challenge === 'recovery'} onComplete={() => { setChallenge(null); void refreshData(); }} /> : children}

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { appData } from '../../lib/backend';
+import { useState, useSyncExternalStore } from 'react';
+import { appData, subscribeData } from '../../lib/backend';
 import { useAuth } from '../AuthContext';
 import Button from '../ui/Button';
 import CustomSelect from '../ui/CustomSelect';
@@ -10,7 +10,9 @@ export function RoleAssignment() {
   const [roleId, setRoleId] = useState('');
   const [message, setMessage] = useState('');
   const accounts = [...appData.getOfficialAccounts(), ...appData.getAllStudents()].filter((account, index, all) => all.findIndex(item => item.uid === account.uid) === index);
-  const roles = [...Object.values(appData.getCoreRoles()), ...Object.values(appData.getCustomRoles())].filter(role => role.id !== 'admin');
+  const coreRoles = useSyncExternalStore(subscribeData, appData.getCoreRoles);
+  const customRoles = useSyncExternalStore(subscribeData, appData.getCustomRoles);
+  const roles = [...Object.values(coreRoles), ...Object.values(customRoles)].filter(role => role.id !== 'admin');
   return <form className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800" onSubmit={async event => {
     event.preventDefault();
     try { await appData.assignAccountRole(profile!.uid, uid, roleId); setMessage('Assignment saved. Position-only roles preserve the existing access role.'); }

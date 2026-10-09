@@ -7,9 +7,13 @@ import { appData } from '../lib/backend';
 import { SchoolNode, UserProfile } from '../types';
 import { changeField as fill } from './ui-select';
 
-vi.mock('../lib/backend', () => ({ appData: {
+vi.mock('../lib/backend', () => ({
+  subscribeData: (callback: () => void) => { window.addEventListener('rmc_data_update', callback); return () => window.removeEventListener('rmc_data_update', callback); },
+  documentUrl: vi.fn(async (path: string) => path),
+  appData: {
   getCoreRoles: () => ({}), getCustomRoles: () => ({}), getOfficialsForNode: () => [],
-  getOfficialAccounts: () => [], getSchoolStructure: vi.fn(), getAccountAccess: vi.fn(async () => ({})),
+  getOfficialAccounts: vi.fn((): UserProfile[] => []), getSchoolStructure: vi.fn(), getAccountAccess: vi.fn(async () => ({})),
+  getSchoolNodePath: vi.fn(() => []), getApplications: vi.fn(() => []), resetAccountPassword: vi.fn(async () => {}),
   createSchoolOfficial: vi.fn(async () => 'new-id'), createUser: vi.fn(async () => 'new-id'),
 } }));
 const campus: SchoolNode = { id: 'campus', name: 'Campus', type: 'education_unit', children: [
@@ -25,7 +29,7 @@ function fillOfficer(index: number) {
   fill('Full name', `Officer ${index}`); fill('Email', `officer${index}@example.test`);
   fill('Username', `officer${index}`); fill('Official ID', `ID${index}`); fill('Temporary password', 'Example-password-123!');
 }
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(appData.getSchoolStructure).mockReturnValue([campus]); });
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(appData.getSchoolStructure).mockReturnValue([campus]); vi.mocked(appData.getOfficialAccounts).mockReturnValue([]); });
 afterEach(cleanup);
 
 describe('Multiple managed accounts', () => {
@@ -83,5 +87,51 @@ describe('Multiple managed accounts', () => {
   it('does not offer account creation without account-management permission', () => {
     render(<NodeOfficerManager actor={{ ...actor, role: 'ssg' }} node={campus} canManage onChanged={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Assign officer' })).toBeNull();
+  });
+
+  it('shows the saved photo and only linked enrollment applications, and validates password updates', async () => {
+    const account = { uid: 'officer', name: 'Officer One', username: 'officer', email: 'one@example.test', student_id: 'ONE', role: 'ssg', photo_url: 'https://example.test/photo.png', school_data: { type: 'College', level: '1', section: 'A' } } as UserProfile;
+    vi.mocked(appData.getOfficialAccounts).mockReturnValue([account]);
+    vi.mocked(appData.getApplications).mockReturnValue([
+      { id: 'officer', form_data: account, status: 'approved', submission_date: 1, rejection_count: 0 },
+      { id: 'other', form_data: { ...account, uid: 'other', name: 'Other applicant' }, status: 'pending', submission_date: 2, rejection_count: 0 },
+    ]);
+    render(<AdminAccountView />);
+    fireEvent.click(screen.getByRole('button', { name: 'View profile for Officer One' }));
+    await waitFor(() => expect(screen.getAllByAltText("Officer One's profile photo")[1]).toHaveAttribute('src', account.photo_url));
+    expect(screen.getByRole('region', { name: 'Enrollment applications' })).toHaveTextContent('approved');
+    expect(screen.queryByText('Other applicant')).not.toBeInTheDocument();
+    expect(screen.getByText('Last sign-in (Manila time)').nextElementSibling).toHaveTextContent('Unavailable');
+    const input = screen.getByLabelText('New password');
+    expect(input).toHaveAttribute('type', 'password');
+    fill('New password', 'abcdefghijklmnop');
+    expect(screen.getByRole('button', { name: 'Update password' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    expect(screen.getByRole('button', { name: 'Update password' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Show new password' }));
+    expect(input).toHaveAttribute('type', 'text');
+    const password = (input as HTMLInputElement).value;
+    fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
+    await waitFor(() => expect(appData.resetAccountPassword).toHaveBeenCalledWith('officer', password));
+    expect(await screen.findByText('Password updated for Officer One.')).toBeInTheDocument();
+    expect(input).toHaveValue('');
+  });
+
+  it('shows password errors inside the profile and permits a retry', async () => {
+    vi.mocked(appData.getOfficialAccounts).mockReturnValue([{ ...actor, name: 'Admin', username: 'admin', photo_url: '', school_data: {} } as UserProfile]);
+    vi.mocked(appData.resetAccountPassword).mockRejectedValueOnce(new Error('Update failed.'));
+    render(<AdminAccountView />);
+    fireEvent.click(screen.getByRole('button', { name: 'View profile for Admin' }));
+    fill('New password', 'Example-password-123!');
+    fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Update failed.');
+    expect(screen.getByRole('button', { name: 'Update password' })).toBeEnabled();
+  });
+
+  it('updates the account directory when new profile data arrives', () => {
+    render(<AdminAccountView />);
+    vi.mocked(appData.getOfficialAccounts).mockReturnValue([{ ...actor, name: 'New admin' } as UserProfile]);
+    fireEvent(window, new Event('rmc_data_update'));
+    expect(screen.getByText('New admin')).toBeInTheDocument();
   });
 });

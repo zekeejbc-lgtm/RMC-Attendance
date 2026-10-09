@@ -20,6 +20,7 @@ import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
 import { createDriveImage, driveFileIdFromUrl, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
 import { enrollmentUsername, STUDENT_ID_ERROR, validEmergencyPhone, validStudentId } from '../lib/enrollment';
 import GoogleSignIn from '../components/GoogleSignIn';
+import EnrollmentPrivacyAgreement from '../components/EnrollmentPrivacyAgreement';
 import PasskeySignIn from '../components/PasskeySignIn';
 import { checkGoogle, submitGoogleEnrollment, type GoogleEnrollment } from '../lib/googleAuth';
 import { ArrowRight, Shield, MapPin, Mail, Phone, Eye, EyeOff, Loader2, ShieldAlert, ChevronDown, ChevronLeft, Check, ExternalLink, UserCircle, Camera, KeyRound, QrCode, ShieldCheck, Clock, FileCheck2, BarChart3, UserCheck, Smartphone, CheckCircle2, Layers, Lock, Zap, Building2 } from 'lucide-react';
@@ -62,7 +63,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   const [showLookupModal, setShowLookupModal] = useState(false);
 
   // Register Logic State
-  const [regStep, setRegStep] = useState(1);
+  const [regStep, setRegStep] = useState(0);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
@@ -83,7 +85,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   });
 
   const enrollmentTitleRef = useRef<HTMLHeadingElement>(null);
-  const enrollmentSteps = ['Account details', 'Academic assignment', 'Emergency contact', 'Profile picture'];
+  const enrollmentSteps = ['Data privacy agreement', 'Account details', 'Academic assignment', 'Emergency contact', 'Profile picture'];
 
   // --- EFFECTS ---
   useEffect(() => {
@@ -162,6 +164,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   // Login Handlers
   const handleGoogle = async (credential: string, nonce: string, enrolling: boolean) => {
+    if (enrolling && !privacyAccepted) { setRegError('Read and agree to the data privacy agreement first.'); return; }
     setLoginError(''); setRegError('');
     setMissingAccountEmail(''); setGoogleNeedsEnrollment(false);
     const result = await checkGoogle(credential, nonce);
@@ -268,6 +271,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   const handleRegisterSubmit = async () => {
     if (isRegistering || readingPhoto) return;
+    if (!privacyAccepted) { setRegError('Read and agree to the data privacy agreement first.'); setRegStep(0); return; }
     setRegError('');
     const terminalNode = academicPath[academicPath.length - 1];
     if (!terminalNode || !['section', 'block'].includes(terminalNode.type)) {
@@ -531,7 +535,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                        <Button type="button" onClick={() => {
                          setRegData(current => ({ ...current, email: missingAccountEmail }));
                          setRegError(''); setLoginError(''); setPassword('');
-                         setShowLoginModal(false); navigate('/register'); setRegStep(1);
+                         setShowLoginModal(false); navigate('/register'); setRegStep(0); setPrivacyAccepted(false);
                          setMissingAccountEmail(''); setGoogleNeedsEnrollment(false);
                        }}>{googleNeedsEnrollment ? 'Sign up with this Google email' : 'Sign up with this email'}</Button>
                      </div>}
@@ -599,10 +603,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-8">
           <div className="mb-6 space-y-3">
             <h1 id="enrollment-title" ref={enrollmentTitleRef} tabIndex={-1} className="scroll-mt-28 text-2xl font-black tracking-tight text-brand-900 focus:outline-none dark:text-white sm:text-3xl">{regSuccess ? 'Enrollment Submitted' : 'Create your student account'}</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">{regSuccess ? 'Your application is waiting for school review' : `Step ${regStep} of 4: ${enrollmentSteps[regStep - 1]}`}</p>
-            {!regSuccess && <ol aria-label="Enrollment progress" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {enrollmentSteps.map((label, index) => <li key={label} aria-current={regStep === index + 1 ? 'step' : undefined} className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-xs font-bold ${index + 1 <= regStep ? 'border-gold-300 bg-gold-50 text-brand-900 dark:border-gold-700 dark:bg-gold-500/10 dark:text-gold-300' : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400'}`}>
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white dark:bg-slate-800">{index + 1 < regStep ? <Check size={14} aria-label="Completed" /> : index + 1}</span>{label}
+            <p className="text-sm text-slate-500 dark:text-slate-400">{regSuccess ? 'Your application is waiting for school review' : `Step ${regStep + 1} of ${enrollmentSteps.length}: ${enrollmentSteps[regStep]}`}</p>
+            {!regSuccess && <ol aria-label="Enrollment progress" className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {enrollmentSteps.map((label, index) => <li key={label} aria-current={regStep === index ? 'step' : undefined} className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-xs font-bold ${index <= regStep ? 'border-gold-300 bg-gold-50 text-brand-900 dark:border-gold-700 dark:bg-gold-500/10 dark:text-gold-300' : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400'}`}>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white dark:bg-slate-800">{index < regStep ? <Check size={14} aria-label="Completed" /> : index + 1}</span>{label}
               </li>)}
             </ol>}
           </div>
@@ -650,6 +654,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
           </div>
         ) : (
            <div className="space-y-5">
+              <div hidden={regStep !== 0}>
+                <EnrollmentPrivacyAgreement accepted={privacyAccepted} onChange={setPrivacyAccepted} />
+              </div>
               {regStep === 1 && (
                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                      <p className="text-sm text-slate-500">Complete your account details, academic assignment, emergency contact, and profile picture.</p>
@@ -811,13 +818,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
               )}
 
               <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:gap-4">
-                 {regStep > 1 && (
+                 {regStep > 0 && (
                    <Button disabled={checkingEnrollment || isRegistering || readingPhoto} variant="secondary" aria-label="Previous registration phase" className="!w-full !rounded-xl sm:!w-auto" onClick={() => { setRegError(''); setRegStep(regStep - 1); }}>
                      <ChevronLeft size={20} /> Back
                    </Button>
                  )}
                   {regStep < 4 ? (
-                    <Button disabled={checkingEnrollment} className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={async () => {
+                    <Button disabled={checkingEnrollment || !privacyAccepted} className="!rounded-xl text-xs uppercase font-black tracking-widest" onClick={async () => {
+                      if (!privacyAccepted) { setRegError('Read and agree to the data privacy agreement first.'); return; }
+                      if (regStep === 0) { setRegError(''); setRegStep(1); return; }
                       if (regStep === 1 && !regData.name.trim()) {
                         setRegError('Enter your full name.');
                         return;

@@ -10,6 +10,7 @@ import { toast } from '../lib/toast';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import CountdownBar from '../components/ui/CountdownBar';
 import { claimApprovalNotice } from '../lib/approvalNotice';
+import FrozenAccess from '../components/admin/FrozenAccess';
 
 const fieldLabels: Record<string, string> = {
   name: 'Full name', student_id: 'Student ID', guardian_name: 'Guardian name',
@@ -25,6 +26,7 @@ export default function RegisterStatus() {
   const [approvalReady, setApprovalReady] = useState(false);
   const [approvalRetry, setApprovalRetry] = useState(0);
   const application = appData.getApplications().find(a => a.id === user?.uid);
+  const frozen = appData.isUserScopeFrozen(profile);
   const [corrections, setCorrections] = useState({ name: '', student_id: '', guardian_name: '', guardian_phone: '' });
   const clarificationFields = application?.clarification_fields || [];
   const canResubmit = Boolean(application && ['rejected', 'bounced', 'deleted'].includes(application.status));
@@ -34,7 +36,7 @@ export default function RegisterStatus() {
 
   useEffect(() => { if (!loading && !user) navigate('/login'); }, [loading, user, navigate]);
   useEffect(() => {
-    if (loading || !profile || !user) return;
+    if (loading || !profile || !user || frozen) return;
     let cancelled = false;
     setApprovalReady(false);
     setError('');
@@ -47,7 +49,7 @@ export default function RegisterStatus() {
       if (!cancelled) setError('Unable to save your approval notice. Reconnect and try again.');
     });
     return () => { cancelled = true; };
-  }, [loading, Boolean(profile), user?.uid, navigate, approvalRetry]);
+  }, [loading, Boolean(profile), user?.uid, navigate, approvalRetry, frozen]);
   useEffect(() => {
     if (!application) return;
     setCorrections({
@@ -59,6 +61,7 @@ export default function RegisterStatus() {
   }, [application?.id, application?.reviewed_at, revision]);
 
   if (loading) return <AppLoading label="Loading application status" />;
+  if (frozen) return <main><FrozenAccess /></main>;
   if (profile && !approvalReady) return error
     ? <main className="app-surface mx-auto my-20 max-w-lg space-y-4 p-6"><p role="alert">{error}</p><Button onClick={() => setApprovalRetry(value => value + 1)}>Try again</Button><Button variant="secondary" onClick={() => void appAuth.signOut()}>Sign out</Button></main>
     : <AppLoading label="Loading account approval" />;

@@ -5,7 +5,7 @@ import OSSADashboard from './OSSADashboard';
 const state = vi.hoisted(() => ({ permissions: ['ossa.manage_cases', 'events.approve'], profile: { uid: 'officer', role: 'ossa' }, events: [] as any[], organizations: [] as any[], sanctions: [] as any[], students: [] as any[], excuses: [] as any[], requests: [] as any[] }));
 vi.mock('../components/AuthContext', () => ({ useAuth: () => ({ profile: state.profile, user: { uid: 'officer' } }) }));
 vi.mock('../lib/accessControl', () => ({ hasPermission: (_: unknown, permission: string) => state.permissions.includes(permission) }));
-vi.mock('../lib/backend', () => ({ refreshData: vi.fn(async () => {}), appData: { getAllStudents: () => state.students, getExcuseApplications: () => state.excuses, getCustomRoles: () => [], getCoreRoles: () => [], getOrganizations: () => state.organizations, getEvents: () => state.events, getOrganizationSanctions: () => state.sanctions } }));
+vi.mock('../lib/backend', () => ({ refreshData: vi.fn(async () => {}), appData: { getPaymentInfo: () => ({ reminders: [] }), getAllStudents: () => state.students, getExcuseApplications: () => state.excuses, getCustomRoles: () => [], getCoreRoles: () => [], getOrganizations: () => state.organizations, getEvents: () => state.events, getOrganizationSanctions: () => state.sanctions } }));
 vi.mock('../lib/profileRequests', () => ({ loadProfileRequests: vi.fn(async () => state.requests) }));
 vi.mock('../components/events/ActivityApprovalQueue', () => ({ default: () => <div>Activity review queue</div> }));
 vi.mock('../components/members/ProfileRequests', () => ({ default: () => <div>Student information review queue</div> }));

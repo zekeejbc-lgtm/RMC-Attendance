@@ -4,6 +4,13 @@ import { classifyError, toast, toastStore } from './toast';
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => { toastStore.getSnapshot().forEach(item => toast.dismiss(item.id)); vi.useRealTimers(); });
 describe('action feedback', () => {
+  it.each([
+    { status: 400, message: 'Attendance is frozen for your unit.' },
+    { status: 403, code: '42501', message: 'Operations are frozen for this school or class.' },
+    { message: 'Enrollment is frozen.' },
+  ])('explains a freeze instead of reporting invalid input or permissions', error => {
+    expect(classifyError(error)).toEqual({ code: 'FREEZE-001', message: 'Access is temporarily paused by school administration.' });
+  });
   it('identifies a missing server function instead of a deleted student record', () => {
     expect(classifyError({ status: 404, code: 'PGRST202' })).toEqual({ code: 'SYS-002', message: 'This feature is unavailable. The server needs an update.' });
   });

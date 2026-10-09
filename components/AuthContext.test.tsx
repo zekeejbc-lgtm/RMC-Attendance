@@ -197,6 +197,17 @@ it('loads the school, profile and events when restoring a saved login', async ()
   expect(screen.getByText('Student')).toBeInTheDocument();
   expect(screen.getByText('Assembly')).toBeInTheDocument();
 });
+it('does not prepare rosters or synchronize attendance while the system is frozen', async () => {
+  api.rpc.mockResolvedValue({ data: { ...snapshot,
+    profiles: [{ uid: 'student', name: 'Mayor', role: 'mayor', account_status: 'active' }],
+    settings: { system_freeze: { isFrozen: true, reason: 'Maintenance' } },
+  }, error: null });
+  render(<AuthProvider><Probe /></AuthProvider>); emit('student');
+  await screen.findByText('Workspace ready');
+  expect(api.autoRosters).not.toHaveBeenCalled();
+  expect(api.syncOffline).not.toHaveBeenCalled();
+  expect(api.clearRosters).toHaveBeenCalledWith('student');
+});
 it('preserves per-student statistics and approved memberships after indexed snapshot refresh', async () => {
   api.rpc.mockResolvedValue({ data: { ...snapshot,
     organization_members: [{ student_id: 'student', organization_id: 'approved', status: 'approved' }, { student_id: 'student', organization_id: 'pending', status: 'pending' }],

@@ -4,7 +4,7 @@ import { formatManilaDate } from '../../lib/dateTime';
 import ProfileAvatar from './ProfileAvatar';
 import type { AppPermission } from '../../types';
 import { appData } from '../../lib/backend';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Award, BarChart3, Building2, Calendar, CalendarPlus, ChevronDown, ChevronRight, FileText,
@@ -16,6 +16,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { Collapsible } from './Collapsible';
 import { hasPermission, roleLabels } from '../../lib/accessControl';
 import { FreezeBanner } from '../admin/FreezeBanner';
+import FrozenAccess from '../admin/FrozenAccess';
 import { Notifications } from './Notifications';
 
 const mobileDrawerId = 'mobile-main-navigation';
@@ -34,6 +35,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileDrawerRef = useRef<HTMLElement>(null);
   const drawerWasOpen = useRef(false);
+  const [, setFreezeRevision] = useState(0);
+  useEffect(() => {
+    const update = () => setFreezeRevision(value => value + 1);
+    window.addEventListener('rmc_data_update', update);
+    return () => window.removeEventListener('rmc_data_update', update);
+  }, []);
+  const frozen = appData.isUserScopeFrozen(profile);
 
   useEffect(() => {
     try { localStorage.setItem('iars.sidebar.collapsed', String(isSidebarCollapsed)); }
@@ -42,7 +50,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, frozen]);
 
   useEffect(() => {
     const desktopViewport = window.matchMedia('(min-width: 768px)');
@@ -55,8 +63,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => desktopViewport.removeEventListener('change', closeOnDesktop);
   }, []);
 
-  useEffect(() => {
-    if (!isMobileMenuOpen) {
+  useLayoutEffect(() => {
+    if (!isMobileMenuOpen || frozen) {
       if (drawerWasOpen.current) mobileMenuButtonRef.current?.focus();
       drawerWasOpen.current = false;
       return;
@@ -74,7 +82,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       document.body.classList.remove('app-scroll-lock');
       window.removeEventListener('keydown', closeOnEscape);
     };
-  }, [isMobileMenuOpen]);
+  }, [isMobileMenuOpen, frozen]);
 
   const trapDrawerFocus = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Tab') return;
@@ -352,6 +360,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     );
   };
 
+  if (frozen) return <main className="min-h-dvh"><FrozenAccess /></main>;
+
   return (
     <div className={`app-sidebar-layout min-h-dvh bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row transition-[padding] duration-base ease-standard ${
       isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'
@@ -450,10 +460,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           {!isSidebarCollapsed ? <><div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-widest text-gold-400/80">Theme Mode</span><ThemeToggle size="sm" className="min-h-11 min-w-11" /></div><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="w-full min-h-14 group flex items-center gap-3 p-2.5 rounded-2xl bg-brand-950/80 hover:bg-brand-800/90 border border-gold-400/30 hover:border-gold-400/60 transition-all text-left"><ProfileAvatar src={profile?.photo_url || '/avatar-placeholder.svg'} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/70" /><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-white truncate">{profile?.name || 'Account'}</span><span className="block text-[10px] font-semibold text-white/80 truncate" title={roleLabels[role] || role}>{roleLabels[role] || role}</span><span className="block text-[10px] font-mono font-bold text-gold-400/90 truncate">{identityLabel}: {profile?.student_id || 'Not assigned'}</span></span><User size={16} className="text-gold-400/80 shrink-0" /></button></> : <div className="flex flex-col items-center gap-2.5"><ThemeToggle size="sm" className="min-h-11 min-w-11" /><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="min-h-11 min-w-11 relative rounded-full ring-2 ring-gold-400/70"><ProfileAvatar src={profile?.photo_url || '/avatar-placeholder.svg'} alt="" className="w-10 h-10 rounded-full object-cover" /></button></div>}
         </div>
       </aside>
-      <FreezeBanner />
+      <div className="flex min-w-0 flex-1 flex-col">
+      {!frozen && <FreezeBanner />}
       {['ossa', 'ossa_staff'].includes(role) && appData.getPaymentInfo().reminders.slice(0, 1).map(reminder => <div key={reminder.id} role="status" className="border-b border-amber-200 bg-amber-50 p-4 text-amber-950"><strong>{reminder.subject}</strong><p className="mt-1 whitespace-pre-line text-sm">{reminder.message}</p><p className="mt-1 text-xs">Payment due: {formatManilaDate(appData.getPaymentInfo().dueDate)}</p></div>)}
 
-      <main className="min-w-0 flex-1 overflow-x-hidden">{profile?.role !== 'admin' && appData.isUserScopeFrozen(profile) ? <div role="alert" className="m-6 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900"><h1 className="text-xl font-bold">Access temporarily frozen</h1><p className="mt-2">Contact your school administration to restore access.</p></div> : children}</main>
+      <main className="min-w-0 flex-1 overflow-x-hidden">{frozen ? <FrozenAccess /> : children}</main>
+      </div>
     </div>
   );
 };

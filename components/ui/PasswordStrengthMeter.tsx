@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, X } from 'lucide-react';
+import { passwordRequirements } from '../../lib/passwordPolicy';
 
 interface PasswordStrengthMeterProps {
   password?: string;
@@ -37,12 +38,7 @@ export function getPasswordStrength(password: string) {
 export const PasswordStrengthMeter: React.FC<PasswordStrengthMeterProps> = ({ password = '' }) => {
   const strength = getPasswordStrength(password);
   
-  const requirements = [
-    { label: 'At least 12 characters', met: password.length >= 12 },
-    { label: 'Contains uppercase letter', met: /[A-Z]/.test(password) },
-    { label: 'Contains number', met: /[0-9]/.test(password) },
-    { label: 'Contains special character', met: /[^A-Za-z0-9]/.test(password) },
-  ];
+  const requirements = passwordRequirements(password);
 
   if (!password) return null;
 

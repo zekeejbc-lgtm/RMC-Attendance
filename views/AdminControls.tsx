@@ -81,7 +81,7 @@ const AdminControls: React.FC = () => {
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-gold-400/30 bg-gold-400/15 text-gold-300 shadow-md">
               <Shield size={24} />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gold-300">Operations center</p>
               <h2 className="mt-1 text-xl font-bold tracking-tight text-white sm:text-2xl">System Operations Group</h2>
               <p className="mt-2 max-w-md text-sm leading-6 text-slate-300">{activeSubPage.description}</p>

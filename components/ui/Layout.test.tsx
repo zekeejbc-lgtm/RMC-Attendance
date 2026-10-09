@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
@@ -12,6 +12,9 @@ const authMocks = vi.hoisted(() => ({
 
 const layoutAuth = vi.hoisted(() => ({
   role: 'student',
+  frozen: false,
+  global: false,
+  accountFrozen: false,
 }));
 
 let restoreMatchMedia: (() => void) | undefined;
@@ -55,6 +58,8 @@ vi.mock('../AuthContext', () => ({
       role: layoutAuth.role,
       student_id: '2024-0001',
       photo_url: '',
+      account_freeze: layoutAuth.accountFrozen ? { isFrozen: true, reason: 'Account review', frozenAt: 123 } : null,
+      school_data: { academic_assignment: { terminalGroupId: 'section' } },
     },
     isMock: true,
   }),
@@ -66,8 +71,10 @@ vi.mock('../../lib/backend', () => ({
   documentUrl: vi.fn(async (path: string) => path),
   appData: {
     getPaymentInfo: () => ({ reminders: [] }),
-    getSystemFreezeStatus: () => ({ isFrozen: false, reason: '' }),
-    isUserScopeFrozen: () => false,
+    getSystemFreezeStatus: () => ({ isFrozen: layoutAuth.global, reason: 'Scheduled maintenance' }),
+    isUserScopeFrozen: () => layoutAuth.accountFrozen || (layoutAuth.role !== 'admin' && layoutAuth.frozen),
+    getSchoolNodePath: () => [{ id: 'department', name: 'College of Education' }, { id: 'section', name: 'Section A' }],
+    getNodeFreezeStatus: (id: string) => id === 'department' && layoutAuth.frozen ? { isFrozen: true, reason: 'Department maintenance', frozenAt: 1791504000000 } : null,
   },
 }));
 
@@ -79,6 +86,52 @@ afterEach(() => {
   restoreMatchMedia = undefined;
   vi.clearAllMocks();
   layoutAuth.role = 'student';
+  layoutAuth.frozen = false;
+  layoutAuth.global = false;
+  layoutAuth.accountFrozen = false;
+});
+
+it('removes admin navigation and protected content during an individual account freeze', () => {
+  layoutAuth.role = 'admin'; layoutAuth.accountFrozen = true;
+  render(<ThemeProvider><MemoryRouter><Layout><p>Admin controls</p></Layout></MemoryRouter></ThemeProvider>);
+  expect(screen.getByRole('heading', { name: 'Your workspace is paused' })).toBeVisible();
+  expect(screen.getByText('Your account', { exact: true })).toBeVisible();
+  expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  expect(screen.queryByText('Admin controls')).not.toBeInTheDocument();
+});
+
+it('blocks page content during a scope freeze and restores it on a data update', () => {
+  layoutAuth.frozen = true;
+  render(<ThemeProvider><MemoryRouter><Layout><p>Protected dashboard content</p></Layout></MemoryRouter></ThemeProvider>);
+  expect(screen.getByRole('heading', { name: 'Your workspace is paused' })).toBeVisible();
+  expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /open navigation|expand sidebar|view profile/i })).not.toBeInTheDocument();
+  expect(screen.getByText('College of Education')).toBeVisible();
+  expect(screen.getByText('Department maintenance')).toBeVisible();
+  expect(screen.queryByText('Protected dashboard content')).not.toBeInTheDocument();
+  act(() => { layoutAuth.frozen = false; window.dispatchEvent(new Event('rmc_data_update')); });
+  expect(screen.getByText('Protected dashboard content')).toBeVisible();
+  expect(screen.queryByRole('heading', { name: 'Your workspace is paused' })).not.toBeInTheDocument();
+});
+
+it('keeps the admin page available with the global freeze banner above it', () => {
+  layoutAuth.role = 'admin'; layoutAuth.frozen = true; layoutAuth.global = true;
+  render(<ThemeProvider><MemoryRouter><Layout><p>Admin controls content</p></Layout></MemoryRouter></ThemeProvider>);
+  expect(screen.getByText('Admin controls content')).toBeVisible();
+  const banner = screen.getByText('SYSTEM ACCESS FROZEN').closest('[role="status"]')!;
+  expect(banner.parentElement).toBe(screen.getByRole('main').parentElement);
+  expect(banner.parentElement).toHaveClass('flex-col');
+});
+
+it('removes an open mobile drawer and its scroll lock as soon as access freezes', async () => {
+  const user = userEvent.setup();
+  render(<ThemeProvider><MemoryRouter><Layout><p>Workspace content</p></Layout></MemoryRouter></ThemeProvider>);
+  await user.click(screen.getByRole('button', { name: /open navigation/i }));
+  expect(document.body).toHaveClass('app-scroll-lock');
+  act(() => { layoutAuth.frozen = true; window.dispatchEvent(new Event('rmc_data_update')); });
+  expect(screen.getByRole('heading', { name: 'Your workspace is paused' })).toBeVisible();
+  expect(screen.queryByRole('dialog', { name: /main navigation/i })).not.toBeInTheDocument();
+  expect(document.body).not.toHaveClass('app-scroll-lock');
 });
 
 it('opens and closes the mobile navigation drawer accessibly', async () => {

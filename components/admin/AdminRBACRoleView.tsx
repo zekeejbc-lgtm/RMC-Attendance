@@ -1,14 +1,14 @@
 import { SelectField } from '../ui/SelectField';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import { ShieldCheck, Plus, Edit2, Trash2, Lock, Sparkles } from 'lucide-react';
-import { appData } from '../../lib/backend';
+import { appData, subscribeData } from '../../lib/backend';
 import { CustomRole, CoreRole, AppPermission } from '../../types';
 import { ALL_PERMISSIONS } from '../../lib/accessControl';
 import { Modal } from '../ui/Modal';
 
 export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName }) => {
-  const [coreRoles, setCoreRoles] = useState<Record<string, CoreRole>>(appData.getCoreRoles());
-  const [customRoles, setCustomRoles] = useState<Record<string, CustomRole>>(appData.getCustomRoles());
+  const coreRoles = useSyncExternalStore(subscribeData, appData.getCoreRoles);
+  const customRoles = useSyncExternalStore(subscribeData, appData.getCustomRoles);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
 
@@ -18,17 +18,6 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
     isPositionOnly: false,
     permissions: [] as AppPermission[]
   });
-
-  const refreshRoles = () => {
-    setCoreRoles(appData.getCoreRoles());
-    setCustomRoles(appData.getCustomRoles());
-  };
-
-  useEffect(() => {
-    refreshRoles();
-    window.addEventListener('rmc_data_update', refreshRoles);
-    return () => window.removeEventListener('rmc_data_update', refreshRoles);
-  }, []);
 
   const openCreateModal = () => {
     setEditingRoleId(null);
@@ -80,13 +69,11 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
       });
     }
     setShowRoleModal(false);
-    refreshRoles();
   };
 
   const handleDeleteRole = async (roleId: string, roleName: string) => {
     if (confirm(`Are you sure you want to delete custom role "${roleName}"?`)) {
       await appData.deleteCustomRole(roleId);
-      refreshRoles();
     }
   };
 
@@ -140,6 +127,8 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
         <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
           <Lock size={18} className="text-purple-500" /> Core System Roles (Built-in)
         </h3>
+
+        {Object.keys(coreRoles).length === 0 && <p role="status" className="text-xs text-slate-500 dark:text-slate-400">Loading roles…</p>}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {Object.values(coreRoles).map(role => (
@@ -247,7 +236,7 @@ export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName 
             ))
           ) : (
             <div className="p-8 col-span-2 text-center text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
-              No custom roles created yet. Click &quot;Create Custom Role&quot; to define institution positions.
+              {Object.keys(coreRoles).length === 0 ? 'Loading custom roles…' : <>No custom roles created yet. Click &quot;Create Custom Role&quot; to define institution positions.</>}
             </div>
           )}
         </div>

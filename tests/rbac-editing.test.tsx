@@ -5,7 +5,30 @@ import { mockData } from './fixtures/demoBackend';
 import { hasPermission } from '../lib/accessControl';
 import { AdminRBACRoleView } from '../components/admin/AdminRBACRoleView';
 
-vi.mock('../lib/backend', async () => { const m = await import('./fixtures/demoBackend'); return { appData: m.mockData, appAuth: m.mockAuth, documentUrl: async (p: string) => p }; });
+vi.mock('../lib/backend', async () => {
+  const m = await import('./fixtures/demoBackend');
+  // Production getters return stable references; the localStorage fixture parses
+  // fresh objects, so match the store's useSyncExternalStore contract here.
+  const stable = <T,>(read: () => T) => {
+    let cached: T;
+    let serialized: string | undefined;
+    return () => {
+      const value = read();
+      const next = JSON.stringify(value);
+      if (next !== serialized) { cached = value; serialized = next; }
+      return cached;
+    };
+  };
+  return {
+    appData: { ...m.mockData, getCoreRoles: stable(m.mockData.getCoreRoles), getCustomRoles: stable(m.mockData.getCustomRoles) },
+    appAuth: m.mockAuth,
+    documentUrl: async (p: string) => p,
+    subscribeData: (callback: () => void) => {
+      window.addEventListener('rmc_data_update', callback);
+      return () => window.removeEventListener('rmc_data_update', callback);
+    },
+  };
+});
 
 describe('Admin RBAC Role Editing and Permission Enforcement', () => {
   beforeEach(() => {

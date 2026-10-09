@@ -1,3 +1,4 @@
+import { hotState } from './hotState';
 import { toast, type OperationProgress } from './toast';
 import { supabase, requireConfiguration, verifyPassword, executeSensitiveAction, type SensitiveConfirmation } from './supabase';
 import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, CoreRole, CustomRole, PaymentInfo, SystemFreezeState, NodeFreezeState, Organization, OrganizationMembership, OrganizationSanctionRequest } from '../types';
@@ -22,19 +23,25 @@ type Snapshot = {
   payment_info: PaymentInfo; audit_logs: any[];
 };
 const empty = (): Snapshot => ({ users: {}, applications: {}, excuse_applications: {}, events: {}, attendance_logs: {}, attendance: [], sanction_logs: {}, school_structure: [], system_freeze: { isFrozen: false, reason: '' }, frozen_nodes: {}, core_roles: {}, custom_roles: {}, payment_info: { status: 'unpaid', amountDue: 0, currency: 'PHP', dueDate: 0, billingCycle: '', accountName: '', schoolId: '', reminders: [] }, audit_logs: [] });
-let snapshot = empty();
-let generation = 0;
-let snapshotRequest = 0;
-let currentUserId: string | null = null;
-let lastSync: number | null = null;
-let latency = 0;
-const getDB = () => snapshot;
+const backendState = hotState(import.meta.hot, () => ({
+  snapshot: empty(),
+  generation: 0,
+  snapshotRequest: 0,
+  currentUserId: null as string | null,
+  lastSync: null as number | null,
+  latency: 0,
+  lastSyncFailed: false,
+  syncFailures: 0,
+  syncSuccesses: 0,
+  latencySamples: [] as { time: number; ms: number }[],
+}));
+const getDB = () => backendState.snapshot;
 const getAssignmentNodeId = (p: UserProfile) => p.official_data?.assignment_node_id || p.school_data?.academic_assignment?.terminalGroupId;
 const getAccountProfiles = (db: Snapshot) => Object.values(db.users).map(u => u.profile);
 const profileBelongsToScope = (db: Snapshot, profile: UserProfile, id: string) => isNodeInSubtree(db.school_structure, id, getAssignmentNodeId(profile) || '');
 export const subscribeData = (callback: () => void) => { window.addEventListener('rmc_data_update', callback); return () => window.removeEventListener('rmc_data_update', callback); };
 export const notifyAuthChange = () => window.dispatchEvent(new Event('rmc_data_update'));
-export function resetData(uid: string | null = null) { generation++; currentUserId = uid; snapshot = empty(); lastSync = null; notifyAuthChange(); }
+export function resetData(uid: string | null = null) { backendState.generation++; backendState.currentUserId = uid; backendState.snapshot = empty(); backendState.lastSync = null; backendState.lastSyncFailed = false; backendState.syncFailures = 0; backendState.syncSuccesses = 0; backendState.latencySamples = []; backendState.latency = 0; notifyAuthChange(); }
 function tree(rows: any[]): SchoolNode[] {
   const nodes = new Map<string, SchoolNode>(rows.map(r => [r.id, { ...r.data, id: r.id, children: [] }]));
   const roots: SchoolNode[] = [];
@@ -43,18 +50,18 @@ function tree(rows: any[]): SchoolNode[] {
 }
 export async function refreshData() {
   requireConfiguration();
-  const requestGeneration = generation;
-  const request = ++snapshotRequest;
+  const requestGeneration = backendState.generation;
+  const request = ++backendState.snapshotRequest;
   const started = performance.now();
-  if (!currentUserId) {
+  if (!backendState.currentUserId) {
     const { data, error } = await supabase.from('rmc_nodes').select('id,parent_id,data');
     if (error) { console.error('[Supabase] school structure refresh failed', error); throw error; }
-    if (requestGeneration !== generation || request !== snapshotRequest) return false;
-    snapshot.school_structure = tree(data || []); notifyAuthChange(); return true;
+    if (requestGeneration !== backendState.generation || request !== backendState.snapshotRequest) return false;
+    backendState.snapshot.school_structure = tree(data || []); notifyAuthChange(); return true;
   }
   const { data, error } = await supabase.rpc('rmc_snapshot');
-  if (error) { console.error('[Supabase] snapshot refresh failed', error); throw error; }
-  if (requestGeneration !== generation || request !== snapshotRequest) return false;
+  if (error) { if (requestGeneration === backendState.generation && request === backendState.snapshotRequest) { backendState.lastSyncFailed = true; backendState.syncFailures++; notifyAuthChange(); } console.error('[Supabase] snapshot refresh failed', error); throw error; }
+  if (requestGeneration !== backendState.generation || request !== backendState.snapshotRequest) return false;
   const next = empty();
   next.organizations = data.organizations || [];
   next.organization_members = data.organization_members || [];
@@ -94,7 +101,9 @@ export async function refreshData() {
   next.frozen_nodes = data.settings.frozen_nodes || {};
   next.payment_info = data.settings.payment_info || next.payment_info;
   next.audit_logs = data.audit;
-  snapshot = next; lastSync = Date.now(); latency = Math.round(performance.now() - started); notifyAuthChange();
+  backendState.snapshot = next; backendState.lastSync = Date.now(); backendState.latency = Math.round(performance.now() - started);
+  backendState.lastSyncFailed = false; backendState.syncSuccesses++; backendState.latencySamples = [...backendState.latencySamples.slice(-29), { time: backendState.lastSync, ms: backendState.latency }];
+  notifyAuthChange();
   return true;
 }
 
@@ -177,17 +186,17 @@ export const appAuth = {
   }, 'Sign in', undefined, ['Checking your sign-in details', 'Signing you in']);
 },
   async signOut() {
-  return toast.track(async (progress) => { const owner = currentUserId; const { error } = await supabase.auth.signOut(); if (error) throw error; resetData(); if (owner) await clearOfflineRosters(owner);
+  return toast.track(async (progress) => { const owner = backendState.currentUserId; const { error } = await supabase.auth.signOut(); if (error) throw error; resetData(); if (owner) await clearOfflineRosters(owner);
   }, 'Sign out');
 },
-  getCurrentUser: () => currentUserId ? snapshot.users[currentUserId] || null : null,
+  getCurrentUser: () => backendState.currentUserId ? backendState.snapshot.users[backendState.currentUserId] || null : null,
   async changePassword(currentPassword: string, password: string) {
   return toast.track(async (progress) => {
     // The profile snapshot can be refreshed independently of the auth session.
     // Read the email from the current Supabase user so password changes do not
     // incorrectly ask a valid session to sign in again.
     const { data: { user } } = await supabase.auth.getUser();
-    const email = user?.email || snapshot.users[currentUserId || '']?.profile.email;
+    const email = user?.email || backendState.snapshot.users[backendState.currentUserId || '']?.profile.email;
     if (!email) throw new Error('Sign in again to change your password.');
     progress.step(1);
     const verified = await verifyPassword(email, currentPassword);
@@ -220,9 +229,9 @@ export async function documentUrl(path: string) {
 }
 
 export const appData = {
-  getOrganizations: () => snapshot.organizations || [],
-  getOrganizationMemberships: () => snapshot.organization_members || [],
-  getOrganizationSanctions: () => snapshot.organization_sanctions || [],
+  getOrganizations: () => backendState.snapshot.organizations || [],
+  getOrganizationMemberships: () => backendState.snapshot.organization_members || [],
+  getOrganizationSanctions: () => backendState.snapshot.organization_sanctions || [],
   getPublicOrganizations: () => rpc<Organization[]>('rmc_public_organizations'),
   getOrganizationPeople: (organizationId: string | null, scopeNode: string | null = null) => rpc<Array<{ uid: string; name: string; student_id: string; role: string; can_add: boolean }>>('rmc_organization_people', { org: organizationId, scope_node: scopeNode }),
   organizationCommand: (action: string, payload: Record<string, unknown>) => trackWrite(async (progress) => {
@@ -240,13 +249,13 @@ export const appData = {
     if (Object.keys(errors).length) throw new Error(Object.values(errors).join(' '));
   },
   updatePhoto: (uid: string, path: string) => command('updatePhoto', [uid, { path }]),
-  getEvents: (): AppEvent[] => Object.values(snapshot.events),
-  getCoreRoles: () => snapshot.core_roles,
-  getCustomRoles: () => snapshot.custom_roles,
-  getPaymentInfo: () => snapshot.payment_info,
-  getSystemHealthMetrics: () => ({ dbStatus: lastSync ? 'operational' as const : 'degraded' as const, authStatus: currentUserId ? 'operational' as const : 'degraded' as const, geofenceStatus: 'degraded' as const, storageUsedBytes: 0, storageMaxBytes: 0, storageUsagePercent: 0, latencyMs: latency, activeSessions: currentUserId ? 1 : 0, totalUsersCount: Object.keys(snapshot.users).length, studentsCount: Object.values(snapshot.users).filter(u => u.profile.role === 'student').length, eventsCount: Object.keys(snapshot.events).length, attendanceLogsCount: snapshot.attendance.length, excuseAppsCount: Object.keys(snapshot.excuse_applications).length, auditLogsCount: snapshot.audit_logs.length, lastBackupTime: 0, healthScore: lastSync ? 100 : 0 }),
-  getAttendanceRecords: (uid: string) => snapshot.attendance.filter(a => a.student_id === uid).map(a => ({ ...a.data, slot: a.slot, id: `${a.event_id}:${a.slot}`, event: snapshot.events[a.event_id] })),
-  isMayorRegisteredForSection: (id?: string, name?: string) => Boolean(flattenDirectory(snapshot.school_structure).find(n => id ? n.id === id : n.name === name)?.['enrollmentKeyRequired']),
+  getEvents: (): AppEvent[] => Object.values(backendState.snapshot.events),
+  getCoreRoles: () => backendState.snapshot.core_roles,
+  getCustomRoles: () => backendState.snapshot.custom_roles,
+  getPaymentInfo: () => backendState.snapshot.payment_info,
+  getSystemHealthMetrics: () => ({ lastSync: backendState.lastSync, lastSyncFailed: backendState.lastSyncFailed, syncFailures: backendState.syncFailures, syncSuccesses: backendState.syncSuccesses, latencySamples: backendState.latencySamples, dbStatus: backendState.lastSync && !backendState.lastSyncFailed ? 'operational' as const : 'degraded' as const, authStatus: backendState.currentUserId ? 'operational' as const : 'degraded' as const, geofenceStatus: 'degraded' as const, storageUsedBytes: 0, storageMaxBytes: 0, storageUsagePercent: 0, latencyMs: backendState.latency, activeSessions: backendState.currentUserId ? 1 : 0, totalUsersCount: Object.keys(backendState.snapshot.users).length, studentsCount: Object.values(backendState.snapshot.users).filter(u => u.profile.role === 'student').length, eventsCount: Object.keys(backendState.snapshot.events).length, attendanceLogsCount: backendState.snapshot.attendance.length, excuseAppsCount: Object.keys(backendState.snapshot.excuse_applications).length, auditLogsCount: backendState.snapshot.audit_logs.length, lastBackupTime: 0, healthScore: backendState.lastSync ? 100 : 0 }),
+  getAttendanceRecords: (uid: string) => backendState.snapshot.attendance.filter(a => a.student_id === uid).map(a => ({ ...a.data, slot: a.slot, id: `${a.event_id}:${a.slot}`, event: backendState.snapshot.events[a.event_id] })),
+  isMayorRegisteredForSection: (id?: string, name?: string) => Boolean(flattenDirectory(backendState.snapshot.school_structure).find(n => id ? n.id === id : n.name === name)?.['enrollmentKeyRequired']),
   getSectionSecurityKey: (_id?: string, _name?: string) => 'Stored securely; set a new key to rotate',
   createSchoolOfficial: (_actor: string, profile: Omit<UserProfile, 'uid' | 'photo_url'>, password: string) => accounts('create', { members: [{ profile, password }] }).then(r => r.ids[0]),
   deleteSchoolOfficial: (_actor: string, uid: string) => accounts('deactivate', { uid }),
@@ -260,11 +269,11 @@ export const appData = {
   submitApplication: async (profile: UserProfile, password: string, enrollmentKey?: string) => {
   return trackWrite(async (progress) => {
     requireConfiguration();
-    if (currentUserId && ['rejected', 'bounced', 'deleted'].includes(snapshot.applications[currentUserId]?.status || '')) {
+    if (backendState.currentUserId && ['rejected', 'bounced', 'deleted'].includes(backendState.snapshot.applications[backendState.currentUserId]?.status || '')) {
       await rpc('rmc_admission_update', { documents: {}, person: profile, enrollment_key: enrollmentKey || null });
-      await refreshAfterWrite(progress); return { uid: currentUserId, needsEmailConfirmation: false };
+      await refreshAfterWrite(progress); return { uid: backendState.currentUserId, needsEmailConfirmation: false };
     }
-    if (currentUserId) throw new Error('You already have an account. Open your application status or sign out to register another student.');
+    if (backendState.currentUserId) throw new Error('You already have an account. Open your application status or sign out to register another student.');
     const result = await googleRequest({ action: 'enroll', profile, password, enrollmentKey });
     if (result.session) {
       const { error } = await supabase.auth.setSession(result.session);
@@ -275,7 +284,7 @@ export const appData = {
   }, 'Submit application');
 },
   verifyUserPassword: async (_uid: string, password: string) => {
-    const email = snapshot.users[currentUserId || '']?.profile.email;
+    const email = backendState.snapshot.users[backendState.currentUserId || '']?.profile.email;
     if (!email) return false;
     return verifyPassword(email, password);
   },
@@ -315,12 +324,26 @@ getOfficialsForNode: (nodeId: string) => Object.values(getDB().users)
 getAllAccountIdentities: () => getAccountProfiles(getDB()).map(({ email, username, student_id }) => ({
     email, username, student_id,
   })),
+getAccountsForFreeze: () => getAccountProfiles(getDB()).sort((a, b) => a.name.localeCompare(b.name)),
+setAccountFreezeStatuses: (ids: string[], frozen: boolean, reason: string) => trackWrite(async progress => {
+    const result = await rpc('rmc_set_account_freezes', { target_ids: ids, frozen, reason });
+    await refreshAfterWrite(progress);
+    return result;
+  }, frozen ? 'Freeze accounts' : 'Unfreeze accounts'),
 getOfficialAccounts: () => Object.values(getDB().users)
     .map(({ profile }) => profile)
     .filter(({ role, account_status }) => role !== 'student' && account_status === 'active')
     .sort((first, second) => first.name.localeCompare(second.name)),
-getAccountAuditLogs: () => [...(getDB().audit_logs || [])]
-    .sort((first, second) => second.timestamp - first.timestamp),
+getAccountAuditLogs: () => {
+    const db = getDB();
+    return [...(db.audit_logs || [])].map(log => ({
+      ...log,
+      actor_name: log.actor_name || db.users[log.actor_uid]?.profile.name,
+      target_name: log.target_name && log.target_name !== log.target_uid ? log.target_name :
+        db.users[log.target_uid]?.profile.name || db.events[log.target_uid || log.event_id]?.title || log.target_name,
+      target_role: log.target_role || db.users[log.target_uid]?.profile.role,
+    })).sort((first, second) => second.timestamp - first.timestamp);
+  },
 isNodeVisibleTo: (actorUid: string, nodeId: string) => {
     const db = getDB();
     const actor = db.users[actorUid]?.profile;
@@ -421,6 +444,7 @@ isNodeOrParentFrozen: (nodeId: string) => {
   },
 isUserScopeFrozen: (profile?: UserProfile | null) => {
     if (!profile) return false;
+    if (profile.account_freeze?.isFrozen) return true;
     const db = getDB();
     if (profile.role === 'admin') return false;
     if (db.system_freeze?.isFrozen) return true;

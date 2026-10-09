@@ -1,7 +1,8 @@
 import { formatManilaDateTime } from '../../lib/dateTime';
 import { SelectField } from '../ui/SelectField';
 ﻿import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Eye, RefreshCw, UserRound } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, RefreshCw } from 'lucide-react';
+import ProfileAvatar from '../ui/ProfileAvatar';
 import { UserProfile } from '../../types';
 import { managedAccountRoles } from '../../lib/accountProvisioning';
 import { roleLabels } from '../../lib/accessControl';
@@ -90,11 +91,11 @@ export default function ManagedAccountsTable({ accounts, access, loading, access
         </thead>
         <tbody>{visible.map(account => <tr key={account.uid} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
           <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-700">
-            <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-800"><UserRound size={16} /></span>
+            <div className="flex items-center gap-3"><ProfileAvatar src={account.photo_url} alt={`${account.name}'s profile photo`} className="h-10 w-10 shrink-0 rounded-full border border-slate-200 bg-brand-100 object-cover dark:border-slate-700" />
               <div className="min-w-0 max-w-sm"><div className="break-words font-bold text-slate-900 dark:text-white">{account.name}</div><div className="break-all text-xs text-slate-500">@{account.username} · {account.email}</div>{account.student_id && <div className="text-xs text-slate-500">ID: {account.student_id}</div>}</div>
             </div>
           </td>
-          <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-700"><span className="inline-block whitespace-nowrap rounded-full bg-gold-100 px-2.5 py-1 text-xs font-bold text-gold-800">{roleLabel(account.role)}</span></td>
+          <td className="border-b border-slate-100 px-4 py-3 dark:border-slate-700"><span className="inline-block whitespace-nowrap rounded-full bg-gold-100 px-2.5 py-1 text-xs font-bold text-brand-900 dark:bg-gold-500/15 dark:text-gold-300">{roleLabel(account.role)}</span></td>
           <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3 dark:border-slate-700">{access[account.uid]?.last_sign_in_at ? <span className="text-emerald-700 dark:text-emerald-300">{formatManilaDateTime(access[account.uid].last_sign_in_at!)}</span> : <span className="text-slate-500">{access[account.uid] ? 'Never signed in' : loading ? 'Loading…' : 'Status unavailable'}</span>}</td>
           <td className="border-b border-slate-100 px-4 py-3 text-right dark:border-slate-700"><Button className="w-auto" variant="secondary" aria-label={`View profile for ${account.name}`} onClick={() => onSelect(account)}><Eye size={15} /> View profile</Button></td>
         </tr>)}{!visible.length && <tr><td colSpan={4} className="px-4 py-12 text-center text-slate-500">{accounts.length ? 'No accounts match your search and filters.' : 'No managed accounts yet.'}</td></tr>}</tbody>

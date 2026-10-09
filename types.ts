@@ -149,6 +149,8 @@ export interface ExcuseApplication {
 }
 
 export interface UserProfile {
+  /** Server-owned restriction, independent of role, status, and school freezes. */
+  account_freeze?: NodeFreezeState | null;
   /** Authorized snapshot membership; not editable profile data. */
   organizationIds?: string[];
   positionRoleIds?: string[];

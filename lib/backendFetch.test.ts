@@ -3,6 +3,13 @@ import { backendFetch } from './backendFetch';
 import { toast, toastStore } from './toast';
 
 afterEach(() => { vi.unstubAllGlobals(); toastStore.getSnapshot().forEach(item => toast.dismiss(item.id)); });
+it('does not turn failed diagnostic uploads into new error reports', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Unavailable', { status: 503 })));
+  expect((await backendFetch('https://test.example/rest/v1/rmc_client_errors', { method: 'POST' })).status).toBe(503);
+  expect(toastStore.getSnapshot()).toHaveLength(0); expect(log).not.toHaveBeenCalled();
+  log.mockRestore();
+});
 it('tracks a request without consuming the SDK response body or exposing query data', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ value: 42 }), { headers: { 'content-type': 'application/json' } })));
   const result = await backendFetch('https://test.example/rest/v1/rmc_profiles?email=secret');

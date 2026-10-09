@@ -1,4 +1,5 @@
 import RecordPagination from '../components/ui/RecordPagination';
+import PaymentNotices from '../components/OSSA/PaymentNotices';
 import DetailFields from '../components/ui/DetailFields';
 import { usePagination } from '../components/usePagination';
 import { usePageMemory } from '../components/usePageMemory';
@@ -238,6 +239,7 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
 
       {section !== 'overview' && <nav aria-label="OSSA Hub pages"><Link to={ossaSectionPath('overview')} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-brand-800 hover:bg-brand-50 dark:text-gold-300 dark:hover:bg-slate-800"><ArrowLeft size={16} /> OSSA Hub</Link></nav>}
 
+      {section === 'overview' && <PaymentNotices />}
       {section === 'overview' && <nav aria-label="OSSA workspaces" className="space-y-6">
         {[
           { title: 'Review & approvals', description: 'Decide on submitted requests and supporting documents.', ids: ['activities', 'requests', 'excuses'] },

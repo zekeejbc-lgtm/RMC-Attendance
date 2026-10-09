@@ -9,6 +9,10 @@ import { toastStore } from './toast';
 import type { UserProfile } from '../types';
 
 const applicant = { email: 'student@example.edu', name: 'Student', username: 'student_123', student_id: '123', school_data: {} } as UserProfile;
+it('applies an individual freeze to admins before the school-freeze exemption', () => {
+  expect(appData.isUserScopeFrozen({ role: 'admin', account_freeze: { isFrozen: true, reason: 'Review', frozenAt: 123 } } as UserProfile)).toBe(true);
+  expect(appData.isUserScopeFrozen({ role: 'admin' } as UserProfile)).toBe(false);
+});
 it('preserves the account-not-found code from an HTTP error response', async () => {
   api.invoke.mockResolvedValue({ data: null, error: { context: { json: async () => ({ error: 'Account not found', code: 'ACCOUNT_NOT_FOUND' }) } } });
   await expect(appAuth.signIn('new@example.test', 'password')).rejects.toMatchObject({ message: 'Account not found', code: 'ACCOUNT_NOT_FOUND' });
@@ -59,6 +63,30 @@ function snapshot() {
     sanctions: [{ student_id: 'student', data: { id: 'penalty', change: 2 } }, { student_id: 'student', data: { id: 'service', change: -0.5 } }],
   };
 }
+it('marks a failed read as degraded while preserving the last successful snapshot', async () => {
+  api.rpc.mockResolvedValueOnce({ data: snapshot(), error: null });
+  await refreshData();
+  const successful = appData.getSystemHealthMetrics();
+  expect(successful.syncSuccesses).toBe(1); expect(successful.latencySamples).toHaveLength(1);
+  api.rpc.mockResolvedValueOnce({ data: null, error: { message: 'Network unavailable' } });
+  await expect(refreshData()).rejects.toMatchObject({ message: 'Network unavailable' });
+  expect(appData.getSystemHealthMetrics()).toMatchObject({ dbStatus: 'degraded', lastSync: successful.lastSync, syncFailures: 1, syncSuccesses: 1 });
+  expect(appData.getEvents()).toHaveLength(1);
+  api.rpc.mockResolvedValueOnce({ data: snapshot(), error: null });
+  await refreshData();
+  expect(appData.getSystemHealthMetrics()).toMatchObject({ dbStatus: 'operational', syncFailures: 1, syncSuccesses: 2 });
+});
+it('resolves missing audit names from visible records and preserves recorded names', async () => {
+  api.rpc.mockResolvedValueOnce({ data: { ...snapshot(), audit: [
+    { id: 'first', actor_uid: 'student', target_uid: 'event', action: 'attendance.offline_prepare', timestamp: 1 },
+    { id: 'second', actor_uid: 'student', actor_name: 'Recorded name', target_uid: 'student', timestamp: 2 },
+  ] }, error: null });
+  await refreshData();
+  expect(appData.getAccountAuditLogs()).toEqual([
+    expect.objectContaining({ actor_name: 'Recorded name', target_name: 'Student', target_role: 'student' }),
+    expect.objectContaining({ actor_name: 'Student', target_name: 'Assembly' }),
+  ]);
+});
 beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); resetData('student'); });
 afterEach(() => { resetData(); });
 

@@ -7,7 +7,8 @@ const api = vi.hoisted(() => ({ claim: vi.fn(), navigate: vi.fn(), profile: null
 vi.mock('react-router-dom', () => ({ useNavigate: () => api.navigate }));
 vi.mock('../components/AuthContext', () => ({ useAuth: () => ({ user: { uid: 'student' }, profile: api.profile, loading: false }) }));
 vi.mock('../lib/approvalNotice', () => ({ claimApprovalNotice: api.claim }));
-vi.mock('../lib/backend', () => ({ appData: { getApplications: () => api.application ? [api.application] : [] }, appAuth: {}, refreshData: vi.fn() }));
+vi.mock('../lib/backend', () => ({ appData: { getApplications: () => api.application ? [api.application] : [], isUserScopeFrozen: () => Boolean(api.profile?.account_freeze?.isFrozen) }, appAuth: {}, refreshData: vi.fn() }));
+vi.mock('../components/admin/FrozenAccess', () => ({ default: () => <p>Account frozen</p> }));
 vi.mock('../components/ui/ThemeToggle', () => ({ default: () => null }));
 beforeEach(() => { vi.useFakeTimers(); vi.resetAllMocks(); api.profile = { uid: 'student' }; api.application = null; });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -49,4 +50,12 @@ it('keeps pending applications open without a countdown or approval write', asyn
   expect(screen.getByText('Admission review pending')).toBeInTheDocument();
   expect(screen.queryByRole('progressbar')).toBeNull();
   expect(api.claim).not.toHaveBeenCalled();
+});
+it('blocks approval navigation for an individually frozen applicant', async () => {
+  api.profile = { uid: 'student', account_status: 'pending', account_freeze: { isFrozen: true } };
+  await act(async () => { render(<RegisterStatus />); });
+  expect(screen.getByText('Account frozen')).toBeInTheDocument();
+  act(() => vi.advanceTimersByTime(10000));
+  expect(api.claim).not.toHaveBeenCalled();
+  expect(api.navigate).not.toHaveBeenCalled();
 });

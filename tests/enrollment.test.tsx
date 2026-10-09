@@ -3,6 +3,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import LandingPage from '../views/LandingPage';
+import { defaultLegalPages } from '../lib/legalPages';
+import { loadLegalPage } from '../lib/legalPageStore';
+vi.mock('../lib/legalPageStore', () => ({ loadLegalPage: vi.fn(async () => defaultLegalPages.agreement) }));
 
 const api = vi.hoisted(() => ({ validate: vi.fn(), submit: vi.fn(), upload: vi.fn(), remove: vi.fn(), google: vi.fn(), googleSubmit: vi.fn(), signIn: vi.fn() }));
 vi.mock('../components/GoogleSignIn', () => ({ default: ({ enrollment, onCredential, onError }: any) => <button onClick={() => onCredential('google-token', 'nonce').catch((error: Error) => onError(error.message))}>{enrollment ? 'Sign up with Google' : 'Sign in with Google'}</button> }));
@@ -72,7 +75,7 @@ it('opens enrollment as a dedicated page and supports browser back and forward n
   expect(screen.queryByLabelText('Legal Full Name')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Browser forward' }));
   expect(screen.getByLabelText('Current route')).toHaveTextContent('/register');
-  expect(screen.getByLabelText('Legal Full Name')).toBeInTheDocument();
+  expect(screen.getByText('Step 1 of 5: Data privacy agreement')).toBeInTheDocument();
 });
 
 it('opens directly at /register and returns home with the back button', () => {
@@ -85,6 +88,7 @@ it('opens directly at /register and returns home with the back button', () => {
 
 it('preserves entered details when moving back a registration step', async () => {
   renderPublicPage('/register');
+  await agreeToPrivacy();
   fill('name', 'Test Student'); fill('email', 'student@example.test');
   fill('password', 'StrongPassword123!'); fill('confirm-password', 'StrongPassword123!');
   fireEvent.click(screen.getByRole('button', { name: 'Next' }));
@@ -97,11 +101,20 @@ it('preserves entered details when moving back a registration step', async () =>
   expect(screen.getByRole('heading', { name: 'Create your student account' })).toHaveFocus();
 });
 
+async function agreeToPrivacy() {
+  const panel = await screen.findByRole('region', { name: 'Data privacy agreement text' });
+  Object.defineProperties(panel, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 400 }, scrollTop: { configurable: true, writable: true, value: 600 } });
+  fireEvent.scroll(panel);
+  fireEvent.click(screen.getByRole('checkbox', { name: 'I have read and agree to the Data Privacy Agreement.' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+}
+
 function fill(id: string, value: string) {
   fireEvent.change(document.getElementById(`landing-register-${id}`)!, { target: { value } });
 }
 async function reachPhoto(google = false) {
   renderPublicPage('/register');
+  await agreeToPrivacy();
   fill('name', 'Test Student');
   if (google) {
     fireEvent.click(screen.getByRole('button', { name: 'Sign up with Google' }));
@@ -192,6 +205,7 @@ it('prompts an unknown Google login to enroll and carries the verified email int
   expect(screen.getByRole('alert')).toHaveFocus();
   expect(api.submit).not.toHaveBeenCalled(); expect(api.googleSubmit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Sign up with this Google email' }));
+  await agreeToPrivacy();
   expect(screen.getByLabelText('Email Address')).toHaveValue('verified@gmail.com');
   expect(screen.getByLabelText('Email Address')).toHaveAttribute('readonly');
 });
@@ -204,6 +218,7 @@ it('offers signup with the same email after an account-not-found password login'
   await screen.findByText('Account not found');
   expect(screen.getByRole('alert')).toHaveTextContent('new@example.test');
   fireEvent.click(screen.getByRole('button', { name: 'Sign up with this email' }));
+  await agreeToPrivacy();
   expect(screen.getByLabelText('Email Address')).toHaveValue('new@example.test');
   expect(screen.getByLabelText('Email Address')).not.toHaveAttribute('readonly');
   expect(api.submit).not.toHaveBeenCalled();
@@ -221,7 +236,49 @@ it('keeps credential failures separate from the signup prompt', async () => {
 it('routes an existing Google email away from enrollment without submitting another application', async () => {
   api.google.mockResolvedValue({ email: 'verified@gmail.com', session: { access_token: 'existing' }, existing: true });
   renderPublicPage('/register');
+  await agreeToPrivacy();
   fireEvent.click(screen.getByRole('button', { name: 'Sign up with Google' }));
   await waitFor(() => expect(screen.queryByLabelText('Email Address')).not.toBeInTheDocument());
   expect(api.submit).not.toHaveBeenCalled(); expect(api.googleSubmit).not.toHaveBeenCalled();
+});
+
+it('requires reaching the agreement bottom and explicitly agreeing before account details or Google signup', async () => {
+  renderPublicPage('/register');
+  const panel = await screen.findByRole('region', { name: 'Data privacy agreement text' });
+  const checkbox = screen.getByRole('checkbox', { name: 'I have read and agree to the Data Privacy Agreement.' });
+  const next = screen.getByRole('button', { name: 'Next' });
+  expect(checkbox).toBeDisabled();
+  expect(next).toBeDisabled();
+  expect(screen.queryByLabelText('Legal Full Name')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Sign up with Google' })).not.toBeInTheDocument();
+  Object.defineProperties(panel, { scrollHeight: { configurable: true, value: 1000 }, clientHeight: { configurable: true, value: 400 }, scrollTop: { configurable: true, writable: true, value: 300 } });
+  fireEvent.scroll(panel);
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
+  expect(checkbox).toBeDisabled();
+  panel.scrollTop = 599;
+  fireEvent.scroll(panel);
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
+  expect(checkbox).toBeEnabled();
+  expect(next).toBeDisabled();
+  fireEvent.click(checkbox);
+  fireEvent.click(next);
+  expect(screen.getByLabelText('Legal Full Name')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Previous registration phase' }));
+  expect(checkbox).toBeChecked();
+  fireEvent.click(checkbox);
+  expect(next).toBeDisabled();
+  expect(api.validate).not.toHaveBeenCalled();
+  expect(api.google).not.toHaveBeenCalled();
+  expect(api.submit).not.toHaveBeenCalled();
+});
+
+it('blocks enrollment when the current agreement cannot load and allows retry', async () => {
+  vi.mocked(loadLegalPage).mockRejectedValueOnce(new Error('Offline'));
+  renderPublicPage('/register');
+  await screen.findByText('Unable to load the agreement. Please retry before continuing.');
+  expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading agreement' }));
+  await agreeToPrivacy();
+  expect(screen.getByLabelText('Legal Full Name')).toBeInTheDocument();
 });

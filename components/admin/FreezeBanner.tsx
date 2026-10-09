@@ -29,14 +29,14 @@ export const FreezeBanner: React.FC = () => {
   if (!systemFreeze.isFrozen && !isScopeFrozen) return null;
 
   return (
-    <div className="w-full bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white px-4 py-3 shadow-lg border-b border-red-700/50 flex flex-col sm:flex-row items-center justify-between gap-3 animate-in slide-in-from-top duration-base">
+    <div role="status" className="w-full shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
       <div className="flex items-center gap-3">
-        <div className="p-2 bg-white/10 backdrop-blur-md rounded-xl shrink-0">
-          {systemFreeze.isFrozen ? <Snowflake className="w-6 h-6 text-white animate-spin-slow" /> : <Lock className="w-6 h-6 text-amber-200" />}
+        <div className="p-2 bg-amber-100 dark:bg-amber-900 rounded-xl shrink-0">
+          {systemFreeze.isFrozen ? <Snowflake className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-black text-xs uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded-md">
+            <span className="font-bold text-xs uppercase tracking-wider">
               {systemFreeze.isFrozen ? 'SYSTEM ACCESS FROZEN' : 'DEPARTMENT / SCOPE FROZEN'}
             </span>
             <span className="text-[11px] opacity-80">
@@ -45,7 +45,7 @@ export const FreezeBanner: React.FC = () => {
           </div>
           <p className="text-xs sm:text-sm font-semibold mt-0.5">
             {systemFreeze.isFrozen
-              ? systemFreeze.reason || 'School account payment is pending or unpaid. System operations are currently locked.'
+              ? systemFreeze.reason || 'Access has been temporarily paused by school administration.'
               : 'Your assigned department or class node has been frozen by administration.'}
           </p>
         </div>
