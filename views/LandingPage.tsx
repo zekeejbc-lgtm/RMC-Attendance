@@ -1,4 +1,4 @@
-import { lastDestination } from '../lib/navigationMemory';
+import { signInDestination } from '../lib/navigationMemory';
 import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
 import React, { useState, useEffect, useRef } from 'react';
@@ -119,16 +119,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   useEffect(() => {
     if (!loading && user && !isEnrollmentPage) {
-      const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
-      if (returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')) {
-        navigate(returnTo, { replace: true, state: null });
-        return;
-      }
-      if (profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
-        navigate(lastDestination(user.uid, '/ossa/dashboard'), { replace: true });
-      } else {
-        navigate(lastDestination(user.uid), { replace: true });
-      }
+      navigate(signInDestination(user.uid, profile?.role, location.state), { replace: true, state: null });
     }
   }, [loading, user, profile, navigate, isEnrollmentPage, location.state]);
 
@@ -171,7 +162,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
     if (result.session) {
       setGoogleEnrollment(null); setGoogleNeedsEnrollment(false);
       setShowLoginModal(false);
-      navigate('/dashboard', { replace: true });
+      if (enrolling) navigate('/dashboard', { replace: true });
+      // Existing-account sign-in uses the profile-ready redirect effect.
       return;
     }
     setGoogleEnrollment(result.enrollment);
@@ -192,8 +184,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
     setMissingAccountEmail(''); setGoogleNeedsEnrollment(false); setGoogleEnrollment(null);
     try {
       await appAuth.signIn(identifier, password);
-      const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
-      navigate(returnTo || '/dashboard', { replace: true, state: null });
+      // AuthContext hydrates the current profile before the effect redirects.
     } catch (err: any) {
       if (err.code === 'ACCOUNT_NOT_FOUND' && identifier.includes('@')) {
         setMissingAccountEmail(identifier.trim().toLowerCase());
@@ -525,8 +516,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                    </form>
                    {showLoginModal && <div className="mt-4 space-y-3">
                      <PasskeySignIn disabled={isLoggingIn} onSuccess={() => {
-                       const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
-                       navigate(returnTo || '/dashboard', { replace: true, state: null });
+                       setIsLoggingIn(true);
                      }} />
                      <GoogleSignIn onCredential={(credential, nonce) => handleGoogle(credential, nonce, false)} onError={setLoginError} />
                      {missingAccountEmail && <div ref={accountPromptRef} tabIndex={-1} role="alert" className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-slate-100">

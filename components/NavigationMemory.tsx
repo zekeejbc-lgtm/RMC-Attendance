@@ -23,7 +23,10 @@ export default function NavigationMemory({ children }: { children: React.ReactNo
 
   useEffect(() => {
     if (loading) return;
-    if (previousOwner.current && previousOwner.current !== (owner || null)) clearNavigationMemory();
+    if (previousOwner.current !== (owner || null)) {
+      if (previousOwner.current) clearNavigationMemory();
+      visited.current = false;
+    }
     previousOwner.current = owner || null;
   }, [owner, loading]);
 

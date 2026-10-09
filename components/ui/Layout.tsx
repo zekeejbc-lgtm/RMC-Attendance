@@ -141,6 +141,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   },
 
   {
+    label: 'My Calendar', icon: Calendar, path: '/student/calendar', permission: 'calendar.view', roles: []
+  },
+  {
     label: 'Events',
     icon: Calendar,
     path: '/student/events',

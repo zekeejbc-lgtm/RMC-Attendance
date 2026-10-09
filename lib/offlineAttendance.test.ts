@@ -107,6 +107,8 @@ it('keeps two current roster versions per event without losing queued scans or h
   const first = await prepare(), queued = await service.queueAttendance(first, manual);
   for (let i = 2; i <= 4; i++) {
     const data = await baseRoster(); data.id = `session-${i}`;
+    // Distinct server preparation times keep version ordering independent of test speed.
+    data.preparedAt = first.preparedAt + i * 1000;
     api.rpc.mockResolvedValueOnce({ data, error: null }); await service.prepareOfflineAttendance('mayor', 'event-1');
   }
   const saved = await service.offlineRosters('mayor'); expect(saved).toHaveLength(2);

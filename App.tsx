@@ -1,6 +1,6 @@
 import { hierarchyPathForRole } from './lib/workspaceRoutes';
 
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useRef } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { ThemeProvider } from './components/ThemeContext';
@@ -10,6 +10,8 @@ const RegisterStatus = lazy(() => import('./views/RegisterStatus'));
 const Dashboard = lazy(() => import('./views/Dashboard'));
 const StudentQR = lazy(() => import('./views/StudentQR'));
 const StudentEvents = lazy(() => import('./views/StudentEvents'));
+const PersonalCalendar = lazy(() => import('./views/PersonalCalendar'));
+const HolidayManagement = lazy(() => import('./views/HolidayManagement'));
 const StudentCeremonies = lazy(() => import('./views/StudentCeremonies'));
 const StudentRecords = lazy(() => import('./views/StudentRecords'));
 const StudentProfile = lazy(() => import('./views/StudentProfile'));
@@ -35,6 +37,7 @@ import { hasPermission, AppPermission } from './lib/accessControl';
 import { AppLoading, PageSkeleton } from './components/ui/Skeleton';
 import ToastViewport from './components/ui/ToastViewport';
 import PwaStatus from './components/ui/PwaStatus';
+import { canAccessSystemControls } from './lib/systemControlsAccess';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -46,10 +49,12 @@ interface ProtectedRouteProps {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permission, permissionAny }) => {
   const { user, loading, profile, error, offlineScanner } = useAuth();
   const location = useLocation();
+  const routeOwner = useRef<string | undefined>(undefined);
+  if (user) routeOwner.current = user.uid;
 
   if (loading) return <AppLoading label="Loading your workspace"><PageSkeleton /></AppLoading>;
 
-  if (!user) return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search }} />;
+  if (!user) return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search, returnToOwner: routeOwner.current }} />;
   if (offlineScanner) {
     if (location.pathname !== '/mayor/scan') return <Navigate to="/mayor/scan" replace />;
     return <Layout>{children}</Layout>;
@@ -76,6 +81,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
 
   if (!isAllowed) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (location.pathname === '/admin/controls' && !canAccessSystemControls(profile.role, location.search)) {
+    return <Navigate to={profile.role === 'ossa' || profile.role === 'ossa_staff' ? '/ossa/dashboard' : '/dashboard'} replace />;
   }
 
   return <Layout>{children}</Layout>;
@@ -126,6 +135,8 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
+          <Route path="/student/calendar" element={<ProtectedRoute permission="calendar.view"><PersonalCalendar /></ProtectedRoute>} />
+          <Route path="/admin/calendar" element={<ProtectedRoute permission="calendar.manage_closures"><HolidayManagement /></ProtectedRoute>} />
           <Route path="/student/events/:eventId" element={<ProtectedRoute roles={['student', 'mayor', 'ssg']}><GeneralEvent student /></ProtectedRoute>} />
           <Route path="/ssg/events/:eventId" element={<ProtectedRoute permission="events.manage" roles={['ssg', 'admin', 'ossa']}><GeneralEvent /></ProtectedRoute>} />
           <Route path="/organizations/:organizationId/events/:eventId" element={<ProtectedRoute><GeneralEvent /></ProtectedRoute>} />

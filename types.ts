@@ -3,6 +3,10 @@ export type UserRole = 'student' | 'mayor' | 'ssg' | 'admin' | 'ossa' | 'ossa_st
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'inactive' | 'graduated';
 
 export type AppPermission =
+  | 'calendar.view'
+  | 'calendar.view_scope'
+  | 'calendar.manage_closures'
+  | 'calendar.manage_schoolwide'
   | 'system.manage_accounts'
   | 'system.view_audit'
   | 'system.freeze'

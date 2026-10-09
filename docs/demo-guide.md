@@ -136,6 +136,15 @@ Do not describe optional-information deletion as complete account erasure. The a
 
 > “The live QR and the printed ID use different tokens. Replacing the printed QR invalidates the previous printed code.”
 
+### My Calendar — `/student/calendar`
+
+Available to any role with **View Calendar**. **View Scoped Calendar** adds schedules within the assigned scope; Admin, OSSA Administrator, and OSSA Staff have it by default.
+
+- Combines institutional events, ceremonies, organization activities, service, and merit sessions in a monthly calendar and daily agenda. Specific activities appear inside their labelled general-event group; standalone activities keep their own cards.
+- Highlights conflicting sessions and affected holidays/suspensions in Philippine time.
+- Filters by activity type. **Export calendar** offers a printable PDF with a monthly grid and detailed agenda, or an ICS (iCalendar) file to import into Google Calendar, Outlook, or Apple Calendar. PDF includes suspended/cancelled activities with status labels; ICS excludes those sessions. ICS is a snapshot, not a live subscription; export again after schedule changes and check for duplicates when importing again.
+- Open a full activity details modal from the agenda: schedule, instructions, venue/perimeter, academic or organization context, attendance windows, applicable sanction/credit rules, and excuse window. The general-event modal lists its accessible specific activities across the full duration, including their attendance windows when configured. General-event containers are excluded from attendance counts and conflict checks.
+
 ### Events — `/student/events`
 
 - Lists relevant institutional activities in active, upcoming, and archived groups.
@@ -332,6 +341,16 @@ The Mayor keeps the student pages above and receives attendance responsibilities
 - Maintains weekly class schedules.
 - Opens Student Transfers.
 
+### Holidays & Suspensions — `/admin/calendar`
+
+Available to any role granted **Manage Holidays & Suspensions**. Assigned scope applies unless **Manage School-wide Suspensions** is also enabled. Open the editor using **Holidays & Suspensions** on My Calendar. Configure these toggles under System Controls → RBAC Roles → Events. Only System Admin receives management by default; saved notices cannot yet be edited or withdrawn.
+
+- Marks school-wide or scoped academic dates, including descendants, with an official reason. Select academic units through the enrollment-style academic path and add one or several units.
+- Previews affected activities and affected/unaffected recipients before applying attendance suspension, bulk cancellation, or bulk rescheduling.
+- Changes schedules only for wholly affected future activities without attendance; shared or ongoing activities suspend affected participation while retaining other students' schedules.
+- Blocks recording and absence sanctions for suspended sessions, including new activities; notifies affected students and records the action history.
+- Rescheduling shows activity details and asks for a new start date for each selected activity, followed by a schedule preview. Selecting a general event moves its specific activities together while preserving their relative dates and attendance configuration. Specific activities can move independently within their parent dates. Applicable OSSA review is retained; ceremonies require individual review before rescheduling.
+
 ### Student Transfers — `/ssg/transfers`
 
 - Selects one or several students and chooses a destination class.
@@ -429,7 +448,7 @@ A general event groups activities over a duration. It does not itself take atten
 10. Review and schedule/submit the selected dates. Each date becomes a separate linked occurrence.
 11. Review the approval state and open a saved occurrence to show its details.
 
-> “The calendar predicts matching weekdays. We still check holidays and suspensions ourselves. Each saved ceremony has its own attendance and exemption rules.”
+> “The calendar predicts matching weekdays. Administrators can record holidays and suspensions to pause attendance for the affected units. Each saved ceremony still has its own attendance and exemption rules.”
 
 - Editing an occurrence does not edit the whole series.
 - Weekly class schedules help select exemptions; saving a class schedule does not automatically exempt students.

@@ -1,3 +1,4 @@
+vi.mock('../lib/personalCalendar', async original => ({ ...await original<any>(), loadScheduleNotices: vi.fn(async () => []) }));
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';

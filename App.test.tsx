@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ auth: {} as any, applications: [] as any[], statusVisits: vi.fn() }));
@@ -16,6 +16,13 @@ vi.mock('./views/OSSADashboard', () => ({ default: ({ section = 'overview' }: an
 vi.mock('./views/RegisterStatus', () => ({ default: () => { state.statusVisits(); return <h1>Application status</h1>; } }));
 vi.mock('./views/SSGPanel', () => ({ default: () => <h1>School hierarchy</h1> }));
 vi.mock('./views/ClassStudentDetail', () => ({ default: () => <h1>Student detail</h1> }));
+vi.mock('./views/AdminControls', () => ({ default: () => <h1>System controls</h1> }));
+vi.mock('./views/LandingPage', () => ({ default: () => {
+  const location = useLocation();
+  return <output>{JSON.stringify(location.state)}</output>;
+} }));
+import { useLocation } from 'react-router-dom';
+import { setMockDataRef } from './lib/accessControl';
 import App from './App';
 
 beforeEach(() => {
@@ -24,7 +31,7 @@ beforeEach(() => {
   state.applications = [{ id: 'student', status: 'approved' }];
   state.auth = { user: { uid: 'student' }, profile: { uid: 'student', role: 'student', account_status: 'active' }, loading: false, approvalNoticeSeen: false };
 });
-afterEach(() => { cleanup(); window.location.hash = ''; });
+afterEach(() => { cleanup(); setMockDataRef(null); window.location.hash = ''; });
 
 it('opens the dashboard directly for an active account with an unseen approval notice', async () => {
   render(<App />);
@@ -118,4 +125,41 @@ it('denies a student access to the admin hierarchy', async () => {
   render(<App />);
   await screen.findByRole('heading', { name: 'Dashboard' });
   expect(window.location.hash).toBe('#/dashboard');
+});
+
+it.each(['rbac', 'accounts', 'freeze', 'payment', 'legal', 'video'])('denies copied %s tab links even when OSSA can view health', async tab => {
+  state.auth.profile.role = 'ossa';
+  window.location.hash = `#/admin/controls?tab=${tab}`;
+  render(<App />);
+  await screen.findByRole('heading', { name: 'OSSA overview' });
+  expect(window.location.hash).toBe('#/ossa/dashboard');
+  expect(screen.queryByRole('heading', { name: 'System controls' })).not.toBeInTheDocument();
+});
+
+it('denies system controls when saved RBAC removes all access', async () => {
+  setMockDataRef({ getCoreRoles: () => ({ ossa: { permissions: ['ossa.manage_cases'] } }), getCustomRoles: () => ({}) });
+  state.auth.profile.role = 'ossa';
+  window.location.hash = '#/admin/controls?tab=health';
+  render(<App />);
+  await screen.findByRole('heading', { name: 'Dashboard' });
+  expect(screen.queryByRole('heading', { name: 'System controls' })).not.toBeInTheDocument();
+});
+
+it.each(['rbac', 'health', 'accounts'])('allows authorized admin %s tab links', async tab => {
+  state.auth.profile.role = 'admin';
+  window.location.hash = `#/admin/controls?tab=${tab}`;
+  render(<App />);
+  await screen.findByRole('heading', { name: 'System controls' });
+  expect(window.location.hash).toBe(`#/admin/controls?tab=${tab}`);
+});
+
+it('ties an expired session return link to the previous account', async () => {
+  state.auth = { ...state.auth, user: { uid: 'admin-1' }, profile: { ...state.auth.profile, uid: 'admin-1', role: 'admin' } };
+  window.location.hash = '#/admin/controls?tab=rbac';
+  const view = render(<App />);
+  await screen.findByRole('heading', { name: 'System controls' });
+  state.auth = { ...state.auth, user: null, profile: null };
+  view.rerender(<App />);
+  await waitFor(() => expect(window.location.hash).toBe('#/login'));
+  expect(JSON.parse(screen.getByRole('status').textContent!)).toEqual({ returnTo: '/admin/controls?tab=rbac', returnToOwner: 'admin-1' });
 });

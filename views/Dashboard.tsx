@@ -80,7 +80,8 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* QUICK SHORTCUT CARDS */}
-      <div className="grid grid-cols-1 gap-2.5 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-2.5 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        {hasPermission(profile?.role, 'calendar.view') && <button onClick={() => navigate('/student/calendar')} className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xs transition-all hover:border-gold-400/60 dark:border-slate-700 dark:bg-slate-800"><div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-gold-50 text-gold-600 dark:bg-amber-500/20 dark:text-amber-400"><Calendar size={16}/></div><h3 className="text-[11px] font-bold uppercase tracking-tight text-brand-900 dark:text-slate-100">Calendar</h3></button>}
         <button
           aria-label="My QR passport"
           onClick={() => navigate('/student/qr')}
@@ -277,6 +278,8 @@ const StaffHome = ({ name, role, navigate }: { name: string; role: 'admin' | 'ss
   const workspaceName = role === 'admin' ? 'Administration' : isOSSA ? 'OSSA' : 'SSG';
 
   const actions = [
+    ...(hasPermission(role, 'calendar.view') ? [{ label: 'My Calendar', description: 'View activities, conflicts, and calendar exports.', path: '/student/calendar', icon: CalendarDays, tone: 'bg-gold-50 text-gold-700 dark:bg-gold-500/15 dark:text-gold-300' }] : []),
+    ...(hasPermission(role, 'calendar.manage_closures') ? [{ label: 'Holidays & Suspensions', description: 'Preview and manage affected attendance dates.', path: '/admin/calendar', icon: Calendar, tone: 'bg-gold-50 text-gold-700 dark:bg-gold-500/15 dark:text-gold-300' }] : []),
     ...(role !== 'ossa_staff' ? [{ label: `${workspaceName} Control Panel`, description: 'Manage the institution directory and applications.', path: hierarchyPathForRole(role), icon: ShieldCheck, tone: 'bg-brand-50 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200' }] : []),
     ...(hasPermission(role, 'attendance.manage') ? [{ label: 'Attendance', description: 'Review attendance trends and institutional records.', path: '/admin/attendance', icon: BarChart3, tone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' }] : []),
     { label: 'Attendance Scanner', description: 'Open attendance scanning and verification tools.', path: '/mayor/scan', icon: ScanLine, tone: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },

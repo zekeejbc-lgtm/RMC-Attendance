@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import React from 'react';
 import { mockData } from './fixtures/demoBackend';
 import { hasPermission } from '../lib/accessControl';
@@ -88,5 +88,22 @@ describe('Admin RBAC Role Editing and Permission Enforcement', () => {
     fireEvent.click(screen.getByRole('button', { name: /Save Changes/i }));
     expect(mockData.getCoreRoles().ssg.permissions).toContain('directory.create_units');
     expect(mockData.getCoreRoles().ssg.permissions).not.toContain('events.require_ossa_approval');
+  });
+  it('lets ADMIN grant and revoke calendar management independently for OSSA Staff', async () => {
+    render(<AdminRBACRoleView actorName="System Admin" />);
+    fireEvent.click(screen.getByRole('button', { name: /Edit role OSSA Staff/i }));
+    expect(screen.getByRole('checkbox', { name: 'View Calendar' })).toBeChecked();
+    const manage = screen.getByRole('checkbox', { name: 'Manage Holidays & Suspensions' });
+    const school = screen.getByRole('checkbox', { name: 'Manage School-wide Suspensions' });
+    expect(manage).not.toBeChecked(); expect(school).not.toBeChecked();
+    fireEvent.click(manage);
+    fireEvent.click(screen.getByRole('button', { name: /Save Changes/i }));
+    expect(mockData.getCoreRoles().ossa_staff.permissions).toContain('calendar.manage_closures');
+    expect(mockData.getCoreRoles().ossa_staff.permissions).not.toContain('calendar.manage_schoolwide');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Edit role OSSA Staff/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Manage Holidays & Suspensions' }));
+    fireEvent.click(screen.getByRole('button', { name: /Save Changes/i }));
+    expect(mockData.getCoreRoles().ossa_staff.permissions).not.toContain('calendar.manage_closures');
   });
 });

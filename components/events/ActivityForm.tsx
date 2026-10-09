@@ -3,6 +3,7 @@ import { DEFAULT_EXCUSE_WINDOW_DAYS, MAX_EXCUSE_WINDOW_DAYS } from '../../lib/ex
 import { TimeInput } from '../ui/TimeInput';
 import { formatClockTime } from '../../lib/dateTime';
 import EventBanner from './EventBanner';
+import ScheduleClosureNotice from './ScheduleClosureNotice';
 import { createDriveImage, fileAsDataUrl } from '../../lib/googleDrive';
 import React, { useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Archive, ArrowLeft, CalendarRange, CircleOff, Clock3, Crosshair, MapPin, Plus, Save as SaveIcon, Trash2, Users2, XCircle } from 'lucide-react';
@@ -387,6 +388,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
         </fieldset>
         {phasedCreation && phase === 4 && <Surface className="space-y-5 p-4 sm:p-6">
           <h2 className="text-lg font-bold text-brand-900 dark:text-white">Review before scheduling</h2>
+          <ScheduleClosureNotice first={isCeremony ? [...ceremonyDates].sort()[0] || startDate : startDate} last={isCeremony ? [...ceremonyDates].sort().at(-1) || endDate : endDate}/>
           {bannerPreview && <EventBanner src={bannerPreview} alt="Event banner preview" />}
           <p className="text-sm text-slate-500">Check the details below. Use Back to make changes, then schedule when ready.</p>
           <dl className="grid gap-5 text-sm sm:grid-cols-2">

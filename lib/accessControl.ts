@@ -1,4 +1,4 @@
-import { UserRole, AppPermission, CustomRole, CoreRole } from '../types';
+﻿import { UserRole, AppPermission, CustomRole, CoreRole } from '../types';
 
 export type { AppPermission };
 
@@ -10,6 +10,10 @@ export interface PermissionDefinition {
 }
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
+  { id: 'calendar.view', name: 'View Calendar', category: 'Events', description: 'View personal activities, conflicts, holidays and suspensions, and export the calendar.' },
+  { id: 'calendar.view_scope', name: 'View Scoped Calendar', category: 'Events', description: 'Also view activities for the assigned academic scope. System administrators see the school-wide schedule. Requires View Calendar.' },
+  { id: 'calendar.manage_closures', name: 'Manage Holidays & Suspensions', category: 'Events', description: 'Mark dates, preview affected activities, and suspend, cancel or reschedule within the assigned academic scope.' },
+  { id: 'calendar.manage_schoolwide', name: 'Manage School-wide Suspensions', category: 'Events', description: 'Allow school-wide dates and all academic units. Requires Manage Holidays & Suspensions.' },
   { id: 'directory.transfer_students', name: 'Transfer Students', category: 'Directory', description: 'Export student assignments and transfer, promote, or demote students individually or in batches within the assigned scope.' },
   { id: 'directory.create_units', name: 'Create Directory Units', category: 'Directory', description: 'Create units and apply templates within the assigned scope. Also requires Manage Directory Structure. Disabled for SSG by default.' },
   { id: 'events.require_ossa_approval', name: 'Require OSSA Approval', category: 'Events', description: 'Workflow rule: events and ceremonies submitted or changed by this role remain inactive until OSSA approves. Enabled for SSG by default. Turning it off does not approve existing requests.' },
@@ -38,7 +42,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'System Owner / Super Admin',
     description: 'Full administrative access across all system nodes and controls',
     isPositionOnly: false,
-    permissions: [
+    permissions: ['calendar.view', 'calendar.view_scope', 'calendar.manage_closures', 'calendar.manage_schoolwide',
       'directory.transfer_students', 'system.manage_accounts', 'system.view_audit', 'system.freeze', 'system.health',
       'system.payment_reminders', 'system.manage_rbac', 'directory.manage_structure', 'directory.create_units',
       'directory.delete_structure', 'directory.manage_members', 'attendance.scan',
@@ -52,7 +56,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'OSSA Administrator',
     description: 'Directs student discipline, excuses, and institutional sanction cases',
     isPositionOnly: false,
-    permissions: [
+    permissions: ['calendar.view', 'calendar.view_scope',
       'directory.transfer_students', 'directory.manage_structure', 'directory.create_units', 'directory.manage_members', 'attendance.scan', 'events.approve',
       'directory.add_members_manually', 'directory.change_member_designation', 'directory.manage_student_sanctions',
       'attendance.manage', 'events.manage', 'ossa.manage_cases', 'system.health',
@@ -64,7 +68,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'OSSA Staff',
     description: 'Scans attendance and reviews student excuse applications',
     isPositionOnly: false,
-    permissions: ['attendance.scan', 'attendance.manage', 'ossa.manage_cases', 'directory.manage_student_sanctions'],
+    permissions: ['calendar.view', 'calendar.view_scope', 'attendance.scan', 'attendance.manage', 'ossa.manage_cases', 'directory.manage_student_sanctions'],
     isBuiltIn: true,
   },
   ssg: {
@@ -72,7 +76,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'SSG Officer',
     description: 'Manages events, geofencing, and directory section rosters',
     isPositionOnly: false,
-    permissions: ['directory.manage_structure', 'directory.manage_members', 'directory.add_members_manually', 'directory.change_member_designation', 'attendance.scan', 'attendance.manage', 'events.manage', 'events.require_ossa_approval'],
+    permissions: ['calendar.view', 'directory.manage_structure', 'directory.manage_members', 'directory.add_members_manually', 'directory.change_member_designation', 'attendance.scan', 'attendance.manage', 'events.manage', 'events.require_ossa_approval'],
     isBuiltIn: true,
   },
   mayor: {
@@ -80,7 +84,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'Mayor / Attendance Officer',
     description: 'Scans class QR codes and records student attendance',
     isPositionOnly: false,
-    permissions: ['attendance.scan'],
+    permissions: ['calendar.view', 'attendance.scan'],
     isBuiltIn: true,
   },
   student: {
@@ -88,7 +92,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'Student',
     description: 'Personal attendance QR, event history, and excuse submission',
     isPositionOnly: false,
-    permissions: [],
+    permissions: ['calendar.view', ],
     isBuiltIn: true,
   },
 };
@@ -121,7 +125,7 @@ export const hasPermission = (
     return (cRole.permissions || []).includes(permission);
   }
 
-  if (role === 'admin') return true;
+  if (role === 'admin' && !permission.startsWith('calendar.')) return true;
 
   const defaultRole = DEFAULT_CORE_ROLES[role];
   if (defaultRole) {

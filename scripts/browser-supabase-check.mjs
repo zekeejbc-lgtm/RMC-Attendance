@@ -7,7 +7,7 @@ const accounts = JSON.parse(fs.readFileSync('.demo-accounts.local', 'utf8'));
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
 const routes = {
   admin: [ '/ssg/panel', '/ssg/events', '/ssg/events/create', '/admin/attendance', '/admin/controls', '/admin/controls?tab=health', '/admin/controls?tab=payment', '/admin/controls?tab=rbac', '/ossa/dashboard', '/student/profile'],
-  student: ['/dashboard', '/student/qr', '/student/events', '/student/ceremonies', '/student/records', '/student/profile'],
+  student: ['/dashboard', '/student/qr', '/student/calendar', '/student/events', '/student/ceremonies', '/student/records', '/student/profile'],
   mayor: ['/dashboard', '/mayor/scan', '/ssg/panel', '/student/profile'],
   ssg: ['/dashboard', '/ssg/panel', '/ssg/events', '/student/profile'],
   ossa: ['/ossa/dashboard', '/ssg/panel', '/admin/attendance', '/student/profile'],

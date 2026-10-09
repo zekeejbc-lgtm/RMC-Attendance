@@ -1,7 +1,8 @@
 import { RoleAssignment } from '../components/admin/RoleAssignment';
 import { hasPermission } from '../lib/accessControl';
+import { canAccessSystemControls, systemControlPermissions } from '../lib/systemControlsAccess';
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { legalLinks } from '../lib/legal';
 import { Snowflake, Activity, DollarSign, ShieldCheck, Shield, Users, Video } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
@@ -56,13 +57,17 @@ const AdminControls: React.FC = () => {
     navigate(`/admin/controls?tab=${tabId}`);
   };
 
-  const tabPermissions = { freeze: 'system.freeze', health: 'system.health', payment: 'system.payment_reminders', rbac: 'system.manage_rbac', accounts: 'system.manage_accounts' } as const;
+  const tabPermissions = systemControlPermissions;
   const allowedPages = subPages.filter(page => (page.id === 'legal' || page.id === 'video') ? profile?.role === 'admin' : hasPermission(profile?.role, tabPermissions[page.id]));
   const requestedPage = new URLSearchParams(location.search).get('page');
   const legalKinds: LegalKind[] = ['privacy', 'deletion', 'agreement', 'terms'];
   const legalKind = legalKinds.includes(requestedPage as LegalKind) ? requestedPage as LegalKind : 'privacy';
   const selectedTab = allowedPages.some(page => page.id === activeTab) ? activeTab : allowedPages[0]?.id;
   const activeSubPage = subPages.find((p) => p.id === selectedTab) || subPages[0];
+
+  if (!canAccessSystemControls(profile?.role, location.search)) {
+    return <Navigate to={profile?.role === 'ossa' || profile?.role === 'ossa_staff' ? '/ossa/dashboard' : '/dashboard'} replace />;
+  }
 
   return (
     <Page className="max-w-none space-y-8 px-5 py-6 sm:px-8 sm:py-8 xl:px-12">

@@ -35,3 +35,13 @@ export function readReturnHistory(owner: string): string[] {
 export function lastDestination(owner: string, fallback = '/dashboard') {
   return readReturnHistory(owner).at(-1) || fallback;
 }
+
+export function signInDestination(owner: string, role: string | undefined, state: unknown): string {
+  const fallback = role === 'ossa' || role === 'ossa_staff' ? '/ossa/dashboard' : '/dashboard';
+  const redirect = state as { returnTo?: unknown; returnToOwner?: unknown } | null;
+  if (typeof redirect?.returnTo === 'string' && redirect.returnTo.startsWith('/') && !redirect.returnTo.startsWith('//')
+    && (!redirect.returnToOwner || redirect.returnToOwner === owner)) return redirect.returnTo;
+  // A different account must start in its own workspace.
+  if (redirect?.returnToOwner && redirect.returnToOwner !== owner) return fallback;
+  return lastDestination(owner, fallback);
+}

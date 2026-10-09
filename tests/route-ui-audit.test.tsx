@@ -1,3 +1,4 @@
+vi.mock('../lib/personalCalendar', async original => ({ ...await original<any>(), loadScheduleNotices: vi.fn(async () => []) }));
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -177,6 +178,7 @@ vi.mock('../lib/backend', () => ({
     validateEnrollment: vi.fn(async () => undefined),
     getSystemFreezeStatus: () => ({ isFrozen: false, reason: '' }),
     getFrozenNodes: () => ({}),
+    getAccountsForFreeze: () => [],
     isNodeOrParentFrozen: () => false,
     setSystemFreezeStatus: vi.fn(),
     setNodeFreezeStatus: vi.fn(),
@@ -758,7 +760,7 @@ describe('complete routed view render matrix', () => {
     { path: '/ssg/events', file: 'views/SSGEventCreation.tsx', element: <SSGEventCreation />, setup: staffRoute, usesPage: true },
     { path: '/ssg/events/create', file: 'views/SSGCreateEvent.tsx', element: <SSGCreateEvent />, setup: staffRoute, usesPage: true },
     { path: '/admin/attendance', file: 'views/AttendanceDashboard.tsx', element: <AttendanceDashboard />, setup: staffRoute, usesPage: true },
-    { path: '/admin/controls', file: 'views/AdminControls.tsx', element: <AdminControls />, setup: staffRoute, usesPage: true },
+    { path: '/admin/controls', file: 'views/AdminControls.tsx', element: <AdminControls />, setup: () => { staffRoute(); routeState.auth.profile = { ...routeState.auth.profile!, role: 'admin' }; }, usesPage: true },
     { path: '/admin/members', file: 'views/ManageMembers.tsx', element: <ManageMembers />, setup: staffRoute, usesPage: true },
     { path: '/ossa/dashboard', file: 'views/OSSADashboard.tsx', element: <OSSADashboard />, setup: staffRoute, usesPage: true },
   ];
