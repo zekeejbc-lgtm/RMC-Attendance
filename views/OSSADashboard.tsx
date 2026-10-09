@@ -8,6 +8,7 @@ import ActivityApprovalQueue from '../components/events/ActivityApprovalQueue';
 import OrganizationApprovalQueue from '../components/events/OrganizationApprovalQueue';
 import ExcuseApprovalQueue from '../components/events/ExcuseApprovalQueue';
 import AttendanceCorrections from '../components/attendance/AttendanceCorrections';
+import ClearanceCertificates from '../components/attendance/ClearanceCertificates';
 import { loadAttendanceCorrections } from '../lib/attendanceCorrections';
 import ProfileRequests from '../components/members/ProfileRequests';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
@@ -139,6 +140,7 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
   const totalSanctionHours = students.reduce((total, student) => total + (student.stats?.sanction_hours || 0), 0);
   const pendingExcuseCount = excuseApps.filter((application) => application.status === 'pending').length;
   const workspaceCounts = {
+    clearance: 0,
     activities: pendingActivityCount,
     requests: pendingInformationCount,
     excuses: pendingExcuseCount,
@@ -218,10 +220,12 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
     setTimeout(() => setAdjustSuccess(null), 3500);
   };
 
-  const availableSections = ossaSections.filter(item => hasPermission(profile?.role, item.permission));
+  const availableSections = ossaSections.filter(item => hasPermission(profile?.role, item.permission)
+    && (item.id !== 'clearance' || profile?.role === 'ossa' || profile?.role === 'ossa_staff'));
   const currentSection = ossaSections.find(item => item.id === section);
-  const sectionIcons = { activities: CalendarCheck, requests: PencilLine, sanctions: ShieldAlert, excuses: FileCheck2, corrections: PencilLine, organizations: Building2 };
+  const sectionIcons = { clearance: ShieldCheck, activities: CalendarCheck, requests: PencilLine, sanctions: ShieldAlert, excuses: FileCheck2, corrections: PencilLine, organizations: Building2 };
   const sectionTones = {
+    clearance: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
     activities: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
     requests: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
     sanctions: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
@@ -254,7 +258,7 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
       {section === 'overview' && <nav aria-label="OSSA workspaces" className="space-y-6">
         {[
           { title: 'Review & approvals', description: 'Decide on submitted requests and supporting documents.', ids: ['activities', 'requests', 'excuses', 'corrections'] },
-          { title: 'Records & oversight', description: 'Manage student cases, reports, and organization requests.', ids: ['sanctions', 'organizations'] },
+          { title: 'Records & oversight', description: 'Manage student cases, reports, and organization requests.', ids: ['sanctions', 'clearance', 'organizations'] },
         ].map(group => { const items = availableSections.filter(item => group.ids.includes(item.id)); if (!items.length) return null; return <section key={group.title} className="space-y-3">
           <div><h2 className="text-base font-bold text-brand-900 dark:text-white">{group.title}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{group.description}</p></div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{items.map(item => { const Icon = sectionIcons[item.id]; return <Link key={item.id} to={ossaSectionPath(item.id)} className="group flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-gold-500 hover:shadow-md motion-reduce:transform-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-500 dark:border-slate-700 dark:bg-slate-800">
@@ -285,6 +289,7 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
       {section === 'activities' && <ActivityApprovalQueue />}
       {section === 'requests' && <ProfileRequests review />}
       {section === 'corrections' && <AttendanceCorrections review />}
+      {section === 'clearance' && <ClearanceCertificates manage />}
       {section === 'organizations' && <OrganizationApprovalQueue />}
       {section === 'sanctions' && <Surface aria-labelledby="ossa-analytics-heading" className="p-4 sm:p-6">
         <h2 id="ossa-analytics-heading" className="text-lg font-bold text-brand-900 dark:text-white">Sanction Analytics</h2>

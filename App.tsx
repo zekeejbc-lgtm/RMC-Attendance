@@ -14,6 +14,7 @@ const PersonalCalendar = lazy(() => import('./views/PersonalCalendar'));
 const HolidayManagement = lazy(() => import('./views/HolidayManagement'));
 const StudentCeremonies = lazy(() => import('./views/StudentCeremonies'));
 const StudentRecords = lazy(() => import('./views/StudentRecords'));
+const VerifyClearance = lazy(() => import('./views/VerifyClearance'));
 const StudentProfile = lazy(() => import('./views/StudentProfile'));
 const MayorScanner = lazy(() => import('./views/MayorScanner'));
 const SSGPanel = lazy(() => import('./views/SSGPanel'));
@@ -110,6 +111,7 @@ const App: React.FC = () => {
           <NavigationMemory>
           <Suspense fallback={<AppLoading label="Loading page"><PageSkeleton /></AppLoading>}><Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/verify/clearance/:token" element={<VerifyClearance />} />
           <Route path="/privacy-policy" element={<LegalPage kind="privacy" />} />
           <Route path="/data-deletion" element={<LegalPage kind="deletion" />} />
           <Route path="/data-privacy-agreement" element={<LegalPage kind="agreement" />} />

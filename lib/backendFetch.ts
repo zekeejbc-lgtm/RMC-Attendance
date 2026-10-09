@@ -17,6 +17,7 @@ function requestLabel(input: RequestInfo | URL, init?: RequestInit) {
   const name = path.includes('/rpc/') || path.includes('/functions/') ? path.split('/').pop() : path.split('/rest/v1/')[1]?.split('/')[0];
   const labels: Record<string, string> = {
     rmc_snapshot: 'Updating your information', rmc_nodes: 'Loading school information',
+    rmc_clearance: 'Checking clearance certificates', rmc_verify_clearance: 'Verifying clearance certificate',
     rmc_profiles: 'Loading profiles', rmc_command: 'Saving your changes',
     'rmc-accounts': 'Updating account details', 'rmc-login': 'Signing you in',
     rmc_organization_command: 'Updating organization details', rmc_organization_people: 'Loading members',

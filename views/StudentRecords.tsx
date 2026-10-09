@@ -1,6 +1,7 @@
 import ActivityCredits from '../components/attendance/ActivityCredits';
 import AttendanceCorrections from '../components/attendance/AttendanceCorrections';
 import SanctionClearance from '../components/attendance/SanctionClearance';
+import ClearanceCertificates from '../components/attendance/ClearanceCertificates';
 import RecordedBy from '../components/attendance/RecordedBy';
 import RecordPagination from '../components/ui/RecordPagination';
 import { getProfileSchoolName } from '../lib/academicDirectory';
@@ -177,6 +178,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
       )}
 
       {/* KPI METRICS OVERVIEW */}
+      {!embedded && !student && <ClearanceCertificates />}
       <div className={`grid grid-cols-2 gap-3 ${embedded ? 'xl:grid-cols-5' : 'lg:grid-cols-4'}`} aria-label="Attendance summary">
         <MetricCard icon={<CheckCircle2 size={20} />} label="Attendance Rate" value={`${stats.rate}%`} detail="Present, late, and excused" />
         <MetricCard icon={<Clock size={20} />} label="Late Check-Ins" value={stats.lateCount} detail="Recorded tardy arrivals" />

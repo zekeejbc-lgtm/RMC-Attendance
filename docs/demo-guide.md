@@ -170,6 +170,7 @@ Available to any role with **View Calendar**. **View Scoped Calendar** adds sche
 - Shows the sanctions/demerits ledger and individual sanction details.
 - Exports a personal PDF transcript.
 - Displays the clearance message when the student qualifies.
+- Opens **Clearance certificates**: shows scheduled clearing periods and eligibility, waits for OSSA release, then requests, previews, and downloads a verifiable A4 landscape PDF with a school seal, issue date, reference, and verification QR.
 - Reports missing or incorrect institutional event, ceremony, service, or merit attendance through **Attendance corrections**, with requested times, an explanation, optional evidence, and decision history.
 
 > “Students can trace individual attendance entries and see why their balance changed. Rendered time, cleared sanctions, and earned merit are shown separately.”
@@ -301,6 +302,17 @@ The Mayor keeps the student pages above and receives attendance responsibilities
 - Opens student information, explanation, event, supporting document, and submission time.
 - Approves with the selected sanction hours to waive, or rejects with notes.
 - Shows decision notes, hours waived, review time, and reviewer for completed requests.
+
+### Clearance certificates — `/ossa/dashboard/clearance`
+
+- An assigned OSSA Administrator or OSSA Staff account with `ossa.manage_cases` creates a clearing schedule for its assigned academic unit and descendants.
+- Enter a period name and start/end times in Philippine time before clearing begins. Schedules cannot be backdated or edited; certificates initially remain on hold.
+- Eligibility requires an actual positive-to-zero sanction balance transition recorded by the server during the scheduled period. An existing zero balance or clearance outside the period does not qualify. Offline service qualifies when its credit is accepted by the server.
+- Shows eligible and issued counts. Use **Enable release → Confirm release** to allow qualified students to request and download; **Hold release** pauses further downloads, including repeat downloads.
+- Issue date, identity, release authority, and reference are saved when the student first requests the certificate. Repeated downloads reuse that certificate.
+- New outstanding sanctions revoke issued certificates. Clearing again during an eligible scheduled period permits a new certificate; the previous revoked certificate stays invalid.
+- Verification through the QR opens `/verify/clearance/:token` without signing in. It reveals only validity, student name, school, clearing period, reference, issue date, and clearance date. Student IDs, attendance, sanction history, balances, and contact details remain private.
+- A release hold preserves verification of already issued certificates. The certificate confirms sanction clearance; other school requirements are assessed separately.
 
 ### Organization approvals — `/ossa/dashboard/organizations`
 
@@ -559,6 +571,18 @@ Do not clear device storage with unsynchronized attendance. Sign-out removes dow
 6. Return to Student Records; show the clearance message if all sanctions are resolved.
 
 Use the permitted sanction tools rather than assuming every directory member manager can adjust sanctions.
+
+### B.1. Release and download a clearance certificate
+
+1. OSSA opens **OSSA Hub → Clearance certificates**, creates a current/future clearing period, and keeps release on hold.
+2. During that period, complete the demo student's service or authorize a sanction adjustment that takes their positive balance to zero.
+3. Student opens **Records → Clearance certificates** and shows **Qualified · Waiting for OSSA release**.
+4. OSSA opens the period, chooses **Enable release**, and confirms the release.
+5. Student refreshes the certificate panel, chooses **Request certificate**, reviews the preview, and downloads the **A4 landscape PDF**.
+6. Scan the certificate's QR using another device to show the public verification result. The QR includes a random verification token, not the student's attendance QR.
+7. Optionally add a new sanction to the demo account and verify that the previous certificate no longer reports valid clearance.
+
+> “Zero sanctions alone do not release a certificate. The student must clear during the published schedule, and OSSA must authorize release. Anyone with the certificate's QR can verify its limited clearance information.”
 
 ### C. Information correction or optional deletion
 
