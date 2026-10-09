@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const outsider = '22222222-2222-4222-8222-222222222222';
@@ -16,6 +16,24 @@ function file(id: string, metadata: Record<string, string> = {}) {
     setSharing: () => {}, setTrashed: (value: boolean) => { files.delete(id); }, setName: () => {} };
 }
 const post = (body: unknown) => JSON.parse(api.doPost({ postData: { contents: JSON.stringify(body) } }));
+
+function keepAliveHarness(status = 200, body = '[]') {
+  const triggers: any[] = [{ getHandlerFunction: () => 'otherMaintenance' }];
+  const fetch = vi.fn(() => ({ getResponseCode: () => status, getContentText: () => body }));
+  const everyHours = vi.fn();
+  api.console = { log: vi.fn() };
+  api.UrlFetchApp = { fetch };
+  api.ScriptApp = {
+    getProjectTriggers: () => [...triggers],
+    newTrigger: (handler: string) => ({ timeBased: () => ({ everyHours: (hours: number) => {
+      everyHours(hours);
+      return { create: () => triggers.push({ getHandlerFunction: () => handler }) };
+    } }) }),
+    deleteTrigger: (trigger: any) => triggers.splice(triggers.indexOf(trigger), 1),
+  };
+  return { triggers, fetch, everyHours };
+}
+
 beforeEach(() => {
   files = new Map(); properties = new Map([['SUPABASE_URL', 'https://test.supabase.co'], ['SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_test']]);
   let created = 0;
@@ -78,4 +96,43 @@ it('limits anonymous storage consumption and scopes authenticated inventories', 
   expect(post(payload).success).toBe(false);
   files.set('mine', file('mine', { owner })); files.set('theirs', file('theirs', { owner: outsider }));
   expect(post({ action: 'list', accessToken: 'owner' }).files.map((item: any) => item.id)).toEqual(['mine']);
+});
+
+it('pings the database using only the publishable key and records a successful empty result', () => {
+  const { fetch } = keepAliveHarness();
+  api.pingSupabase();
+  expect(fetch).toHaveBeenCalledWith('https://test.supabase.co/rest/v1/rmc_nodes?select=id&limit=1', {
+    method: 'get', headers: { apikey: 'sb_publishable_test' }, muteHttpExceptions: true,
+  });
+  expect(properties.get('SUPABASE_KEEPALIVE_LAST_SUCCESS')).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+});
+
+it('reinstalling keeps one six-hour ping trigger and preserves unrelated triggers', () => {
+  const { triggers, everyHours } = keepAliveHarness();
+  api.installSupabaseKeepAlive();
+  api.installSupabaseKeepAlive();
+  expect(everyHours.mock.calls).toEqual([[6], [6]]);
+  expect(triggers.map(trigger => trigger.getHandlerFunction())).toEqual(['otherMaintenance', 'pingSupabase']);
+  api.removeSupabaseKeepAlive();
+  expect(triggers.map(trigger => trigger.getHandlerFunction())).toEqual(['otherMaintenance']);
+});
+
+it('failed setup preserves the existing schedule and last successful timestamp without leaking responses', () => {
+  const { triggers } = keepAliveHarness(503, 'sensitive response');
+  triggers.push({ getHandlerFunction: () => 'pingSupabase' });
+  properties.set('SUPABASE_KEEPALIVE_LAST_SUCCESS', 'previous');
+  expect(() => api.installSupabaseKeepAlive()).toThrow('HTTP 503');
+  expect(triggers).toHaveLength(2);
+  expect(properties.get('SUPABASE_KEEPALIVE_LAST_SUCCESS')).toBe('previous');
+  expect(api.console.log).not.toHaveBeenCalled();
+});
+
+it('rejects missing configuration and unexpected ping responses', () => {
+  const { fetch } = keepAliveHarness(200, '{}');
+  expect(() => api.pingSupabase()).toThrow('unexpected response');
+  expect(properties.has('SUPABASE_KEEPALIVE_LAST_SUCCESS')).toBe(false);
+  fetch.mockClear();
+  properties.delete('SUPABASE_PUBLISHABLE_KEY');
+  expect(() => api.installSupabaseKeepAlive()).toThrow('Configure SUPABASE_URL');
+  expect(fetch).not.toHaveBeenCalled();
 });

@@ -1,3 +1,5 @@
+import { getProfileSchoolName } from '../lib/academicDirectory';
+import { usePageMemory } from '../components/usePageMemory';
 import { formatManilaDate, formatManilaTime, formatManilaDateTime } from '../lib/dateTime';
 import { Modal } from '../components/ui/Modal';
 import { AppEvent } from '../types';
@@ -63,9 +65,9 @@ const StudentRecords: React.FC = () => {
   }));
 
   // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = usePageMemory('searchTerm', '');
+  const [statusFilter, setStatusFilter] = usePageMemory<string>('statusFilter', 'all');
+  const [categoryFilter, setCategoryFilter] = usePageMemory<string>('categoryFilter', 'all');
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [selectedSanctionId, setSelectedSanctionId] = useState<string | null>(null);
   const selectedRecord = records.find(record => record.id === selectedRecordId);
@@ -103,6 +105,7 @@ const StudentRecords: React.FC = () => {
       const { downloadAttendanceTranscript } = await import('../lib/attendanceTranscript');
       progress.step(1);
       await downloadAttendanceTranscript({
+        schoolName: getProfileSchoolName(profile, appData.getSchoolStructure()),
         student: {
           name: profile.name, id: profile.student_id || '',
           department: profile.school_data?.department || '',

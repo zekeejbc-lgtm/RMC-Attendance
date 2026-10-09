@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import Button from '../ui/Button';
 import { Surface } from '../ui/Page';
 import { formatManilaDateTime } from '../../lib/dateTime';
+import type { AppEvent } from '../../types';
+import { offlineRosterUnavailableReason } from '../../lib/offlineRosterEligibility';
 import { offlineQueue, offlineRosters, prepareOfflineAttendance, subscribeOfflineAttendance, syncOfflineAttendance, retryOfflineAttendance, removeSyncedAttendance, type OfflineRoster, type QueuedAttendance } from '../../lib/offlineAttendance';
 
 export function useOfflineAttendance(owner?: string) {
@@ -30,8 +32,16 @@ export function useOfflineAttendance(owner?: string) {
   return { rosters, queue, error, online };
 }
 
-export default function OfflineAttendancePanel({ owner, eventId, data }: { owner?: string; eventId?: string; data: ReturnType<typeof useOfflineAttendance> }) {
+export default function OfflineAttendancePanel({ owner, eventId, event, data }: { owner?: string; eventId?: string; event?: AppEvent; data: ReturnType<typeof useOfflineAttendance> }) {
   const [working, setWorking] = useState(false), [error, setError] = useState('');
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    setError(''); setNow(Date.now());
+    if (!eventId) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [eventId]);
+  const unavailableReason = event ? offlineRosterUnavailableReason(event, now) : undefined;
   const roster = data.rosters.find(item => item.event.id === eventId && Date.now() + item.clockOffset <= item.captureUntil);
   const pending = data.queue.filter(item => item.state === 'pending').length;
   const rejected = data.queue.filter(item => item.state === 'rejected').length;
@@ -53,7 +63,8 @@ export default function OfflineAttendancePanel({ owner, eventId, data }: { owner
     <p role="status" className="text-sm">{data.online ? 'Online' : 'Offline'} · {pending} pending sync · {rejected} need review · {confirmed} confirmed</p>
     {eventId && <>
       <p className="text-sm">{roster ? `${roster.students.length} students saved on this device. Prepared ${formatManilaDateTime(roster.preparedAt)}. Capture until ${formatManilaDateTime(roster.captureUntil)}; sync by ${formatManilaDateTime(roster.syncUntil)}.` : 'Download this event’s roster while online before taking offline attendance.'}</p>
-      <Button variant="secondary" disabled={!owner || !data.online || working} onClick={() => owner && void act(() => prepareOfflineAttendance(owner, eventId))}>{roster ? 'Refresh offline roster' : 'Download offline roster'}</Button>
+      {unavailableReason && <p role="status" className="text-sm text-slate-600">{unavailableReason}</p>}
+      <Button variant="secondary" disabled={!owner || !data.online || working || Boolean(unavailableReason)} onClick={() => owner && (!event || !offlineRosterUnavailableReason(event)) && void act(() => prepareOfflineAttendance(owner, eventId))}>{roster ? 'Refresh offline roster' : 'Download offline roster'}</Button>
       <p className="text-xs text-slate-500">Offline lookup uses saved names, student IDs and sections. Present a school ID when a photo is unavailable. Use a prepared printed QR or an exact student ID; a new rotating QR needs internet.</p>
     </>}
     {(data.queue.length > 0) && <div className="flex flex-wrap gap-2">

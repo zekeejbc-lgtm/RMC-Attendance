@@ -158,6 +158,7 @@ vi.mock('../lib/backend', () => ({
     reviewExcuseApplication: staffState.reviewExcuseApplication,
     updateContactDetails: staffState.updateContactDetails,
     submitApplication: vi.fn(),
+    validateEnrollment: vi.fn(async () => undefined),
     getSystemFreezeStatus: () => ({ isFrozen: false, reason: '' }),
     getFrozenNodes: () => ({}),
     isNodeOrParentFrozen: () => false,
@@ -200,7 +201,7 @@ vi.mock('html5-qrcode', () => ({
 function renderRoute(element: React.ReactElement) {
   return render(
     <ThemeProvider>
-      <MemoryRouter>{element}</MemoryRouter>
+      <MemoryRouter initialEntries={[element.type === Register ? '/register' : '/']}>{element}</MemoryRouter>
     </ThemeProvider>,
   );
 }
@@ -316,35 +317,37 @@ describe('public route UI behavior', () => {
     expect(backendState.mockSeed).not.toHaveBeenCalled();
   });
 
-  it('keeps both landing authentication dialogs named, operable, and keyboard dismissible', async () => {
+  it('keeps login dismissible and enrollment on a dedicated page with back navigation', async () => {
     const user = userEvent.setup();
     renderRoute(<LandingPage defaultOpenLogin />);
 
-    expect(screen.getByRole('dialog', { name: /portal login/i })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: /asset identifier/i })).toBeInTheDocument();
-    const landingPassword = screen.getByLabelText(/security key/i);
+    expect(screen.getByRole('dialog', { name: /log in to IARS/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /username or email/i })).toBeInTheDocument();
+    const landingPassword = screen.getByLabelText(/^password$/i);
     await user.click(screen.getByRole('button', { name: /show password/i }));
     expect(landingPassword).toHaveAttribute('type', 'text');
 
     await user.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog', { name: /portal login/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /log in to IARS/i })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /^register$/i }));
-    expect(screen.getByRole('dialog', { name: /system enrollment/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /close dialog/i })).toHaveFocus();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /create your student account/i })).toHaveFocus();
     expect(screen.getByRole('textbox', { name: /legal full name/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /next/i })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog', { name: /system enrollment/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /create your student account/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /back to home/i }));
+    expect(screen.queryByLabelText(/legal full name/i)).not.toBeInTheDocument();
   });
 
   it('gives the login form programmatic labels and an operable password disclosure', async () => {
     const user = userEvent.setup();
     renderRoute(<Login />);
 
-    expect(screen.getByRole('textbox', { name: /asset identifier/i })).toBeInTheDocument();
-    const password = screen.getByLabelText(/security key/i);
+    expect(screen.getByRole('textbox', { name: /username or email/i })).toBeInTheDocument();
+    const password = screen.getByLabelText(/^password$/i);
     expect(password).toHaveAttribute('type', 'password');
 
     await user.click(screen.getByRole('button', { name: /show password/i }));
@@ -352,13 +355,13 @@ describe('public route UI behavior', () => {
     expect(screen.getByRole('button', { name: /hide password/i })).toBeInTheDocument();
   });
 
-  it('makes the registration identity inputs and profile action accessible by name', async () => {
+  it('makes the registration identity inputs and step progress accessible by name', async () => {
     const user = userEvent.setup();
     renderRoute(<Register />);
 
     await user.type(screen.getByRole('textbox', { name: /legal full name/i }), 'Juan Dela Cruz');
     expect(screen.getByRole('textbox', { name: /legal full name/i })).toHaveValue('Juan Dela Cruz');
-    expect(screen.getByText(/after verifying your email/i)).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: /enrollment progress/i })).toBeInTheDocument();
   });
 
   it('requires identity details before showing academic enrollment fields', async () => {
@@ -366,21 +369,23 @@ describe('public route UI behavior', () => {
     renderRoute(<Register />);
 
     const next = screen.getByRole('button', { name: /^next$/i });
-    expect(next).toBeDisabled();
+    await user.click(next);
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter your full name.');
+    expect(screen.queryByLabelText(/official student id/i)).not.toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: /legal full name/i }), 'Juan Dela Cruz');
     await user.type(screen.getByRole('textbox', { name: /email address/i }), 'juan@rmc.edu.ph');
     await user.type(screen.getByLabelText(/^password$/i), 'secure-password-123');
     await user.type(screen.getByLabelText(/^confirm password$/i), 'secure-password-123');
     expect(next).toBeEnabled();
     await user.click(screen.getByRole('button', { name: /^next$/i }));
-    expect(screen.getByRole('textbox', { name: /official student id/i })).toBeInTheDocument();
+    expect(await screen.findByRole('textbox', { name: /official student id/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /capture student id/i })).not.toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /official student id/i })).toBeRequired();
   });
 
   it.each([
-    ['login', <Login />, /portal login/i, /asset identifier/i],
-    ['registration', <Register />, /system enrollment/i, /legal full name/i],
+    ['login', <Login />, /log in to IARS/i, /username or email/i],
+    ['registration', <Register />, /create your student account/i, /legal full name/i],
   ])('keeps the standalone %s card readable when dark mode is selected', async (_name, element, headingName, inputName) => {
     const user = userEvent.setup();
     localStorage.setItem('iars-theme', 'light');
@@ -388,10 +393,10 @@ describe('public route UI behavior', () => {
 
     await user.keyboard('{Escape}');
     await user.click(screen.getByRole('button', { name: /current theme: light mode/i }));
-    await user.click(screen.getAllByRole('button', { name: _name === 'login' ? /^log in$/i : /^register$/i })[0]);
+    if (_name === 'login') await user.click(screen.getAllByRole('button', { name: /^log in$/i })[0]);
     expect(document.documentElement).toHaveClass('dark');
 
-    const card = screen.getByRole('dialog', { name: headingName });
+    const card = screen.getByRole(_name === 'login' ? 'dialog' : 'main', { name: headingName });
     expect(card).toBeVisible();
     expect(screen.getByRole('textbox', { name: inputName })).toHaveClass('dark:text-white');
     expect(screen.getByRole('textbox', { name: inputName }).className).toMatch(/dark:bg-slate-800/);

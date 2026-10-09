@@ -1,3 +1,5 @@
+import { useLocation, useNavigate } from 'react-router-dom';
+import { usePageMemory } from '../components/usePageMemory';
 import { DateTimeInput } from '../components/ui/TimeInput';
 import { parseManilaDateTime } from '../lib/dateTime';
 import { ClassScheduleEditor } from '../components/academic/ClassScheduleEditor';
@@ -37,15 +39,17 @@ const memberFieldClass = 'mt-1.5 h-11 w-full rounded-xl border border-slate-300 
 
 const SSGPanel: React.FC = () => {
   const { profile, isMock, revision } = useAuth();
-  const [tab, setTab] = useState<'hub' | 'events'>('hub');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [tab, setTab] = usePageMemory<'hub' | 'events'>('tab', 'hub');
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+    const params = new URLSearchParams(location.search || window.location.hash.split('?')[1] || '');
     const tabParam = params.get('tab');
     if (tabParam && ['hub', 'events'].includes(tabParam)) {
       setTab(tabParam as any);
     }
-  }, []);
+  }, [location.search]);
   const [apps, setApps] = useState<Application[]>([]);
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [structure, setStructure] = useState<SchoolNode[]>([]);
@@ -176,7 +180,7 @@ const SSGPanel: React.FC = () => {
 
   useEffect(() => {
     const restoreUnit = () => {
-      const unitId = new URLSearchParams(window.location.hash.split('?')[1] || '').get('unit');
+      const unitId = new URLSearchParams(location.search || window.location.hash.split('?')[1] || '').get('unit');
       const visibleStructure = profile && typeof appData.getVisibleSchoolStructure === 'function'
         ? appData.getVisibleSchoolStructure(profile.uid) : appData.getSchoolStructure();
       setPath(unitId ? findNodePath(visibleStructure, unitId) || [] : []);
@@ -184,7 +188,7 @@ const SSGPanel: React.FC = () => {
     restoreUnit();
     window.addEventListener('hashchange', restoreUnit);
     return () => window.removeEventListener('hashchange', restoreUnit);
-  }, [profile?.uid]);
+  }, [profile?.uid, location.search]);
 
   const handleAddAsset = () => {
     if (assetInput.trim() && !eventData.specificPeople.includes(assetInput.trim())) {
@@ -246,9 +250,9 @@ const SSGPanel: React.FC = () => {
   const changePath = (next: SchoolNode[]) => {
     setPath(next);
     if (window.location.hash.startsWith('#/ssg/panel')) {
-      const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      const params = new URLSearchParams(location.search || window.location.hash.split('?')[1] || '');
       if (next.length) params.set('unit', next[next.length - 1].id); else params.delete('unit');
-      window.history.replaceState(window.history.state, '', `#/ssg/panel${params.size ? `?${params}` : ''}`);
+      navigate(`/ssg/panel${params.size ? `?${params}` : ''}`);
     }
   };
   const navigateTo = (node: SchoolNode) => changePath([...path, node]);
@@ -272,7 +276,7 @@ const SSGPanel: React.FC = () => {
   const [sensitiveTarget, setSensitiveTarget] = useState<{ action: 'ARCHIVE' | 'DELETE'; node: SchoolNode } | null>(null);
   const [restoreError, setRestoreError] = useState('');
   const [restoringId, setRestoringId] = useState('');
-  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [archivedOpen, setArchivedOpen] = usePageMemory('archivedOpen', false);
   const handleArchiveNode = (node: SchoolNode) => setSensitiveTarget({ action: 'ARCHIVE', node });
   const handleDeleteNodeClick = (node: SchoolNode) => setSensitiveTarget({ action: 'DELETE', node });
   const restoreNode = async (node: SchoolNode) => {
@@ -362,7 +366,7 @@ const SSGPanel: React.FC = () => {
           </div>
           <div role="tablist" aria-label={`${workspaceName} panel sections`} className={`grid w-full ${tabs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5 rounded-xl border border-white/10 bg-brand-950/40 p-1.5 lg:w-auto`}>
             {tabs.map(({ id, label, icon: Icon, count }) => (
-              <button key={id} aria-label={label} aria-pressed={tab === id} onClick={() => setTab(id)} className={`flex min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2.5 text-xs font-bold transition-all sm:px-4 ${tab === id ? 'app-button--gold text-brand-900 shadow-md' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
+              <button key={id} aria-label={label} aria-pressed={tab === id} onClick={() => { setTab(id); const params = new URLSearchParams(location.search); params.set('tab', id); navigate(`/ssg/panel?${params}`); }} className={`flex min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2.5 text-xs font-bold transition-all sm:px-4 ${tab === id ? 'app-button--gold text-brand-900 shadow-md' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
                 <Icon size={15} className="hidden sm:block" />
                 <span className="truncate">{label}</span>
                 <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${tab === id ? 'bg-brand-900/10' : 'bg-white/10'}`}>{count}</span>
@@ -420,7 +424,7 @@ const SSGPanel: React.FC = () => {
                     )}
                     <button onClick={() => navigateTo(node)} className="flex flex-1 flex-col items-center justify-center px-3 pt-5">
                       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-900 transition-transform group-hover:scale-105 dark:border-brand-800 dark:bg-brand-900/40 dark:text-brand-300">{['school', 'campus'].includes(node.type) ? <School size={22} /> : ['section', 'block'].includes(node.type) ? <LayoutGrid size={22} /> : <BookOpen size={22} />}</div>
-                      <h4 className="flex min-h-8 items-center text-[11px] font-bold uppercase tracking-tight text-brand-900 dark:text-slate-100">{node.name}</h4>
+                      <h4 className="flex min-h-8 w-full min-w-0 items-center justify-center [overflow-wrap:anywhere] text-[11px] font-bold uppercase tracking-tight text-brand-900 dark:text-slate-100">{node.name}</h4>
                       <p className="mt-1 text-[8px] font-black uppercase tracking-widest text-slate-400">{getAcademicNodeLabel(node.type)}</p>
                       <NodeOfficerSummary node={node} />
                       {organizations.some(org => org.node_id === node.id) && <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"><Users2 size={12} /> {organizations.filter(org => org.node_id === node.id).length} organizations</span>}

@@ -1,3 +1,4 @@
+import { useSmartBack } from '../NavigationMemory';
 import { DEFAULT_EXCUSE_WINDOW_DAYS, MAX_EXCUSE_WINDOW_DAYS } from '../../lib/excusePolicy';
 import { TimeInput } from '../ui/TimeInput';
 import { formatClockTime } from '../../lib/dateTime';
@@ -34,6 +35,7 @@ const newWindow = (index: number): EventAttendanceWindow => ({
 // The page fixes the purpose; changing activity types cannot turn an event into a ceremony.
 const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Organization }> = ({ purpose, organization }) => {
   const navigate = useNavigate();
+  const back = useSmartBack();
   const { eventId } = useParams();
   const [searchParams] = useSearchParams();
   const isCeremony = purpose === 'ceremony';
@@ -241,7 +243,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
     } catch (error) { setSaveError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to save event.'); return; }
     finally { setSaving(false); }
 
-    navigate(returnPath);
+    navigate(returnPath, { replace: true });
   };
 
   return (
@@ -250,7 +252,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
         eyebrow={isCeremony ? "Ceremony management" : "Activity management"}
         title={isCeremony ? isEditing ? 'Edit Ceremony' : 'Create Ceremony' : kind === 'service' ? isEditing ? 'Edit Service Activity' : 'Create Service Activity' : kind === 'merit' ? isEditing ? 'Edit Merit Activity' : 'Create Merit Activity' : isEditing ? 'Edit Event' : 'Create Event'}
         description={isCeremony ? 'Plan flag raising or retreat dates, required attendance, exemptions, and class schedules.' : isEditing ? 'Review this activity and its attendance configuration.' : kind === 'service' ? 'Set the service duration, attendance windows, recipients, and excess-hours policy.' : kind === 'merit' ? 'Set a fixed award and the attendance sessions required to complete this activity.' : 'Configure recipients, attendance windows, geofencing, and sanction rules before scheduling.'}
-        actions={<Button variant="secondary" onClick={() => navigate(returnPath)}><ArrowLeft size={17} /> {isCeremony ? 'Back to Ceremonies' : 'Back to Events'}</Button>}
+        actions={<Button variant="secondary" onClick={() => back(returnPath)}><ArrowLeft size={17} /> {isCeremony ? 'Back to Ceremonies' : 'Back to Events'}</Button>}
       />
 
       {requiresApproval && <Surface className="p-4 text-sm" aria-label="OSSA approval requirement"><strong>OSSA approval required</strong><p>Submit ? Pending OSSA review ? Approved ? Active at the scheduled time. Changes to an approved activity require a new review. Attendance and sanctions remain disabled while pending or rejected.</p>{editingEvent?.approvalStatus && <p className="mt-2 font-bold">Current decision: {editingEvent.approvalStatus}. {editingEvent.reviewNotes}</p>}</Surface>}
@@ -274,7 +276,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
       {editingEvent?.kind === 'service' && eventInScope && editingEvent.status !== 'done' && <Surface className="space-y-3 p-4">
         <h2 className="font-bold">Extend service duration</h2><p className="text-sm">Add future days with the same attendance windows. Existing attendance and credits are preserved.</p>
         <label className="app-field-label block">New service end date<input type="date" className="input-field mt-2" min={endDate} value={extensionDate} onChange={e => setExtensionDate(e.target.value)} /></label>
-        <Button type="button" variant="secondary" disabled={extending || !extensionDate || extensionDate <= (editingEvent.endDate || datePart(editingEvent.endTime))} onClick={async () => { setExtending(true); setSaveError(''); try { await appData.extendService(editingEvent.id, extensionDate); navigate(returnPath); } catch (error) { setSaveError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to extend service.'); } finally { setExtending(false); } }}>Extend service days</Button>
+        <Button type="button" variant="secondary" disabled={extending || !extensionDate || extensionDate <= (editingEvent.endDate || datePart(editingEvent.endTime))} onClick={async () => { setExtending(true); setSaveError(''); try { await appData.extendService(editingEvent.id, extensionDate); navigate(returnPath, { replace: true }); } catch (error) { setSaveError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to extend service.'); } finally { setExtending(false); } }}>Extend service days</Button>
       </Surface>}
       <form aria-label={isCeremony ? isEditing ? 'Edit ceremony' : 'Schedule ceremony' : isEditing ? 'Edit attendance event' : 'Schedule attendance event'} className="space-y-6" onSubmit={scheduleEvent}>
         {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
@@ -410,11 +412,11 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
         <div className="sticky bottom-3 z-10 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:p-4 lg:flex-row lg:items-center lg:justify-between">
           <div><p className="text-sm font-bold text-brand-900 dark:text-white">{isEditing ? isCeremony ? 'Ceremony actions' : 'Event actions' : phase < 4 ? `Phase ${phase + 1}: ${phases[phase]}` : 'Ready to schedule?'}</p><p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{isEditing ? 'Save your changes or update this event’s status.' : phase < 4 ? 'Complete this phase, then continue. Your entries are kept when you go back.' : isCeremony ? 'Review the selected dates and ceremony attendance requirements.' : 'Review the configuration before scheduling this event.'}</p></div>
           <div aria-label={isCeremony ? 'Ceremony form actions' : 'Event form actions'} className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end" role="group">
-            {!isEditing && <Button className="sm:w-auto" type="button" variant="secondary" disabled={saving} onClick={() => navigate(returnPath)}>Cancel</Button>}
+            {!isEditing && <Button className="sm:w-auto" type="button" variant="secondary" disabled={saving} onClick={() => back(returnPath)}>Cancel</Button>}
             {phasedCreation && phase > 0 && <Button className="sm:w-auto" type="button" variant="secondary" disabled={saving} onClick={() => goToPhase(phase - 1)}>Back</Button>}
             {phasedCreation && phase < phases.length - 1 && <Button className="sm:w-auto" type="submit" variant="gold">Next: {phases[phase + 1]}</Button>}
-            {!organization && eventInScope && editingEvent?.status === 'active' && <><Button className="sm:w-auto" size="sm" type="button" variant="secondary" disabled={hasRecordedAttendance} onClick={async () => { await appData.updateEvent(editingEvent.id, { endTime: editingEvent.endTime + 3600000 }); navigate(returnPath); }}><Clock3 size={15}/>Extend by 1 Hour</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath); }}><Archive size={15}/>Finish and Archive</Button></>}
-            {!organization && eventInScope && editingEvent?.status === 'upcoming' && <><Button className="sm:w-auto" size="sm" type="submit" variant="secondary"><Clock3 size={15}/>Reschedule</Button><Button className="sm:w-auto" size="sm" type="button" variant="warning" onClick={async () => { await appData.updateEvent(editingEvent.id, { status: 'done', cancellationStatus: 'dropped' }); navigate(returnPath); }}><CircleOff size={15}/>Drop</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.cancelEvent(editingEvent.id); navigate(returnPath); }}><XCircle size={15}/>Cancel</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath); }}><Archive size={15}/>Archive</Button><Button className="text-red-700 sm:w-auto" size="sm" type="button" variant="danger" onClick={async () => { await appData.deleteEvent(editingEvent.id); navigate(returnPath); }}><Trash2 size={15}/>Delete</Button></>}
+            {!organization && eventInScope && editingEvent?.status === 'active' && <><Button className="sm:w-auto" size="sm" type="button" variant="secondary" disabled={hasRecordedAttendance} onClick={async () => { await appData.updateEvent(editingEvent.id, { endTime: editingEvent.endTime + 3600000 }); navigate(returnPath, { replace: true }); }}><Clock3 size={15}/>Extend by 1 Hour</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath, { replace: true }); }}><Archive size={15}/>Finish and Archive</Button></>}
+            {!organization && eventInScope && editingEvent?.status === 'upcoming' && <><Button className="sm:w-auto" size="sm" type="submit" variant="secondary"><Clock3 size={15}/>Reschedule</Button><Button className="sm:w-auto" size="sm" type="button" variant="warning" onClick={async () => { await appData.updateEvent(editingEvent.id, { status: 'done', cancellationStatus: 'dropped' }); navigate(returnPath, { replace: true }); }}><CircleOff size={15}/>Drop</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.cancelEvent(editingEvent.id); navigate(returnPath, { replace: true }); }}><XCircle size={15}/>Cancel</Button><Button className="sm:w-auto" size="sm" type="button" variant="secondary" onClick={async () => { await appData.archiveEvent(editingEvent.id); navigate(returnPath, { replace: true }); }}><Archive size={15}/>Archive</Button><Button className="text-red-700 sm:w-auto" size="sm" type="button" variant="danger" onClick={async () => { await appData.deleteEvent(editingEvent.id); navigate(returnPath, { replace: true }); }}><Trash2 size={15}/>Delete</Button></>}
             {(!phasedCreation || phase === phases.length - 1) && <Button className="col-span-2 sm:ml-2 sm:w-auto sm:min-w-32" type="submit" variant="gold" loading={saving} disabled={!formValid || saving}><SaveIcon size={16}/>{requiresApproval ? isEditing ? 'Submit Changes for Approval' : 'Submit for OSSA Approval' : isEditing ? 'Save' : isCeremony ? 'Schedule Ceremonies' : kind === 'service' ? 'Schedule Service' : kind === 'merit' ? 'Schedule Merit Activity' : 'Schedule Event'}</Button>}
           </div>
         </div>

@@ -1,3 +1,4 @@
+import { usePageMemory } from '../components/usePageMemory';
 import { excuseBlockReason, excuseFileError, EXCUSE_FILE_ACCEPT } from '../lib/excusePolicy';
 import { ExcuseWindowNotice, useExcuseClock } from '../components/events/ExcuseWindowNotice';
 import { formatManilaDate, formatManilaTime } from '../lib/dateTime';
@@ -48,10 +49,10 @@ const StudentCeremonies: React.FC = () => {
   const canManage = Boolean(profile && hasPermission(profile.role, 'events.manage'));
 
   // Search & Filter state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [isScheduledOpen, setIsScheduledOpen] = useState(false);
-  const [isArchivedOpen, setIsArchivedOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = usePageMemory('searchTerm', '');
+  const [typeFilter, setTypeFilter] = usePageMemory<string>('typeFilter', 'all');
+  const [isScheduledOpen, setIsScheduledOpen] = usePageMemory('isScheduledOpen', false);
+  const [isArchivedOpen, setIsArchivedOpen] = usePageMemory('isArchivedOpen', false);
 
   // Modal State
   const [selectedCeremony, setSelectedCeremony] = useState<SchoolCeremony | null>(null);

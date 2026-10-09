@@ -5,6 +5,7 @@ import { createAttendanceTranscript, type AttendanceTranscript } from './attenda
 const logo = new Uint8Array(readFileSync('public/academic-seal.jpeg'));
 const generatedAt = new Date('2026-10-08T04:09:00Z');
 const sample: AttendanceTranscript = {
+  schoolName: 'RIZAL MEMORIAL COLLEGES, INC., TAGUM CAMPUS',
   student: { name: 'Juan Dela Cruz', id: '2025-00047A', department: 'College Department', section: '2SP - B' },
   attendanceRate: 100,
   sanctionHours: 0,
@@ -13,6 +14,23 @@ const sample: AttendanceTranscript = {
 };
 
 describe('attendance transcript PDF', () => {
+  it('wraps a long school name within the page and moves records below the header', () => {
+    const schoolName = 'RIZAL MEMORIAL COLLEGES, INC., TAGUM CAMPUS AND REGIONAL CENTER FOR ADVANCED SCIENCE AND TECHNOLOGY';
+    const doc = createAttendanceTranscript({ ...sample, schoolName }, logo, generatedAt);
+    const content = doc.internal.pages.slice(1).flat().join('\n');
+    const lastTable = (doc as typeof doc & { lastAutoTable: { finalY: number } }).lastAutoTable;
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(content).toContain('TECHNOLOGY');
+    expect(content).toContain('Juan Dela Cruz');
+    expect(content).not.toContain('(RIZAL MEMORIAL COLLEGES)');
+    expect(lastTable.finalY).toBeGreaterThan((createAttendanceTranscript(sample, logo, generatedAt) as typeof doc & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY);
+    doc.setFont('helvetica', 'bold').setFontSize(17);
+    const maxWidth = doc.internal.pageSize.getWidth() - 61;
+    const lines: string[] = doc.splitTextToSize(schoolName, maxWidth);
+    expect(lines.length).toBeGreaterThan(2);
+    lines.forEach(line => expect(doc.getTextWidth(line)).toBeLessThanOrEqual(maxWidth));
+  });
+
   it('includes the seal, readable student records, an empty ledger, and the Manila generation time', () => {
     const doc = createAttendanceTranscript(sample, logo, generatedAt);
     const content = doc.internal.pages.slice(1).flat().join('\n');
@@ -45,7 +63,8 @@ describe('attendance transcript PDF', () => {
     const pages = (doc.internal.pages as unknown as string[][]).slice(1).map(page => page.join('\n'));
     for (const [index, page] of pages.entries()) {
       expect(page).toContain('/I0 Do');
-      expect(page).toContain('RIZAL MEMORIAL COLLEGES');
+      expect(page).toContain('RIZAL MEMORIAL');
+      expect(page).toContain('TAGUM CAMPUS');
       expect(page).toContain('SYSTEM-AUTOMATED DOCUMENT');
       expect(page).toContain(`Page ${index + 1} of ${pages.length}`);
     }

@@ -16,6 +16,7 @@ vi.mock('./AuthChallenge', () => ({ AuthChallenge: () => <div>Authenticator veri
 import { AuthProvider, useAuth } from './AuthContext';
 import { appAuth, appData, resetData } from '../lib/backend';
 import { toast } from '../lib/toast';
+import { IDLE_STORAGE_PREFIX, IDLE_TIMEOUT_MS } from '../lib/idleSession';
 
 function deferred() {
   let resolve!: (value: any) => void;
@@ -42,7 +43,8 @@ function Probe() {
   </div>;
 }
 beforeEach(() => {
-  vi.resetAllMocks(); resetData();
+  vi.resetAllMocks(); resetData(); localStorage.clear();
+  api.signOut.mockResolvedValue({ error: null });
   api.onAuthStateChange.mockImplementation(callback => {
     authChange = callback;
     return { data: { subscription: { unsubscribe: vi.fn() } } };
@@ -52,7 +54,38 @@ beforeEach(() => {
   api.autoRosters.mockResolvedValue(undefined);
   api.refreshProfiles.mockResolvedValue(undefined);
 });
-afterEach(() => { cleanup(); resetData(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); resetData(); vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear(); });
+
+it('closes the workspace and clears scanner access on idle logout even if the server is unreachable', async () => {
+  vi.useFakeTimers();
+  api.rpc.mockResolvedValue({ data: snapshot, error: null });
+  api.select.mockResolvedValue({ data: nodes, error: null });
+  api.signOut.mockResolvedValue({ error: new Error('Offline') });
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  render(<AuthProvider><Probe /></AuthProvider>); emit('student');
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+  expect(screen.getByText('Student')).toBeInTheDocument();
+  // Simulate a suspended browser without running hundreds of background polls.
+  vi.setSystemTime(Date.now() + IDLE_TIMEOUT_MS);
+  act(() => window.dispatchEvent(new Event('focus')));
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+  expect(screen.queryByText('Student')).not.toBeInTheDocument();
+  expect(api.signOut).toHaveBeenCalledExactlyOnceWith({ scope: 'local' });
+  expect(api.clearRosters).toHaveBeenCalledWith('student');
+  act(() => authChange('TOKEN_REFRESHED', { user: { id: 'student' } }));
+  expect(screen.queryByText('Student')).not.toBeInTheDocument();
+  expect(api.signOut).toHaveBeenCalledOnce();
+});
+
+it('rejects expired offline scanner access on a cold start', async () => {
+  vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+  localStorage.setItem(IDLE_STORAGE_PREFIX + 'mayor', JSON.stringify({ sessionId: 'old', lastActivity: Date.now() - IDLE_TIMEOUT_MS }));
+  api.restoreActive.mockResolvedValue({ actorUid: 'mayor', actor: { uid: 'mayor', name: 'Prepared Mayor', role: 'mayor', account_status: 'active', school_data: {} } });
+  render(<AuthProvider><Probe /></AuthProvider>); emit(null);
+  await waitFor(() => expect(api.clearRosters).toHaveBeenCalledWith('mayor'));
+  expect(screen.queryByText('Prepared Mayor')).not.toBeInTheDocument();
+  expect(api.rpc).not.toHaveBeenCalled();
+});
 
 it('keeps a passkey SIGNED_IN session behind the existing authenticator challenge when required', async () => {
   api.assurance.mockResolvedValue({ data: { currentLevel: 'aal1', nextLevel: 'aal2' }, error: null });

@@ -1,3 +1,5 @@
+import { getProfileSchoolName } from '../lib/academicDirectory';
+import { usePageMemory } from '../components/usePageMemory';
 import { formatManilaDate, formatManilaTime, parseManilaDateTime, startOfManilaPeriod } from '../lib/dateTime';
 import { attendanceWindowTitle, eventDisplayTitle } from '../lib/eventGroups';
 import { toast } from '../lib/toast';
@@ -72,18 +74,18 @@ const formatStatus = (status: AttendanceRecord['status']) =>
 const AttendanceDashboard: React.FC = () => {
   const { isMock, profile, revision } = useAuth();
   const [events, setEvents] = useState<AppEvent[]>([]);
-  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [selectedEvents, setSelectedEvents] = usePageMemory<string[]>('selectedEvents', []);
+  const [timeFilter, setTimeFilter] = usePageMemory<TimeFilter>('timeFilter', 'all');
+  const [dateRange, setDateRange] = usePageMemory('dateRange', { start: '', end: '' });
   
-  const [filters, setFilters] = useState<FilterState>({
+  const [filters, setFilters] = usePageMemory<FilterState>('filters', {
     level: 'all',
     college: '', program: '', major: '', yearLevel: '', section: '',
     secondaryType: '', strand: '', specialization: '', gradeLevel: '',
     elemGradeLevel: ''
   });
 
-  const [chartType, setChartType] = useState<ChartType>('pie');
+  const [chartType, setChartType] = usePageMemory<ChartType>('chartType', 'pie');
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportSettings, setExportSettings] = useState({
     groupBy: 'status' as 'status' | 'program' | 'section' | 'level',
@@ -95,7 +97,7 @@ const AttendanceDashboard: React.FC = () => {
 
   const [showTimeModal, setShowTimeModal] = useState(false);
   const [showEventDropdown, setShowEventDropdown] = useState(false);
-  const [eventSearch, setEventSearch] = useState('');
+  const [eventSearch, setEventSearch] = usePageMemory('eventSearch', '');
 
   // Load initial data
   useEffect(() => {
@@ -175,16 +177,22 @@ const AttendanceDashboard: React.FC = () => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     
+    const schoolName = getProfileSchoolName(profile, appData.getSchoolStructure());
+    doc.setFont('helvetica', 'bold').setFontSize(18);
+    const schoolLines: string[] = doc.splitTextToSize(schoolName, pageWidth - 28);
+    const headerHeight = 40 + (schoolLines.length - 1) * 7;
     // Header
     doc.setFillColor(14, 27, 66); // Brand color
-    doc.rect(0, 0, pageWidth, 40, 'F');
+    doc.rect(0, 0, pageWidth, headerHeight, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.text('RMC SSG Attendance Report', 14, 25);
+    doc.setFontSize(18);
+    doc.text(schoolLines, 14, 15, { lineHeightFactor: 7 / (18 * 25.4 / 72) });
+    doc.setFontSize(13);
+    doc.text('Attendance Report', 14, headerHeight - 15);
     doc.setFontSize(10);
-    doc.text(`Generated: ${formatManilaDate(Date.now())}`, 14, 32);
+    doc.text(`Generated: ${formatManilaDate(Date.now())}`, 14, headerHeight - 8);
 
-    let yPos = 50;
+    let yPos = headerHeight + 10;
 
     // Summary
     doc.setTextColor(0, 0, 0);

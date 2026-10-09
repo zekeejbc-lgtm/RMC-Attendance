@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getProfileSchoolName,
   profileMatchesDirectorySection,
   createAcademicPreset,
   createEventAudienceTarget,
@@ -9,6 +10,35 @@ import {
   serializeAcademicAssignment,
   validateChildType,
 } from './academicDirectory';
+import type { SchoolNode, UserProfile } from '../types';
+
+describe('account school / branch identity', () => {
+  const nodes: SchoolNode[] = [{ id: 'campus', name: 'Campus container', type: 'campus', children: [
+    { id: 'branch-a', name: 'School Branch A', type: 'education_unit', children: [{ id: 'a-section', name: 'Shared Section', type: 'section' }] },
+    { id: 'branch-b', name: 'School Branch B', type: 'education_unit', children: [{ id: 'b-section', name: 'Shared Section', type: 'section' }] },
+  ] }];
+  const profile = { school_data: { section: 'Shared Section', academic_assignment: { terminalGroupId: 'b-section' } } } as UserProfile;
+
+  it('uses the first academic unit on the assigned path, rather than the first sibling or campus container', () => {
+    expect(getProfileSchoolName(profile, nodes)).toBe('School Branch B');
+    expect(getProfileSchoolName(profile, [{ ...nodes[0], children: [...nodes[0].children!].reverse() }])).toBe('School Branch B');
+    const renamed = structuredClone(nodes);
+    renamed[0].children![1].name = 'A renamed school with a long branch name';
+    expect(getProfileSchoolName(profile, renamed)).toBe('A renamed school with a long branch name');
+  });
+
+  it('resolves official assignments and units that are directory roots', () => {
+    expect(getProfileSchoolName({ ...profile, official_data: { body: 'OSSA', assignment_node_id: 'a-section' } }, nodes)).toBe('School Branch A');
+    expect(getProfileSchoolName(profile, nodes[0].children!)).toBe('School Branch B');
+  });
+
+  it('resolves legacy enrollment only when its branch is unambiguous', () => {
+    const legacy = { school_data: { section: 'Shared Section' } } as UserProfile;
+    expect(getProfileSchoolName(legacy, nodes)).toBe('School / branch not assigned');
+    expect(getProfileSchoolName({ ...legacy, school_data: { ...legacy.school_data, department: 'School Branch B' } }, nodes)).toBe('School Branch B');
+    expect(getProfileSchoolName(null, nodes)).toBe('School / branch not assigned');
+  });
+});
 
 const collectTypes = (node: any): string[] => [
   node.type,

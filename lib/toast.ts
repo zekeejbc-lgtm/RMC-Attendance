@@ -43,6 +43,7 @@ export function classifyError(error: unknown) {
   const value = error as { code?: string; status?: number; name?: string; message?: string } | null;
   const code = String(value?.code || '');
   const message = String(value?.message || error || '').toLowerCase();
+  if (message === 'prepare an approved ongoing event or one starting within 24 hours.') return { code: 'ROSTER-001', message: 'Roster download requires an approved event that is ongoing or starts within 24 hours.' };
   if (code === 'PGRST202') return { code: 'SYS-002', message: 'This feature is unavailable. The server needs an update.' };
   if (value?.name === 'NotAllowedError' || /camera|geolocation/.test(message)) return { code: 'DEVICE-001', message: 'Camera or location access is blocked.' };
   if (value?.name === 'AbortError') return { code: 'ACT-001', message: 'Action cancelled.' };

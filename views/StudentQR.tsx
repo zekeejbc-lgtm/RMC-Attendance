@@ -1,4 +1,5 @@
 import { formatManilaDate } from '../lib/dateTime';
+import { getProfileSchoolName } from '../lib/academicDirectory';
 import { toast } from '../lib/toast';
 import React, { useEffect, useRef, useState } from 'react';
 import { appData } from '../lib/backend';
@@ -10,6 +11,7 @@ import { Page, PageHeader, Surface } from '../components/ui/Page';
 
 const StudentQR: React.FC = () => {
   const { profile } = useAuth();
+  const schoolName = getProfileSchoolName(profile, appData.getSchoolStructure());
   const qrWrapperRef = useRef<HTMLDivElement>(null);
   const printQrWrapperRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
@@ -159,9 +161,23 @@ const StudentQR: React.FC = () => {
       // Header copy is drawn before the remote seal so a missing logo never leaves a blank header.
       ctx.textAlign = 'left';
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '900 25px Arial, sans-serif';
-      ctx.fillText('INSTITUTION ATTENDANCE', cardX + 188, cardY + 108);
-      ctx.fillText('& RECORDS', cardX + 188, cardY + 140);
+      // Wrap even unbroken names, then reduce the font to fit the header area.
+      const nameWidth = cardW - 220;
+      let schoolFont = 25;
+      let schoolLines: string[] = [];
+      do {
+        ctx.font = `900 ${schoolFont}px Arial, sans-serif`;
+        schoolLines = [''];
+        for (const character of schoolName) {
+          const last = schoolLines.length - 1;
+          if (ctx.measureText(schoolLines[last] + character).width > nameWidth && schoolLines[last]) schoolLines.push(character);
+          else schoolLines[last] += character;
+        }
+        if (schoolLines.length * schoolFont * 1.2 <= 110 || schoolFont <= 10) break;
+        schoolFont -= 1;
+      } while (schoolFont >= 10);
+      const schoolLineHeight = Math.min(schoolFont * 1.2, 110 / schoolLines.length);
+      schoolLines.forEach((line, index) => ctx.fillText(line.trim(), cardX + 188, cardY + 55 + index * schoolLineHeight, nameWidth));
       ctx.fillStyle = gold;
       ctx.font = '700 16px Arial, sans-serif';
       ctx.fillText('OFFICIAL DIGITAL PASSPORT', cardX + 188, cardY + 176);
@@ -304,7 +320,7 @@ const StudentQR: React.FC = () => {
             alt="IARS Academic Seal"
             className="w-14 h-14 mx-auto rounded-full object-cover shadow-lg mb-2 ring-2 ring-gold-400/60"
           />
-          <h2 className="text-base font-bold text-white uppercase tracking-tight">Institution Attendance & Records</h2>
+          <h2 className="text-base font-bold leading-relaxed text-white uppercase tracking-tight [overflow-wrap:anywhere]">{schoolName}</h2>
           <p className="text-gold-300 text-[9px] font-semibold uppercase tracking-widest mt-0.5">IARS | Student ID Card</p>
         </div>
 

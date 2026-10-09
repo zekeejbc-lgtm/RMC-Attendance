@@ -1,14 +1,27 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const api = vi.hoisted(() => ({ rpc: vi.fn(), select: vi.fn(), invoke: vi.fn(), signUp: vi.fn() }));
+const api = vi.hoisted(() => ({ rpc: vi.fn(), select: vi.fn(), invoke: vi.fn(), signUp: vi.fn(), setSession: vi.fn() }));
 vi.mock('./supabase', () => ({
   requireConfiguration: () => {},
-  supabase: { rpc: api.rpc, from: () => ({ select: api.select }), functions: { invoke: api.invoke }, auth: { signUp: api.signUp } },
+  supabase: { rpc: api.rpc, from: () => ({ select: api.select }), functions: { invoke: api.invoke }, auth: { signUp: api.signUp, setSession: api.setSession } },
 }));
-import { appData, refreshData, resetData } from './backend';
+import { appAuth, appData, refreshData, resetData } from './backend';
 import { toastStore } from './toast';
 import type { UserProfile } from '../types';
 
 const applicant = { email: 'student@example.edu', name: 'Student', username: 'student_123', student_id: '123', school_data: {} } as UserProfile;
+it('preserves the account-not-found code from an HTTP error response', async () => {
+  api.invoke.mockResolvedValue({ data: null, error: { context: { json: async () => ({ error: 'Account not found', code: 'ACCOUNT_NOT_FOUND' }) } } });
+  await expect(appAuth.signIn('new@example.test', 'password')).rejects.toMatchObject({ message: 'Account not found', code: 'ACCOUNT_NOT_FOUND' });
+  expect(api.setSession).not.toHaveBeenCalled();
+});
+it('accepts email login and establishes the returned session', async () => {
+  const session = { access_token: 'access', refresh_token: 'refresh' };
+  api.invoke.mockResolvedValue({ data: session, error: null });
+  api.setSession.mockResolvedValue({ error: null });
+  await appAuth.signIn(' existing@example.test ', 'password');
+  expect(api.invoke).toHaveBeenCalledWith('rmc-login', { body: { identifier: 'existing@example.test', password: 'password' } });
+  expect(api.setSession).toHaveBeenCalledWith(session);
+});
 it('submits the admission profile and key through Supabase and reports email confirmation', async () => {
   resetData();
   api.invoke.mockResolvedValue({ data: { uid: 'new', needsEmailConfirmation: true }, error: null });

@@ -346,7 +346,7 @@ const MayorScanner: React.FC = () => {
           actions={<Button variant="secondary" className="sm:w-auto" onClick={closeScanner}><ArrowLeft size={17} /> Back to events</Button>}
         />
 
-        <OfflineAttendancePanel owner={profile?.uid} eventId={selectedEvent?.id} data={offline} />
+        <OfflineAttendancePanel owner={profile?.uid} eventId={selectedEvent?.id} event={selectedEvent || undefined} data={offline} />
 
         <div className="grid gap-4 sm:grid-cols-3">
           <Surface className="p-4"><CustomSelect label="Scan action" value={direction} onChange={value => setDirection(value as 'in' | 'out')} options={[{value:'in',label:'Scan in'},{value:'out',label:'Scan out / compute rendered hours'}]} />{scanError && <p role="alert" className="mt-2 text-sm text-red-600">{scanError}</p>}{attendanceReceipt?.time_out && <p role="status" className="mt-2 text-sm">Rendered: {attendanceReceipt.rendered_hours?.toFixed(2)} hours. Sanctions cleared: {attendanceReceipt.deducted_hours?.toFixed(2)} hours. Earned merit: {(attendanceReceipt.merit_earned_hours || 0).toFixed(2)} hours.{attendanceReceipt.completion_pending && ' Fixed merit is pending completion of all required sessions.'}</p>}</Surface>
@@ -441,7 +441,7 @@ const MayorScanner: React.FC = () => {
 
       <OfflineAttendancePanel owner={profile?.uid} data={offline} />
       <Modal open={Boolean(selectedEvent)} onClose={() => setSelectedEvent(null)} title={selectedEvent?.title || 'Event'} description="Confirm that you are within the authorized attendance area." size="xl" footer={<><Button variant="secondary" onClick={() => setSelectedEvent(null)}>Close</Button><Button variant="gold" onClick={enterScanner} disabled={!insideGeofence || groupEvent(selectedEvent!) !== 'current' || (!offline.online && !preparedRoster)}><ScanLine size={17} /> Start scanning</Button></>}>
-        <OfflineAttendancePanel owner={profile?.uid} eventId={selectedEvent?.id} data={offline} />
+        <OfflineAttendancePanel owner={profile?.uid} eventId={selectedEvent?.id} event={selectedEvent || undefined} data={offline} />
         {selectedEvent && <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
           {selectedEvent.geofenceEnabled !== false ? <GeofenceMap value={{ lat: selectedEvent.location.lat, lng: selectedEvent.location.lng, radius: selectedEvent.location.radius_meters }} position={location} /> : <Surface className="grid min-h-48 place-items-center p-6 text-sm text-slate-500">This event does not require a location check.</Surface>}
           <div className="space-y-4">

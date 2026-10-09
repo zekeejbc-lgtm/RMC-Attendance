@@ -1,3 +1,4 @@
+import { usePageMemory } from '../components/usePageMemory';
 import { formatManilaDate, formatManilaDateTime, formatClockTime } from '../lib/dateTime';
 import EventBanner from '../components/events/EventBanner';
 import { eventDisplayTitle } from '../lib/eventGroups';
@@ -23,7 +24,7 @@ export default function Organizations({ publicDirectory = false }: { publicDirec
   const { organizationId } = useParams();
   const [publicItems, setPublicItems] = useState<Organization[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(publicDirectory);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = usePageMemory('query', '');
   const [form, setForm] = useState<'create' | Organization | null>(null);
   const [joining, setJoining] = useState<Organization | null>(null);
   const [joinKey, setJoinKey] = useState('');

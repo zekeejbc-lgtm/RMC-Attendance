@@ -1,6 +1,7 @@
 import type { AppEvent } from '../types';
 import { offlineRosters, prepareOfflineAttendance, recentRosterPreparations } from './offlineAttendance';
 import { prefetchScannerPhotos } from './scannerPhotos';
+import { offlineRosterUnavailableReason } from './offlineRosterEligibility';
 
 export const ROSTER_REFRESH_INTERVAL = 15 * 60 * 1000;
 const busy = new Map<string, Promise<void>>();
@@ -18,8 +19,7 @@ export async function refreshAutomaticRosters(owner: string, events: AppEvent[],
     // Leave capacity below the server's 30/hour limit for manual preparation and other devices.
     const preparedCount = await recentRosterPreparations(owner) ?? rosters.filter(roster => roster.preparedAt - roster.clockOffset > now - 3600000).length;
     let budget = Math.min(2, Math.max(0, 20 - preparedCount));
-    const eligible = events.filter(event => !['pending', 'rejected'].includes(event.approvalStatus || '') && !event.isGeneralEvent
-      && event.status !== 'done' && !event.cancellationStatus && event.endTime > now && event.startTime <= now + 86400000);
+    const eligible = events.filter(event => !offlineRosterUnavailableReason(event, now));
     const latest = (event: AppEvent) => rosters.find(roster => roster.event.id === event.id);
     const due = eligible.filter(event => {
       const roster = latest(event);

@@ -91,3 +91,6 @@ it('shows one brief error when a request and its action report the same problem'
   expect(toastStore.getSnapshot()).toHaveLength(1);
   expect(toastStore.getSnapshot()[0]).toMatchObject({ message: 'Connection lost.', code: 'NET-001' });
 });
+it('explains the offline roster preparation window instead of reporting invalid input', () => {
+  expect(classifyError({ status: 400, code: '22023', message: 'Prepare an approved ongoing event or one starting within 24 hours.' })).toEqual({ code: 'ROSTER-001', message: 'Roster download requires an approved event that is ongoing or starts within 24 hours.' });
+});

@@ -1,3 +1,4 @@
+import { lastDestination } from '../lib/navigationMemory';
 import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
 import React, { useState, useEffect, useRef } from 'react';
@@ -32,10 +33,9 @@ import {
 
 interface LandingPageProps {
   defaultOpenLogin?: boolean;
-  defaultOpenRegister?: boolean;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, defaultOpenRegister = false }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isMock, user, profile, revision, loading } = useAuth();
@@ -46,7 +46,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   
   // Modals
   const [showLoginModal, setShowLoginModal] = useState(defaultOpenLogin);
-  const [showRegisterModal, setShowRegisterModal] = useState(defaultOpenRegister);
+  const isEnrollmentPage = location.pathname === '/register';
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
 
   // Login Logic State
@@ -56,6 +56,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   const [loginError, setLoginError] = useState('');
   const [googleEnrollment, setGoogleEnrollment] = useState<GoogleEnrollment | null>(null);
   const [googleNeedsEnrollment, setGoogleNeedsEnrollment] = useState(false);
+  const [missingAccountEmail, setMissingAccountEmail] = useState('');
+  const accountPromptRef = useRef<HTMLDivElement>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
   const [showTestPanel, setShowTestPanel] = useState(false);
@@ -87,16 +89,31 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     guardianName: '', guardianPhone: '', profilePic: '', idFront: '', idBack: ''
   });
 
+  const enrollmentTitleRef = useRef<HTMLHeadingElement>(null);
+  const enrollmentSteps = ['Account details', 'Academic assignment', 'Emergency contact', 'Profile picture'];
+
   // --- EFFECTS ---
+  useEffect(() => {
+    if (!isEnrollmentPage) return;
+    enrollmentTitleRef.current?.focus({ preventScroll: true });
+    enrollmentTitleRef.current?.closest('main')?.scrollIntoView?.({ block: 'start' });
+  }, [isEnrollmentPage, regStep, regSuccess]);
+
+  useEffect(() => {
+    if (missingAccountEmail && showLoginModal) {
+      accountPromptRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      accountPromptRef.current?.focus({ preventScroll: true });
+    }
+  }, [missingAccountEmail, showLoginModal]);
+
   useEffect(() => {
     const section = (location.state as { homeSection?: string } | null)?.homeSection;
     if (section) document.getElementById(section)?.scrollIntoView({ behavior: 'smooth' });
   }, [location.key, location.state]);
 
   useEffect(() => {
-    if (defaultOpenLogin) setShowLoginModal(true);
-    if (defaultOpenRegister) setShowRegisterModal(true);
-  }, [defaultOpenLogin, defaultOpenRegister]);
+    setShowLoginModal(defaultOpenLogin && !isEnrollmentPage);
+  }, [defaultOpenLogin, isEnrollmentPage]);
 
 
 
@@ -106,14 +123,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   }, [isDarkMode]);
 
   useEffect(() => {
-    if (!loading && user && !defaultOpenRegister && !showRegisterModal) {
+    if (!loading && user && !isEnrollmentPage) {
+      const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+      if (returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')) {
+        navigate(returnTo, { replace: true, state: null });
+        return;
+      }
       if (profile?.role === 'ossa' || profile?.role === 'ossa_staff') {
-        navigate('/ossa/dashboard');
+        navigate(lastDestination(user.uid, '/ossa/dashboard'), { replace: true });
       } else {
-        navigate('/dashboard');
+        navigate(lastDestination(user.uid), { replace: true });
       }
     }
-  }, [loading, user, profile, navigate, defaultOpenRegister, showRegisterModal]);
+  }, [loading, user, profile, navigate, isEnrollmentPage, location.state]);
 
   useEffect(() => {
     setStructure(appData.getSchoolStructure());
@@ -121,15 +143,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   }, [revision]);
 
   useEffect(() => {
-    if (!showRegisterModal || structure.length > 0) return;
+    if (!isEnrollmentPage || structure.length > 0) return;
     void refreshData().catch(() => {
-      // AuthContext reports connection errors; keep the modal usable while it retries.
+      // AuthContext reports connection errors; keep enrollment usable while it retries.
     });
-  }, [showRegisterModal, structure.length]);
+  }, [isEnrollmentPage, structure.length]);
 
   const hydratedApplication = useRef<string | null>(null);
   useEffect(() => {
-    if (!defaultOpenRegister || !user || hydratedApplication.current === user.uid) return;
+    if (!isEnrollmentPage || !user || hydratedApplication.current === user.uid) return;
     const application = appData.getApplications().find(a => a.id === user.uid && ['rejected', 'bounced', 'deleted'].includes(a.status));
     if (!application) return;
     const saved = application.form_data;
@@ -138,7 +160,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     const terminalId = saved.school_data.academic_assignment?.terminalGroupId;
     if (terminalId) setAcademicPath(findNodePath(appData.getSchoolStructure(), terminalId) || []);
     hydratedApplication.current = user.uid;
-  }, [user, revision, defaultOpenRegister]);
+  }, [user, revision, isEnrollmentPage]);
 
   // --- HANDLERS ---
   const scrollTo = (id: string) => {
@@ -148,10 +170,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   // Login Handlers
   const handleGoogle = async (credential: string, nonce: string, enrolling: boolean) => {
     setLoginError(''); setRegError('');
+    setMissingAccountEmail(''); setGoogleNeedsEnrollment(false);
     const result = await checkGoogle(credential, nonce);
     if (result.session) {
       setGoogleEnrollment(null); setGoogleNeedsEnrollment(false);
-      setShowLoginModal(false); setShowRegisterModal(false);
+      setShowLoginModal(false);
       navigate('/dashboard', { replace: true });
       return;
     }
@@ -161,7 +184,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
       setGoogleNeedsEnrollment(false);
     } else {
       setGoogleNeedsEnrollment(true);
-      setLoginError('This Google email is not enrolled. Complete enrollment to create your account.');
+      setMissingAccountEmail(result.email);
     }
   };
 
@@ -170,13 +193,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
     if (isLoggingIn) return;
     setIsLoggingIn(true);
     setLoginError('');
+    setMissingAccountEmail(''); setGoogleNeedsEnrollment(false); setGoogleEnrollment(null);
     try {
-      if (identifier.trim().includes('@')) throw new Error('Use the username you submitted during registration to sign in.');
       await appAuth.signIn(identifier, password);
       const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
       navigate(returnTo || '/dashboard', { replace: true, state: null });
     } catch (err: any) {
-      setLoginError(err.message || 'Failed to sign in.');
+      if (err.code === 'ACCOUNT_NOT_FOUND' && identifier.includes('@')) {
+        setMissingAccountEmail(identifier.trim().toLowerCase());
+      } else {
+        setLoginError(err.message || 'Failed to sign in.');
+      }
       setIsLoggingIn(false);
     }
   };
@@ -420,7 +447,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
   return (
     <div className={`min-h-dvh overflow-x-hidden font-inter transition-colors duration-base ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
       
-      <PublicHeader onSection={scrollTo} onLogin={() => setShowLoginModal(true)} />
+      <PublicHeader onSection={isEnrollmentPage ? undefined : scrollTo} onLogin={isEnrollmentPage ? undefined : () => setShowLoginModal(true)} />
 
       {/* --- MODALS --- */}
 
@@ -449,18 +476,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
 
                    <form onSubmit={handleLogin} className="space-y-4">
                       <div className="space-y-1.5">
-                        <label htmlFor="landing-login-identifier" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Username</label>
+                        <label htmlFor="landing-login-identifier" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">Username or email</label>
                         <div className="relative">
                           <UserCircle size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                           <input
                             id="landing-login-identifier"
-                            aria-label="Username"
+                            aria-label="Username or email"
                             type="text"
                            required
                            value={identifier}
-                           onChange={(e) => setIdentifier(e.target.value)}
+                           onChange={(e) => { setIdentifier(e.target.value); setMissingAccountEmail(''); setGoogleNeedsEnrollment(false); setGoogleEnrollment(null); setLoginError(''); }}
                            className="app-control w-full py-3.5 pl-12 pr-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 focus:outline-none transition-all font-bold text-base text-brand-900 dark:text-white"
-                           placeholder="Your submitted username"
+                           placeholder="Your username or email address"
                          />
                        </div>
                      </div>
@@ -505,13 +532,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
                        navigate(returnTo || '/dashboard', { replace: true, state: null });
                      }} />
                      <GoogleSignIn onCredential={(credential, nonce) => handleGoogle(credential, nonce, false)} onError={setLoginError} />
-                     {googleNeedsEnrollment && <Button type="button" onClick={() => { setShowLoginModal(false); setShowRegisterModal(true); setRegStep(1); }}>Enroll with this Google email</Button>}
+                     {missingAccountEmail && <div ref={accountPromptRef} tabIndex={-1} role="alert" className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-slate-100">
+                       <p className="font-bold">Account not found</p>
+                       <p className="break-words">We couldn’t find an account for {missingAccountEmail}. Sign up with this email to create your account.</p>
+                       <Button type="button" onClick={() => {
+                         setRegData(current => ({ ...current, email: missingAccountEmail }));
+                         setRegError(''); setLoginError(''); setPassword('');
+                         setShowLoginModal(false); navigate('/register'); setRegStep(1);
+                         setMissingAccountEmail(''); setGoogleNeedsEnrollment(false);
+                       }}>{googleNeedsEnrollment ? 'Sign up with this Google email' : 'Sign up with this email'}</Button>
+                     </div>}
                    </div>}
                 </div>
 
                 <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-3.5">
                   <button 
-                    onClick={() => { setShowLoginModal(false); setShowRegisterModal(true); }} 
+                    onClick={() => { setShowLoginModal(false); navigate('/register'); }}
                     className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-brand-900 dark:text-slate-200 rounded-2xl text-xs font-black uppercase tracking-wider transition-all border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2"
                   >
                     <span>Register</span>
@@ -560,14 +596,23 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
            </div>
       </Modal>
 
-      {/* REGISTRATION MODAL */}
-      <Modal
-        open={showRegisterModal}
-        onClose={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); if (defaultOpenRegister) navigate('/'); }}
-        size="xl"
-        title={regSuccess ? "Enrollment Submitted" : "Create your student account"}
-        description={regSuccess ? "Your application is waiting for school review" : `Step ${regStep} of 4 — Account registration`}
-      >
+      {isEnrollmentPage && <main className="mx-auto w-full max-w-4xl px-4 pb-12 pt-28 sm:px-6 sm:pt-32" aria-labelledby="enrollment-title">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <button type="button" disabled={checkingEnrollment || isRegistering || readingPhoto} onClick={() => navigate('/')} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-brand-900 hover:bg-slate-200 disabled:opacity-50 dark:text-white dark:hover:bg-slate-800">
+            <ChevronLeft size={18} /> Back to home
+          </button>
+          <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Student enrollment</span>
+        </div>
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+          <div className="mb-6 space-y-3">
+            <h1 id="enrollment-title" ref={enrollmentTitleRef} tabIndex={-1} className="scroll-mt-28 text-2xl font-black tracking-tight text-brand-900 focus:outline-none dark:text-white sm:text-3xl">{regSuccess ? 'Enrollment Submitted' : 'Create your student account'}</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{regSuccess ? 'Your application is waiting for school review' : `Step ${regStep} of 4: ${enrollmentSteps[regStep - 1]}`}</p>
+            {!regSuccess && <ol aria-label="Enrollment progress" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {enrollmentSteps.map((label, index) => <li key={label} aria-current={regStep === index + 1 ? 'step' : undefined} className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-xs font-bold ${index + 1 <= regStep ? 'border-gold-300 bg-gold-50 text-brand-900 dark:border-gold-700 dark:bg-gold-500/10 dark:text-gold-300' : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400'}`}>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white dark:bg-slate-800">{index + 1 < regStep ? <Check size={14} aria-label="Completed" /> : index + 1}</span>{label}
+              </li>)}
+            </ol>}
+          </div>
         {!regSuccess && <p className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed dark:border-slate-700 dark:bg-slate-800">
           Before providing your details, read our <a href="#/privacy-policy" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Privacy Policy</a>, <a href="#/data-privacy-agreement" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Data Privacy Act Agreement</a>, and <a href="#/terms-of-service" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Terms of Service</a> (open in a new tab). Ask your school about anything unclear.
         </p>}
@@ -602,11 +647,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Button variant="gold" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); navigate(needsEmailConfirmation ? '/login' : '/register/status'); }}>
+              <Button variant="gold" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { navigate(needsEmailConfirmation ? '/login' : '/register/status'); }}>
                 {needsEmailConfirmation ? 'Sign In After Confirmation' : 'View Application Status'}
               </Button>
-              <Button variant="secondary" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { setShowRegisterModal(false); setRegSuccess(false); setRegStep(1); }}>
-                Close
+              <Button variant="secondary" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { navigate('/'); }}>
+                Back to home
               </Button>
             </div>
           </div>
@@ -615,7 +660,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
               {regStep === 1 && (
                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
                      <p className="text-sm text-slate-500">Complete your account details, academic assignment, emergency contact, and profile picture.</p>
-                     {!user && showRegisterModal && <GoogleSignIn enrollment onCredential={(credential, nonce) => handleGoogle(credential, nonce, true)} onError={setRegError} />}
+                     {!user && isEnrollmentPage && <GoogleSignIn enrollment onCredential={(credential, nonce) => handleGoogle(credential, nonce, true)} onError={setRegError} />}
                      {googleEnrollment && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">Google email verified: {googleEnrollment.email}. Your account will be created only when you finish enrollment.</p>}
 
                     <div className="space-y-1">
@@ -774,8 +819,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
 
               <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:gap-4">
                  {regStep > 1 && (
-                   <Button disabled={checkingEnrollment || isRegistering || readingPhoto} variant="secondary" aria-label="Previous registration phase" className="!w-full !rounded-xl sm:!w-16 sm:!p-0" onClick={() => { setRegError(''); setRegStep(regStep - 1); }}>
-                     <ChevronLeft size={20} />
+                   <Button disabled={checkingEnrollment || isRegistering || readingPhoto} variant="secondary" aria-label="Previous registration phase" className="!w-full !rounded-xl sm:!w-auto" onClick={() => { setRegError(''); setRegStep(regStep - 1); }}>
+                     <ChevronLeft size={20} /> Back
                    </Button>
                  )}
                   {regStep < 4 ? (
@@ -837,15 +882,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
               </div>
 
               <div className="text-center pt-1 border-t border-slate-100 dark:border-slate-800">
-                <button onClick={() => { setShowRegisterModal(false); setShowLoginModal(true); }} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-brand-900 dark:hover:text-gold-400 transition-colors">
+                <button type="button" disabled={checkingEnrollment || isRegistering || readingPhoto} onClick={() => { navigate('/login'); }} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-brand-900 dark:hover:text-gold-400 transition-colors">
                   Already have an account? <span className="text-gold-500 underline">Log In</span>
                 </button>
               </div>
            </div>
         )}
-      </Modal>
+        </section>
+      </main>}
 
-      <main>
+      {!isEnrollmentPage && <main>
       {/* HERO SECTION */}
       <section id="home" className="scroll-mt-28 relative pt-32 pb-20 lg:pt-44 lg:pb-28 px-6 overflow-hidden">
         <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-gold-400/10 dark:bg-gold-500/5 rounded-full blur-3xl -z-10 animate-pulse"></div>
@@ -865,7 +911,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
               <button onClick={() => setShowLoginModal(true)} className="w-full sm:w-auto px-8 py-4 bg-brand-900 dark:bg-gold-500 text-white dark:text-brand-950 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-brand-800 dark:hover:bg-gold-400 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-3">
                  Log In <ArrowRight size={16} />
               </button>
-              <button onClick={() => setShowRegisterModal(true)} className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-slate-800 text-brand-900 dark:text-white border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-gold-400 hover:text-gold-600 dark:hover:text-gold-400 transition-all flex items-center justify-center gap-3 shadow-sm">
+              <button onClick={() => navigate('/register')} className="w-full sm:w-auto px-8 py-4 bg-white dark:bg-slate-800 text-brand-900 dark:text-white border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-gold-400 hover:text-gold-600 dark:hover:text-gold-400 transition-all flex items-center justify-center gap-3 shadow-sm">
                  Register
               </button>
            </div>
@@ -1087,7 +1133,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false, def
          </div>
       </section>
 
-      </main>
+      </main>}
       <PublicFooter />
     </div>
   );

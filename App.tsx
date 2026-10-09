@@ -4,6 +4,7 @@ import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-d
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { ThemeProvider } from './components/ThemeContext';
 import Layout from './components/ui/Layout';
+import NavigationMemory from './components/NavigationMemory';
 const Register = lazy(() => import('./views/Register'));
 const RegisterStatus = lazy(() => import('./views/RegisterStatus'));
 const Dashboard = lazy(() => import('./views/Dashboard'));
@@ -46,7 +47,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
 
   if (loading) return <AppLoading label="Loading your workspace"><PageSkeleton /></AppLoading>;
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search }} />;
   if (offlineScanner) {
     if (location.pathname !== '/mayor/scan') return <Navigate to="/mayor/scan" replace />;
     return <Layout>{children}</Layout>;
@@ -88,6 +89,7 @@ const App: React.FC = () => {
       <ToastViewport />
       <AuthProvider>
         <HashRouter>
+          <NavigationMemory>
           <Suspense fallback={<AppLoading label="Loading page"><PageSkeleton /></AppLoading>}><Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/privacy-policy" element={<LegalPage kind="privacy" />} />
@@ -100,7 +102,7 @@ const App: React.FC = () => {
           <Route path="/organizations/:organizationId" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
           <Route path="/organizations/:organizationId/events/create" element={<ProtectedRoute><OrganizationEvent /></ProtectedRoute>} />
           <Route path="/organizations/:organizationId/events/:eventId/edit" element={<ProtectedRoute><OrganizationEvent /></ProtectedRoute>} />
-          <Route path="/register" element={<LandingPage defaultOpenRegister={true} />} />
+          <Route path="/register" element={<LandingPage />} />
           <Route path="/register/status" element={<RegisterStatus />} />
           
           <Route path="/dashboard" element={
@@ -208,6 +210,7 @@ const App: React.FC = () => {
           } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes></Suspense>
+          </NavigationMemory>
       </HashRouter>
     </AuthProvider>
   </ThemeProvider>

@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { autoTable, type UserOptions } from 'jspdf-autotable';
 
 export interface AttendanceTranscript {
+  schoolName: string;
   student: { name: string; id: string; department: string; section: string };
   attendanceRate: number;
   sanctionHours: number;
@@ -25,15 +26,20 @@ export function createAttendanceTranscript(data: AttendanceTranscript, logo: Uin
   const height = doc.internal.pageSize.getHeight();
   const margin = 15;
   const contentWidth = width - margin * 2;
-  const tableTop = 46;
+  const schoolName = data.schoolName.trim() || 'School / branch not assigned';
+  doc.setFont('helvetica', 'bold').setFontSize(17);
+  const schoolLines: string[] = doc.splitTextToSize(schoolName, contentWidth - 31);
+  const titleBottom = 20 + (schoolLines.length - 1) * 7;
+  const headerBottom = Math.max(41, titleBottom + 21);
+  const tableTop = headerBottom + 5;
   const tableBottom = height - 28;
   const generated = new Intl.DateTimeFormat('en-PH', {
     timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: true,
   }).format(generatedAt);
   doc.setProperties({
-    title: `RMC Attendance & Sanction Transcript - ${data.student.id}`,
-    author: 'RMC Project Regalia System',
+    title: `${schoolName} Attendance & Sanction Transcript - ${data.student.id}`,
+    author: schoolName,
     subject: 'System-automated student attendance and sanction record',
     creator: 'RMC Project Regalia System',
   });
@@ -113,13 +119,13 @@ export function createAttendanceTranscript(data: AttendanceTranscript, logo: Uin
     doc.setPage(page);
     doc.addImage(logo, 'JPEG', margin, 13, 25, 25, 'academic-seal');
     doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(navy);
-    doc.text('RIZAL MEMORIAL COLLEGES', margin + 31, 20);
+    doc.text(schoolLines, margin + 31, 20, { lineHeightFactor: 7 / (17 * 25.4 / 72) });
     doc.setFontSize(10);
-    doc.text('Attendance & Sanction Transcript', margin + 31, 27);
+    doc.text('Attendance & Sanction Transcript', margin + 31, titleBottom + 7);
     doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(muted);
-    doc.text('PROJECT REGALIA  |  STUDENT RECORDS', margin + 31, 33);
+    doc.text('PROJECT REGALIA  |  STUDENT RECORDS', margin + 31, titleBottom + 13);
     doc.setDrawColor(gold).setLineWidth(0.6);
-    doc.line(margin, 41, width - margin, 41);
+    doc.line(margin, headerBottom, width - margin, headerBottom);
     doc.setDrawColor(border).setLineWidth(0.2);
     doc.line(margin, height - 23, width - margin, height - 23);
     doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(navy);

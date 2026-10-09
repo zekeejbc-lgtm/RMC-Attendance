@@ -36,20 +36,22 @@ it('offers browser installation and waits for the user to accept it', async () =
   const event = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), { prompt, userChoice: Promise.resolve({ outcome: 'accepted' }) });
   act(() => window.dispatchEvent(event));
   expect(event.defaultPrevented).toBe(true);
-  expect(screen.getByRole('dialog', { name: 'Install IARS' })).toBeInTheDocument();
+  expect(screen.getByRole('complementary', { name: 'Install IARS' })).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(document.body).not.toHaveStyle({ overflow: 'hidden' });
   expect(prompt).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Install IARS' }));
   await waitFor(() => expect(prompt).toHaveBeenCalledOnce());
-  await waitFor(() => expect(screen.queryByLabelText('App status')).toBeNull());
+  await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Install IARS' })).toBeNull());
 });
 
-it('dismisses the install modal after twelve seconds without prompting the browser', () => {
+it('dismisses the install notification after twelve seconds without prompting the browser', () => {
   vi.useFakeTimers();
   render(<PwaStatus />);
   const prompt = vi.fn();
   act(() => window.dispatchEvent(Object.assign(new Event('beforeinstallprompt'), { prompt, userChoice: Promise.resolve({ outcome: 'dismissed' }) })));
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '12');
   act(() => vi.advanceTimersByTime(12000));
-  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByRole('complementary', { name: 'Install IARS' })).toBeNull();
   expect(prompt).not.toHaveBeenCalled();
 });

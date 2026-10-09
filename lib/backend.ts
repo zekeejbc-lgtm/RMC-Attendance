@@ -164,10 +164,12 @@ export const appAuth = {
   async signIn(identifier: string, password: string) {
   return toast.track(async (progress) => {
     requireConfiguration();
-    if (identifier.trim().includes('@')) throw new Error('Use the username you submitted during registration to sign in.');
     // Usernames are resolved on the server; no public email directory is exposed.
     const { data, error } = await supabase.functions.invoke('rmc-login', { body: { identifier: identifier.trim(), password } });
-    if (error || data?.error) throw new Error(data?.error || 'Unable to sign in. Check your credentials.');
+    if (error || data?.error) {
+      const details = data?.error ? data : await error?.context?.json?.().catch(() => null);
+      throw Object.assign(new Error(details?.error || 'Unable to sign in. Check your credentials.'), { code: details?.code });
+    }
     progress.step(1);
     const { error: sessionError } = await supabase.auth.setSession(data);
     if (sessionError) throw sessionError;

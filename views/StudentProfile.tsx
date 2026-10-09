@@ -1,3 +1,4 @@
+import { getProfileSchoolName } from '../lib/academicDirectory';
 import { formatManilaDate } from '../lib/dateTime';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import { toast } from '../lib/toast';
@@ -22,6 +23,7 @@ import PasskeySettings from '../components/PasskeySettings';
 
 const StudentProfile: React.FC = () => {
   const { profile, isMock } = useAuth();
+  const schoolName = getProfileSchoolName(profile, appData.getSchoolStructure());
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -308,7 +310,7 @@ const StudentProfile: React.FC = () => {
             {/* School Info Pills */}
             <div className="pt-2 flex flex-wrap items-center gap-1.5 text-[11px] border-t border-white/10 mt-3">
               <span className="flex max-w-full items-center gap-1 rounded-full border border-white/10 bg-white/10 px-2.5 py-0.5 font-bold text-gold-300 [overflow-wrap:anywhere]">
-                <School size={12} /> {profile.school_data.school_id === 'school_rmc' ? 'Rizal Memorial Colleges' : 'RMC'}
+                <School size={12} className="shrink-0" /><span className="min-w-0 [overflow-wrap:anywhere]">{schoolName}</span>
               </span>
               <span className="flex max-w-full items-center gap-1 rounded-full border border-white/10 bg-white/10 px-2.5 py-0.5 font-bold text-white [overflow-wrap:anywhere]">
                 <Building2 size={12} /> {isStudent ? (profile.school_data.department || 'Academic unit') : (profile.official_data?.body || profile.school_data.department || 'Official body')}

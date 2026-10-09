@@ -47,7 +47,7 @@ const AdminControls: React.FC = () => {
 
   const handleTabChange = (tabId: TabId) => {
     setActiveTab(tabId);
-    navigate(`/admin/controls?tab=${tabId}`, { replace: true });
+    navigate(`/admin/controls?tab=${tabId}`);
   };
 
   const tabPermissions = { freeze: 'system.freeze', health: 'system.health', payment: 'system.payment_reminders', rbac: 'system.manage_rbac', accounts: 'system.manage_accounts' } as const;

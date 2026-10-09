@@ -1,3 +1,4 @@
+import { usePageMemory } from '../components/usePageMemory';
 import { excuseBlockReason, excuseFileError, EXCUSE_FILE_ACCEPT } from '../lib/excusePolicy';
 import { ExcuseWindowNotice, useExcuseClock } from '../components/events/ExcuseWindowNotice';
 import { formatManilaTime, formatManilaDate, formatClockTime } from '../lib/dateTime';
@@ -27,12 +28,12 @@ const StudentEvents: React.FC = () => {
   const { profile, revision } = useAuth();
   
   // UI States
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'upcoming' | 'done'>('all');
+  const [searchTerm, setSearchTerm] = usePageMemory('searchTerm', '');
+  const [statusFilter, setStatusFilter] = usePageMemory<'all' | 'active' | 'upcoming' | 'done'>('statusFilter', 'all');
   
   // Section Collapsible Toggles (Default: Scheduled & Archived Collapsed)
-  const [isScheduledOpen, setIsScheduledOpen] = useState(false);
-  const [isArchivedOpen, setIsArchivedOpen] = useState(false);
+  const [isScheduledOpen, setIsScheduledOpen] = usePageMemory('isScheduledOpen', false);
+  const [isArchivedOpen, setIsArchivedOpen] = usePageMemory('isArchivedOpen', false);
 
   // Modal States
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);

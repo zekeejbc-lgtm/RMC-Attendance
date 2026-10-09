@@ -1,3 +1,4 @@
+import { useSmartBack } from '../components/NavigationMemory';
 import { formatManilaTime, formatClockTime } from '../lib/dateTime';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -17,6 +18,7 @@ export default function GeneralEvent({ student = false }: { student?: boolean })
   const { eventId, organizationId } = useParams();
   const { profile, revision, loading } = useAuth();
   const navigate = useNavigate();
+  const goBack = useSmartBack();
   const [now, setNow] = useState(Date.now);
   const [selected, setSelected] = useState<{ id: string; day: string } | null>(null);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
@@ -31,14 +33,14 @@ export default function GeneralEvent({ student = false }: { student?: boolean })
   const base = parent?.organizationId ? `/organizations/${parent.organizationId}/events` : '/ssg/events';
   const back = student ? '/student/events' : organizationId ? `/organizations/${organizationId}` : '/ssg/events';
   if (loading) return <Page><p role="status">Loading event...</p></Page>;
-  if (!parent) return <Page><Button variant="secondary" onClick={() => navigate(back)}>Back to events</Button><p>This general event is unavailable.</p></Page>;
+  if (!parent) return <Page><Button variant="secondary" onClick={() => goBack(back)}>Back to events</Button><p>This general event is unavailable.</p></Page>;
   return <Page className="max-w-6xl">
     <section aria-label="Event header" className="relative isolate overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
       {parent.bannerUrl && <EventBanner src={parent.bannerUrl} alt={`${parent.title} banner`} background />}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-white/90 via-white/50 to-transparent dark:from-slate-950/95 dark:via-slate-950/50 dark:to-slate-950/10" />
       <div className="relative flex min-h-64 flex-col justify-between gap-10 p-5 sm:min-h-72 sm:p-8">
         <nav aria-label="Event navigation">
-          <Button variant="secondary" size="sm" fullWidth={false} onClick={() => navigate(back)}><ArrowLeft size={16} /> Back to events</Button>
+          <Button variant="secondary" size="sm" fullWidth={false} onClick={() => goBack(back)}><ArrowLeft size={16} /> Back to events</Button>
         </nav>
         <PageHeader className="gap-6" eyebrow="General event" title={<span className="break-words">{parent.title}</span>} description={`${parent.startDate} to ${parent.endDate} - Philippine time`} actions={canManage && parent.status !== 'done' ? <div className="flex flex-wrap gap-2"><Button variant="secondary" fullWidth={false} onClick={() => navigate(`${base}/${parent.id}/edit`)}>Edit general event</Button>{!parent.cancellationStatus && <Button fullWidth={false} onClick={() => navigate(`${base}/create?parent=${parent.id}`)}><Plus size={16} /> Add specific event</Button>}</div> : undefined} />
       </div>

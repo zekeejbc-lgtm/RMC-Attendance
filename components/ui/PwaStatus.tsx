@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
+import { Download, X } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { Modal } from './Modal';
 import Button from './Button';
 import CountdownBar from './CountdownBar';
 
@@ -10,6 +10,7 @@ type InstallEvent = Event & {
 };
 
 export default function PwaStatus() {
+  const installTitleId = useId();
   const [online, setOnline] = useState(navigator.onLine);
   const [install, setInstall] = useState<InstallEvent | null>(null);
   const [installing, setInstalling] = useState(false);
@@ -58,12 +59,24 @@ export default function PwaStatus() {
       {updateError && <p role="alert">{updateError}</p>}
     </div>}
   </aside>}
-  <Modal open={Boolean(online && install)} onClose={() => { if (!installing) setInstall(null); }} title="Install IARS" description="Add IARS to your home screen for quick access to attendance and your records." size="sm">
-    <div className="space-y-4">
-      {install && <CountdownBar seconds={12} label="This panel closes" paused={installing} onComplete={() => setInstall(null)} />}
-      <Button disabled={installing} onClick={() => void installApp()}>{installing ? 'Installing…' : 'Install IARS'}</Button>
-      <Button variant="secondary" disabled={installing} onClick={() => setInstall(null)}>Maybe later</Button>
+  {online && install && <aside aria-labelledby={installTitleId} className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-40 w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 print:hidden">
+    <div className="flex items-start gap-3">
+      <Download aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-brand-900 dark:text-gold-400" />
+      <div className="min-w-0 flex-1" role="status">
+        <h2 id={installTitleId} className="text-base font-semibold">Install IARS</h2>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Add IARS to your home screen for quick access to attendance and your records.</p>
+      </div>
+      <button type="button" aria-label="Dismiss install notification" disabled={installing} onClick={() => setInstall(null)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-700">
+        <X aria-hidden="true" className="h-5 w-5" />
+      </button>
     </div>
-  </Modal>
+    <div className="mt-4 space-y-3">
+      <div className="flex gap-2">
+        <Button disabled={installing} onClick={() => void installApp()}>{installing ? 'Installing…' : 'Install IARS'}</Button>
+        <Button variant="secondary" disabled={installing} onClick={() => setInstall(null)}>Maybe later</Button>
+      </div>
+      <CountdownBar seconds={12} label="This notification closes" paused={installing} onComplete={() => setInstall(null)} />
+    </div>
+  </aside>}
   </>;
 }

@@ -1,3 +1,4 @@
+import { usePageMemory } from '../components/usePageMemory';
 import { formatManilaDateTime } from '../lib/dateTime';
 import ActivityApprovalQueue from '../components/events/ActivityApprovalQueue';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
@@ -65,10 +66,10 @@ const OSSADashboard: React.FC = () => {
   const canManageSanctions = hasPermission(profile?.role, 'directory.manage_student_sanctions', appData.getCustomRoles(), appData.getCoreRoles());
   const [students, setStudents] = useState<StudentWithStats[]>([]);
   const [excuseApps, setExcuseApps] = useState<ExcuseApplication[]>([]);
-  const [activeTab, setActiveTab] = useState<'roster' | 'excuses'>('roster');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [deptFilter, setDeptFilter] = useState('all');
-  const [sanctionFilter, setSanctionFilter] = useState<'all' | 'has_sanctions' | 'cleared'>('all');
+  const [activeTab, setActiveTab] = usePageMemory<'roster' | 'excuses'>('activeTab', 'roster');
+  const [searchQuery, setSearchQuery] = usePageMemory('searchQuery', '');
+  const [deptFilter, setDeptFilter] = usePageMemory('deptFilter', 'all');
+  const [sanctionFilter, setSanctionFilter] = usePageMemory<'all' | 'has_sanctions' | 'cleared'>('sanctionFilter', 'all');
   const [selectedStudent, setSelectedStudent] = useState<StudentWithStats | null>(null);
   const [studentDetails, setStudentDetails] = useState<any>(null);
   const [adjustMode, setAdjustMode] = useState<'deduct' | 'add' | 'clear' | null>(null);

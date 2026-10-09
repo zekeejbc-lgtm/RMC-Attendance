@@ -1,3 +1,4 @@
+import { usePageMemory } from '../components/usePageMemory';
 import { formatManilaDateTime, formatClockTime } from '../lib/dateTime';
 import EventLocationDetails from '../components/events/EventLocationDetails';
 import EventBanner from '../components/events/EventBanner';
@@ -58,8 +59,8 @@ export default function SSGEventCreation() {
   const navigate = useNavigate();
   const { profile, revision } = useAuth();
   const events = useMemo(() => profile ? appData.getVisibleEvents(profile.uid).filter(event => event.kind !== 'flag_ceremony') : [], [profile, revision]);
-  const [search, setSearch] = useState(''), [status, setStatus] = useState<StatusFilter>('all'), [audience, setAudience] = useState('all'), [geofence, setGeofence] = useState<GeofenceFilter>('all');
-  const [scheduledOpen, setScheduledOpen] = useState(false), [archivedOpen, setArchivedOpen] = useState(false), [selected, setSelected] = useState<AppEvent | null>(null);
+  const [search, setSearch] = usePageMemory('search', ''), [status, setStatus] = usePageMemory<StatusFilter>('status', 'all'), [audience, setAudience] = usePageMemory('audience', 'all'), [geofence, setGeofence] = usePageMemory<GeofenceFilter>('geofence', 'all');
+  const [scheduledOpen, setScheduledOpen] = usePageMemory('scheduledOpen', false), [archivedOpen, setArchivedOpen] = usePageMemory('archivedOpen', false), [selected, setSelected] = useState<AppEvent | null>(null);
   useEffect(() => { setSelected(current => current ? events.find(event => event.id === current.id) || null : null); }, [events]);
   const audiences = useMemo(() => Array.from(new Set(events.flatMap(e => e.recipientGroups || [recipients(e)]))).filter(Boolean).sort(), [events]);
   const filtered = useMemo(() => events.filter(e => [eventDisplayTitle(e, events), e.description || '', recipients(e)].join(' ').toLowerCase().includes(search.toLowerCase()) && (status === 'all' || e.status === status) && (audience === 'all' || e.recipientGroups?.includes(audience) || recipients(e) === audience) && (geofence === 'all' || (geofence === 'enabled') === (e.geofenceEnabled !== false))), [events, search, status, audience, geofence]);

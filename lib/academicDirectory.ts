@@ -94,6 +94,40 @@ export const findNodePath = (nodes: SchoolNode[], id: string): SchoolNode[] | un
   return undefined;
 };
 
+/** The first academic unit below a campus container identifies the school/branch. */
+export const getProfileSchoolName = (profile: UserProfile | null | undefined, nodes: SchoolNode[]): string => {
+  if (!profile) return 'School / branch not assigned';
+  const assignment = profile.school_data?.academic_assignment;
+  const ids = [
+    profile.official_data?.assignment_node_id,
+    ...(profile.official_data?.assignment_node_path_ids || []).slice().reverse(),
+    assignment?.terminalGroupId,
+    ...(assignment?.nodePathIds || []).slice().reverse(),
+  ];
+  let path = ids.filter(Boolean).map(id => findNodePath(nodes, id!)).find(Boolean);
+  // Older accounts store names instead of a directory path. Resolve only unique matches.
+  if (!path) {
+    const matches = flattenDirectory(nodes).filter(node =>
+      ['section', 'block'].includes(node.type) && node.name === profile.school_data?.section
+      && (!profile.school_data?.department || findNodePath(nodes, node.id)?.some(parent => parent.name === profile.school_data.department)),
+    );
+    if (matches.length === 1) path = findNodePath(nodes, matches[0].id);
+  }
+  if (!path) {
+    const matches = flattenDirectory(nodes).filter(node => node.name === profile.school_data?.department);
+    if (matches.length === 1) path = findNodePath(nodes, matches[0].id);
+  }
+  if (!path) {
+    const container = findNodeById(nodes, assignment?.campusId || profile.school_data?.school_id || '');
+    if (container) {
+      const children = (container.children || []).filter(node => !node.metadata?.archived);
+      path = ['campus', 'school'].includes(container.type) && children.length === 1
+        ? [container, children[0]] : [container];
+    }
+  }
+  return (path?.find(node => !['campus', 'school'].includes(node.type)) || path?.[0])?.name.trim() || 'School / branch not assigned';
+};
+
 export const getDirectorySubtree = (nodes: SchoolNode[], rootId: string): SchoolNode[] => {
   const root = findNodeById(nodes, rootId);
   return root ? [root] : [];

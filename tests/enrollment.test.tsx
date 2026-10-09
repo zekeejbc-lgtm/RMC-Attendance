@@ -1,10 +1,10 @@
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import LandingPage from '../views/LandingPage';
 
-const api = vi.hoisted(() => ({ validate: vi.fn(), submit: vi.fn(), upload: vi.fn(), remove: vi.fn(), google: vi.fn(), googleSubmit: vi.fn() }));
+const api = vi.hoisted(() => ({ validate: vi.fn(), submit: vi.fn(), upload: vi.fn(), remove: vi.fn(), google: vi.fn(), googleSubmit: vi.fn(), signIn: vi.fn() }));
 vi.mock('../components/GoogleSignIn', () => ({ default: ({ enrollment, onCredential, onError }: any) => <button onClick={() => onCredential('google-token', 'nonce').catch((error: Error) => onError(error.message))}>{enrollment ? 'Sign up with Google' : 'Sign in with Google'}</button> }));
 vi.mock('../lib/googleAuth', () => ({ checkGoogle: api.google, submitGoogleEnrollment: api.googleSubmit }));
 vi.mock('../components/AuthContext', () => ({ useAuth: () => ({ user: null, profile: null, loading: false, revision: 0 }) }));
@@ -17,7 +17,7 @@ vi.mock('../components/academic/AcademicPathPicker', () => ({
   ])}>Choose section</button>,
 }));
 vi.mock('../lib/backend', () => ({
-  appAuth: {}, refreshData: async () => undefined,
+  appAuth: { signIn: api.signIn }, refreshData: async () => undefined,
   appData: { getSchoolStructure: () => [{ id: 'campus' }], isMayorRegisteredForSection: () => false,
     validateEnrollment: api.validate, submitApplication: api.submit },
 }));
@@ -41,11 +41,67 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+function NavigationProbe() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  return <><output aria-label="Current route">{location.pathname}</output><button onClick={() => navigate(-1)}>Browser back</button><button onClick={() => navigate(1)}>Browser forward</button></>;
+}
+
+function renderPublicPage(entry = '/') {
+  return render(<MemoryRouter initialEntries={[entry]}>
+    <NavigationProbe />
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/register" element={<LandingPage />} />
+      <Route path="/login" element={<LandingPage defaultOpenLogin />} />
+      <Route path="/register/status" element={<p>Application status page</p>} />
+      <Route path="/dashboard" element={<p>Dashboard page</p>} />
+    </Routes>
+  </MemoryRouter>);
+}
+
+it('opens enrollment as a dedicated page and supports browser back and forward navigation', async () => {
+  renderPublicPage();
+  fireEvent.click(screen.getByRole('button', { name: /^Register$/ }));
+  expect(screen.getByLabelText('Current route')).toHaveTextContent('/register');
+  expect(screen.getByRole('heading', { name: 'Create your student account' })).toHaveFocus();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.queryByText('Your school attendance')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Browser back' }));
+  expect(screen.getByLabelText('Current route')).toHaveTextContent(/^\/$/);
+  expect(screen.queryByLabelText('Legal Full Name')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Browser forward' }));
+  expect(screen.getByLabelText('Current route')).toHaveTextContent('/register');
+  expect(screen.getByLabelText('Legal Full Name')).toBeInTheDocument();
+});
+
+it('opens directly at /register and returns home with the back button', () => {
+  renderPublicPage('/register');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to home' }));
+  expect(screen.getByLabelText('Current route')).toHaveTextContent(/^\/$/);
+  expect(screen.queryByLabelText('Legal Full Name')).not.toBeInTheDocument();
+});
+
+it('preserves entered details when moving back a registration step', async () => {
+  renderPublicPage('/register');
+  fill('name', 'Test Student'); fill('email', 'student@example.test');
+  fill('password', 'StrongPassword123!'); fill('confirm-password', 'StrongPassword123!');
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await screen.findByLabelText('Official Student ID #');
+  expect(screen.getByText('Academic assignment', { selector: 'li' })).toHaveAttribute('aria-current', 'step');
+  fireEvent.click(screen.getByRole('button', { name: 'Previous registration phase' }));
+  expect(screen.getByLabelText('Legal Full Name')).toHaveValue('Test Student');
+  expect(screen.getByLabelText('Email Address')).toHaveValue('student@example.test');
+  expect(screen.getByLabelText('Password', { exact: true })).toHaveValue('StrongPassword123!');
+  expect(screen.getByRole('heading', { name: 'Create your student account' })).toHaveFocus();
+});
+
 function fill(id: string, value: string) {
   fireEvent.change(document.getElementById(`landing-register-${id}`)!, { target: { value } });
 }
 async function reachPhoto(google = false) {
-  render(<MemoryRouter><LandingPage defaultOpenRegister /></MemoryRouter>);
+  renderPublicPage('/register');
   fill('name', 'Test Student');
   if (google) {
     fireEvent.click(screen.getByRole('button', { name: 'Sign up with Google' }));
@@ -77,7 +133,9 @@ it('submits a photo URL accepted by the enrollment validator and shows email con
   const profile = api.submit.mock.calls[0][0];
   expect(profile.photo_url).toBe('https://drive.google.com/thumbnail?id=photo123&sz=w1600');
   expect(api.validate).toHaveBeenLastCalledWith(profile, '', 4);
-  expect(screen.getByRole('button', { name: 'Sign In After Confirmation' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Sign In After Confirmation' }));
+  expect(screen.getByLabelText('Current route')).toHaveTextContent('/login');
+  expect(screen.getByLabelText('Username or email')).toBeInTheDocument();
 });
 
 it('retains the uploaded photo after a failed signup and reuses it on retry', async () => {
@@ -123,19 +181,46 @@ it('verifies Google without creating an account and submits only at the final st
   await screen.findByText('Registration Submitted!');
   expect(api.submit).not.toHaveBeenCalled();
   expect(api.googleSubmit).toHaveBeenCalledWith(expect.objectContaining({ email: 'verified@gmail.com' }), 'StrongPassword123!', '', { credential: 'google-token', nonce: 'nonce', email: 'verified@gmail.com' });
-  expect(screen.getByRole('button', { name: 'View Application Status' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'View Application Status' }));
+  expect(screen.getByText('Application status page')).toBeInTheDocument();
 });
 it('prompts an unknown Google login to enroll and carries the verified email into enrollment', async () => {
-  render(<MemoryRouter><LandingPage defaultOpenLogin /></MemoryRouter>);
+  renderPublicPage('/login');
   fireEvent.click(screen.getByRole('button', { name: 'Sign in with Google' }));
-  await screen.findByText('This Google email is not enrolled. Complete enrollment to create your account.');
+  await screen.findByText('Account not found');
+  expect(screen.getByRole('alert')).toHaveTextContent('verified@gmail.com');
+  expect(screen.getByRole('alert')).toHaveFocus();
   expect(api.submit).not.toHaveBeenCalled(); expect(api.googleSubmit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Enroll with this Google email' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign up with this Google email' }));
   expect(screen.getByLabelText('Email Address')).toHaveValue('verified@gmail.com');
+  expect(screen.getByLabelText('Email Address')).toHaveAttribute('readonly');
+});
+it('offers signup with the same email after an account-not-found password login', async () => {
+  api.signIn.mockRejectedValue(Object.assign(new Error('Account not found'), { code: 'ACCOUNT_NOT_FOUND' }));
+  renderPublicPage('/login');
+  fireEvent.change(screen.getByLabelText('Username or email'), { target: { value: ' New@Example.test ' } });
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Password123!' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
+  await screen.findByText('Account not found');
+  expect(screen.getByRole('alert')).toHaveTextContent('new@example.test');
+  fireEvent.click(screen.getByRole('button', { name: 'Sign up with this email' }));
+  expect(screen.getByLabelText('Email Address')).toHaveValue('new@example.test');
+  expect(screen.getByLabelText('Email Address')).not.toHaveAttribute('readonly');
+  expect(api.submit).not.toHaveBeenCalled();
+});
+it('keeps credential failures separate from the signup prompt', async () => {
+  api.signIn.mockRejectedValue(new Error('Unable to sign in. Check your credentials.'));
+  renderPublicPage('/login');
+  fireEvent.change(screen.getByLabelText('Username or email'), { target: { value: 'existing@example.test' } });
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
+  await screen.findByText('Unable to sign in. Check your credentials.');
+  expect(screen.queryByText('Account not found')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Sign up with this email' })).not.toBeInTheDocument();
 });
 it('routes an existing Google email away from enrollment without submitting another application', async () => {
   api.google.mockResolvedValue({ email: 'verified@gmail.com', session: { access_token: 'existing' }, existing: true });
-  render(<MemoryRouter><LandingPage defaultOpenRegister /></MemoryRouter>);
+  renderPublicPage('/register');
   fireEvent.click(screen.getByRole('button', { name: 'Sign up with Google' }));
   await waitFor(() => expect(screen.queryByLabelText('Email Address')).not.toBeInTheDocument());
   expect(api.submit).not.toHaveBeenCalled(); expect(api.googleSubmit).not.toHaveBeenCalled();

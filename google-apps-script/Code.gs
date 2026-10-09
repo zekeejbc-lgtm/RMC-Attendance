@@ -6,6 +6,51 @@ const DRIVE_FOLDER_ID = '1ow0X_gdQB7AwJI5pAFJeP1YTftbc845Q';
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
+// Run installSupabaseKeepAlive once from the trusted Apps Script editor.
+// Time-driven triggers run on Google's servers even when the app is closed.
+function installSupabaseKeepAlive() {
+  pingSupabase(); // Verify configuration before changing an existing schedule.
+  const previous = ScriptApp.getProjectTriggers().filter(function (trigger) {
+    return trigger.getHandlerFunction() === 'pingSupabase';
+  });
+  ScriptApp.newTrigger('pingSupabase').timeBased().everyHours(6).create();
+  previous.forEach(function (trigger) { ScriptApp.deleteTrigger(trigger); });
+  console.log('Supabase keep-alive installed: every 6 hours.');
+}
+
+function removeSupabaseKeepAlive() {
+  ScriptApp.getProjectTriggers().forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === 'pingSupabase') ScriptApp.deleteTrigger(trigger);
+  });
+}
+
+function pingSupabase() {
+  const properties = PropertiesService.getScriptProperties();
+  const url = properties.getProperty('SUPABASE_URL');
+  const key = properties.getProperty('SUPABASE_PUBLISHABLE_KEY');
+  if (!url || !/^https:\/\/[a-z0-9.-]+(?::\d+)?\/?$/i.test(url) || !key) {
+    throw new Error('Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in Script properties first.');
+  }
+  // Query the existing public directory through RLS, without reading profiles
+  // or changing data. An Auth health check alone is not a database query.
+  const response = UrlFetchApp.fetch(url.replace(/\/$/, '') + '/rest/v1/rmc_nodes?select=id&limit=1', {
+    method: 'get',
+    headers: { apikey: key },
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  if (status !== 200) {
+    // Do not log keys, response bodies, or school records.
+    throw new Error('Supabase keep-alive failed (HTTP ' + status + '). Check project status and Script properties.');
+  }
+  if (!Array.isArray(JSON.parse(response.getContentText()))) {
+    throw new Error('Supabase keep-alive returned an unexpected response.');
+  }
+  const lastSuccess = new Date().toISOString();
+  properties.setProperty('SUPABASE_KEEPALIVE_LAST_SUCCESS', lastSuccess);
+  console.log('Supabase keep-alive succeeded at ' + lastSuccess);
+}
+
 function json_(value) {
   return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
 }
