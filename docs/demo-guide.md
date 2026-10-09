@@ -19,7 +19,7 @@ This guide describes the implemented screens. Available actions depend on saved 
 - Prepare a sample academic unit and class, with the officers assigned to the correct scope.
 - Prepare a pending enrollment application, a future activity awaiting approval, and an approved activity whose attendance window overlaps the demo.
 - Prepare one completed event and a sample supporting PDF or image for the excuse workflow.
-- Prepare a completed institutional event within the last 30 days with a missing or incorrect attendance record for the correction workflow.
+- Prepare a completed institutional event and service/merit activity within the last 30 days with a missing or incorrect attendance record for the correction workflow.
 - Prepare a student with a sample sanction balance for service and clearance examples.
 - Prepare an organization with a head, a pending membership application, and an approved member.
 - Check camera access, location access, network connectivity, photo uploads, and document opening on the devices you will use.
@@ -161,7 +161,7 @@ Do not describe optional-information deletion as complete account erasure. The a
 - Shows the sanctions/demerits ledger and individual sanction details.
 - Exports a personal PDF transcript.
 - Displays the clearance message when the student qualifies.
-- Reports missing or incorrect institutional event/ceremony attendance through **Attendance corrections**, with requested times, an explanation, optional evidence, and decision history.
+- Reports missing or incorrect institutional event, ceremony, service, or merit attendance through **Attendance corrections**, with requested times, an explanation, optional evidence, and decision history.
 
 > “Students can trace individual attendance entries and see why their balance changed. Rendered time, cleared sanctions, and earned merit are shown separately.”
 
@@ -301,9 +301,9 @@ The Mayor keeps the student pages above and receives attendance responsibilities
 
 ### Attendance corrections — `/ossa/dashboard/corrections`
 
-- Reviews missing or incorrect institutional attendance and ceremony sessions.
+- Reviews missing or incorrect institutional attendance, ceremony, service, and merit sessions.
 - Shows original recording details, requested times, explanation, and optional evidence.
-- Approves using verified Manila times; the server derives present/late/absent and reconciles the affected session penalty.
+- Approves using verified Manila times; the server derives present/late/absent and reconciles the affected session penalty or service/merit credits. Service and merit approvals require a current server credit preview.
 - Requires decision notes for both approval and rejection; retains the original, corrected result, reviewer, balance adjustment, notification, and audit history.
 - Requires an Admin/OSSA/OSSA Staff account with case-management access within the student's scope. Self-review is blocked.
 
@@ -557,21 +557,23 @@ Use the permitted sanction tools rather than assuming every directory member man
 - Staff route: Hierarchy → **Transfer students** → select students or import a template → choose/review destinations → apply the batch.
 - Explain that personal records stay with the student after reassignment.
 
-### E. Report and review an attendance recording mistake — phase 1
+### E. Report and review an attendance recording mistake — phases 1 and 2
 
 1. Student opens Records → **Report a problem / missing record**, or opens an attendance entry → **Report a problem with this record**.
-2. Choose a completed institutional activity/session ending within the last 30 days. Missing records can also be selected.
+2. Choose a completed institutional attendance, ceremony, service, or merit activity/session ending within the last 30 days. Missing records can also be selected.
 3. Choose **I attended** and enter the requested arrival time using the AM/PM controls, with optional departure time. Choose **Mark me absent** only to remove an incorrectly recorded attendance entry. All times use Philippine time. Check the **Current record → Requested change** preview, explain the mistake (10–2,000 characters), and optionally use **Choose file** to attach a non-empty PDF, JPG, PNG, or WebP up to 5 MB. The selected filename and size are shown, with replace/remove controls.
 4. Submit. A pending request does not change attendance or sanctions; only one pending request is allowed per student/event/session.
 5. Authorized OSSA/Admin opens **Attendance corrections**, reviews the original recording and evidence, and enters verified times and decision notes (5–2,000 characters).
-6. Approve to apply the correction, or reject with notes. No time-in means absent; otherwise the server calculates present/late using the session's late threshold.
+6. For service or merit, review the server preview of rendered time, sanctions cleared, saved merit, and outstanding sanctions. A fixed merit award requires every scheduled session to have both check-in and checkout. Refresh the preview if balances change. Approve to apply the correction, or reject with notes. No time-in means absent; otherwise the server calculates present/late using the session's late threshold.
 7. Return to Student Records and open the request history to show the original recording, decision, corrected record, reviewer, and sanction adjustment. Show the in-app decision notification.
 
-- Phase 1 covers institutional attendance events and flag ceremonies. Service, merit, volunteer credit, general events, and organization activities are excluded; these need separate credit-aware correction work in a later phase.
+- Phase 1 covers institutional attendance events and flag ceremonies; phase 2 also covers institutional service and merit activities. Volunteer credit, general events, and organization activities remain excluded.
+- Service and merit corrections append signed ledger adjustments. Reducing credits removes saved merit first and then restores previously cleared sanctions. Increasing service credits clears current sanctions first; excess follows the activity’s saved overflow policy. Unchanged service times do not clear newly added sanctions again.
+- Overlapping service/merit participation is rejected. Changes to another session or the relevant credit ledger after submission block approval and require rejection/resubmission. Changes to the current balance require refreshing the credit preview. Original attendance snapshots and original award entries remain in the history.
 - Pending/approved excuses block corrections for that activity. Use excuses for justified non-attendance and corrections for recording mistakes.
 - Invalid session times, unapproved/cancelled activities, account/scope freezes, and unauthorized reviews are rejected by the backend.
 - If attendance changes after submission (for example, an offline capture synchronizes), approval is blocked. The reviewer can reject it and ask for a new request against the latest record.
-- Sanction reconciliation appends an adjustment for the affected session. Reductions stop at the outstanding balance; previously completed service is not refunded or turned into merit. Unrelated sanction entries remain intact.
+- For institutional attendance/ceremony penalties, reconciliation appends an adjustment for the affected session. Reductions stop at the outstanding balance; previously completed service is not refunded or turned into merit. Service/merit corrections use their separate credit reversal rules above. Unrelated sanction entries remain intact.
 
 ## 13. Organization workflows
 

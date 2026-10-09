@@ -7,10 +7,17 @@ export type CorrectionAttendance = {
  status: 'present' | 'late' | 'absent' | 'excused'; time_in?: number; time_out?: number;
  recorded_at?: number; scanned_by_name?: string; scanned_by_uid?: string;
  corrected_by_name?: string; corrected_at?: number; correction_note?: string;
+ rendered_hours?: number; deducted_hours?: number; merit_earned_hours?: number;
+};
+export type CreditAdjustment = {
+ kind: 'service' | 'merit'; rendered_before: number; rendered_after: number;
+ cleared_before: number; cleared_after: number; merit_before: number; merit_after: number;
+ sanction_change: number; merit_change: number; balance_before: number; balance_after: number; complete: boolean;
 };
 export type CorrectionOption = {
  event_id: string; event_title: string; slot: string; label: string;
  starts_at: string; ends_at: string; late_at: string; original: CorrectionAttendance | null;
+ kind?: string;
 };
 export type AttendanceCorrection = {
  id: string; student_id: string; student_name: string; student_number: string;
@@ -20,6 +27,7 @@ export type AttendanceCorrection = {
  proposed_time_in: string | null; proposed_time_out: string | null;
  status: 'pending' | 'approved' | 'rejected'; created_at: string; reviewed_at: string | null;
  reviewer_name: string | null; review_note: string; sanction_change: number;
+ kind?: string; credit_adjustment?: CreditAdjustment | null;
 };
 export const correctionKey = (eventId: string, slot: string) => JSON.stringify([eventId, slot]);
 export function manilaInput(value?: string | number | null) {
@@ -76,11 +84,19 @@ export async function submitAttendanceCorrection(option: CorrectionOption, reaso
  if (error) throw error;
  return data as string;
 }
-export async function reviewAttendanceCorrection(id: string, decision: 'approved' | 'rejected', note: string, timeIn: string, timeOut: string) {
+export async function previewCorrectionCredit(id: string, timeIn: string, timeOut: string): Promise<CreditAdjustment> {
+ const { data, error } = await supabase.rpc('rmc_preview_correction_credit', {
+  request_id: id, verified_in: correctionTimestamp(timeIn), verified_out: correctionTimestamp(timeOut),
+ });
+ if (error) throw error;
+ return data;
+}
+export async function reviewAttendanceCorrection(id: string, decision: 'approved' | 'rejected', note: string, timeIn: string, timeOut: string, credit?: CreditAdjustment) {
  const { error } = await supabase.rpc('rmc_review_attendance_correction', {
   request_id: id, decision, note: note.trim(),
   verified_in: decision === 'approved' ? correctionTimestamp(timeIn) : null,
   verified_out: decision === 'approved' ? correctionTimestamp(timeOut) : null,
+  ...(credit && decision === 'approved' ? { expected_credit: credit } : {}),
  });
  if (error) throw error;
  try { await refreshData(); }

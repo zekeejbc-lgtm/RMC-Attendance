@@ -127,6 +127,11 @@ it('keeps earned merit separate from outstanding sanctions', async () => {
   await refreshData();
   expect(appData.getUserDetail('student')?.stats).toEqual(expect.objectContaining({merit_hours:1.75,sanction_hours:1.5}));
 });
+it('includes signed correction entries in the saved merit balance', async () => {
+  api.rpc.mockResolvedValue({ data: { ...snapshot(), merit_credits: [{ student_id: 'student', hours: 2 }, { student_id: 'student', hours: -1.25 }] }, error: null });
+  await refreshData();
+  expect(appData.getUserDetail('student')?.stats).toMatchObject({ merit_hours: 0.75, sanction_hours: 1.5 });
+});
 it('excludes pending admissions from active student registers', async () => {
   api.rpc.mockResolvedValue({ data: snapshot(), error: null });
   await refreshData();

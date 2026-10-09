@@ -202,7 +202,7 @@ it('prompts an unknown Google login to enroll and carries the verified email int
   fireEvent.click(screen.getByRole('button', { name: 'Sign in with Google' }));
   await screen.findByText('Account not found');
   expect(screen.getByRole('alert')).toHaveTextContent('verified@gmail.com');
-  expect(screen.getByRole('alert')).toHaveFocus();
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveFocus());
   expect(api.submit).not.toHaveBeenCalled(); expect(api.googleSubmit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Sign up with this Google email' }));
   await agreeToPrivacy();

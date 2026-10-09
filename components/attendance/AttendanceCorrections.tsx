@@ -8,8 +8,8 @@ import { requestError } from '../../lib/profileRequests';
 import { toast } from '../../lib/toast';
 import {
  correctionEvidenceError, correctionKey, correctionStatus, correctionTimeError, loadAttendanceCorrections,
- loadCorrectionOptions, manilaInput, reviewAttendanceCorrection, submitAttendanceCorrection,
- type AttendanceCorrection, type CorrectionAttendance, type CorrectionOption,
+ loadCorrectionOptions, manilaInput, previewCorrectionCredit, reviewAttendanceCorrection, submitAttendanceCorrection,
+ type AttendanceCorrection, type CorrectionAttendance, type CorrectionOption, type CreditAdjustment,
 } from '../../lib/attendanceCorrections';
 import ApprovalQueue, { ApprovalStatus, approvalControl, approvalLabel } from '../ui/ApprovalQueue';
 import Button from '../ui/Button';
@@ -18,6 +18,18 @@ import { Modal } from '../ui/Modal';
 import { Surface } from '../ui/Page';
 import CustomSelect from '../ui/CustomSelect';
 import { TimeInput } from '../ui/TimeInput';
+
+function CreditPreview({ plan }: { plan: CreditAdjustment }) {
+ return <section aria-label="Credit change preview" className="space-y-3 rounded-xl border border-gold-300 p-4 dark:border-gold-700">
+  <h3 className="font-bold">{plan.kind === 'merit' ? 'Activity credit adjustment' : 'Session credit adjustment'}</h3>
+  <dl className="grid gap-3 sm:grid-cols-2">{[
+   ['Rendered time', plan.rendered_before, plan.rendered_after], ['Sanctions cleared', plan.cleared_before, plan.cleared_after],
+   ['Saved merit', plan.merit_before, plan.merit_after], ['Outstanding sanctions', plan.balance_before, plan.balance_after],
+  ].map(([label, before, after]) => <div key={String(label)}><dt className="text-xs text-slate-500 dark:text-slate-400">{label}</dt><dd className="mt-1 font-semibold">{Number(before).toFixed(2)} → {Number(after).toFixed(2)} hours</dd></div>)}</dl>
+  {plan.kind === 'merit' && <p className="text-sm">{plan.complete ? 'All required sessions are complete. The fixed award applies once.' : 'Required attendance is incomplete. The fixed award is unavailable.'}</p>}
+  <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">Reducing credit removes saved merit first, then restores previously cleared sanctions. Original awards stay in the history.</p>
+ </section>;
+}
 
 const muted = 'text-sm leading-6 text-slate-500 dark:text-slate-400';
 
@@ -38,6 +50,7 @@ function ChangePreview({ original, timeIn, timeOut, option, valid, attended }: {
     </section>
    </div>)}
   </div>
+  {['service', 'merit'].includes(option.kind || '') && <p className={`${muted} mt-3`}>Rendered time: {Number(original?.rendered_hours || 0).toFixed(2)} → {valid && timeIn && timeOut ? ((Date.parse(timeOut + '+08:00') - Date.parse(timeIn + '+08:00')) / 3600000).toFixed(2) : '0.00'} hours. OSSA reviews the resulting sanctions and merit adjustment before approval.</p>}
   <p className={`${muted} mt-3`}>Submitting a request does not change your record or sanction balance. OSSA will verify the times before applying a correction.</p>
  </section>;
 }
@@ -83,6 +96,9 @@ export default function AttendanceCorrections({ review = false, target, onTarget
  const [key, setKey] = useState(''), [reason, setReason] = useState(''), [note, setNote] = useState('');
  const [timeIn, setTimeIn] = useState(''), [timeOut, setTimeOut] = useState('');
  const [file, setFile] = useState<File | null>(null);
+ const [credit, setCredit] = useState<{ key: string; plan: CreditAdjustment } | null>(null);
+ const [creditError, setCreditError] = useState(''), [creditLoading, setCreditLoading] = useState(false);
+ const [previewVersion, setPreviewVersion] = useState(0);
  const [attendanceIntent, setAttendanceIntent] = useState<'attended' | 'absent'>('attended');
  const formId = useId(), fileInputId = useId();
  const fileInput = useRef<HTMLInputElement>(null);
@@ -91,7 +107,7 @@ export default function AttendanceCorrections({ review = false, target, onTarget
  const selected = rows.find(row => row.id === selectedId);
  const option: CorrectionOption | undefined = review && selected ? {
   event_id: selected.event_id, event_title: selected.event_title, slot: selected.slot, label: selected.slot,
-  starts_at: selected.session_starts_at, ends_at: selected.session_ends_at, late_at: selected.session_late_at, original: selected.original,
+  starts_at: selected.session_starts_at, ends_at: selected.session_ends_at, late_at: selected.session_late_at, original: selected.original, kind: selected.kind,
  } : options.find(row => correctionKey(row.event_id, row.slot) === key);
  const load = async () => {
   const request = ++sequence.current;
@@ -124,6 +140,20 @@ export default function AttendanceCorrections({ review = false, target, onTarget
   } else setError('This session is unavailable for correction or already has a pending request. Contact OSSA if needed.');
   onTargetHandled?.();
  }, [target, loading, eligible, review, options]);
+ const creditKind = ['service', 'merit'].includes(option?.kind || '');
+ const previewKey = JSON.stringify([selected?.id, timeIn, timeOut, previewVersion]);
+ const creditValid = credit?.key === previewKey;
+ useEffect(() => {
+  setCredit(null); setCreditError(''); setCreditLoading(false);
+  if (!review || !selected || selected.status !== 'pending' || !creditKind || correctionTimeError(timeIn, timeOut, option) || (attendanceIntent === 'attended' && !timeIn)) return;
+  let active = true;
+  setCreditLoading(true);
+  const timer = window.setTimeout(() => {
+   void previewCorrectionCredit(selected.id, timeIn, timeOut).then(plan => { if (active) setCredit({ key: previewKey, plan }); })
+    .catch(err => { if (active) setCreditError(requestError(err)); }).finally(() => { if (active) setCreditLoading(false); });
+  }, 250);
+  return () => { active = false; window.clearTimeout(timer); };
+ }, [previewKey, review, selected?.status, creditKind, attendanceIntent]);
  if (!eligible) return null;
  const timeError = attendanceIntent === 'attended' && !timeIn ? 'Enter the time you arrived, or choose “Mark me absent” if the attendance entry is incorrect.' : correctionTimeError(timeIn, timeOut, option);
  const fileError = correctionEvidenceError(file);
@@ -139,12 +169,13 @@ export default function AttendanceCorrections({ review = false, target, onTarget
   finally { saving.current = false; setBusy(false); }
  };
  const decide = async (decision: 'approved' | 'rejected') => {
-  if (!selected || saving.current || note.trim().length < 5 || (decision === 'approved' && timeError)) return;
+  if (!selected || saving.current || note.trim().length < 5 || (decision === 'approved' && (timeError || (creditKind && !creditValid)))) return;
   saving.current = true; setBusy(true); setError('');
   try {
-   await reviewAttendanceCorrection(selected.id, decision, note, timeIn, timeOut);
+   if (creditKind && decision === 'approved') await reviewAttendanceCorrection(selected.id, decision, note, timeIn, timeOut, credit!.plan);
+   else await reviewAttendanceCorrection(selected.id, decision, note, timeIn, timeOut);
    setSelectedId(null); toast.success(`Attendance correction ${decision}.`); await load();
-  } catch (err) { setError(requestError(err)); }
+  } catch (err) { setError(requestError(err)); setPreviewVersion(v => v + 1); }
   finally { saving.current = false; setBusy(false); }
  };
  const openProof = async () => {
@@ -167,25 +198,25 @@ export default function AttendanceCorrections({ review = false, target, onTarget
     <CorrectionTimeField label={verified ? 'Verified time-in' : 'Requested time-in'} value={timeIn} onChange={setTimeIn} option={option} disabled={busy} />
     <CorrectionTimeField label={verified ? 'Verified time-out' : 'Requested time-out'} value={timeOut} onChange={setTimeOut} option={option} disabled={busy} />
    </div>
-   <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">Time-out is optional. Arrival after {formatManilaTime(option.late_at)} is marked late automatically.</p>
-  </> : <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">You are requesting absent status with no attendance times. This may add an absence sanction. If you missed the activity for a valid reason, submit an excuse instead.</p>}
+   <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">{creditKind ? 'Completed check-in and checkout are required to earn credit.' : 'Time-out is optional.'} Arrival after {formatManilaTime(option.late_at)} is marked late automatically.</p>
+  </> : <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">You are requesting absent status with no attendance times. {creditKind ? 'This removes service or merit credit and may restore previously cleared sanctions.' : 'This may add an absence sanction. If you missed the activity for a valid reason, submit an excuse instead.'}</p>}
   {timeError && timeIn ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{timeError}</p> : <p role="status" className="text-sm">{attendanceIntent === 'attended' && !timeIn ? 'Add your arrival time to preview the attendance status.' : `Status: ${correctionStatus(timeIn, option)}`}</p>}
   <ChangePreview original={verified ? selected?.original || null : option.original} timeIn={timeIn} timeOut={timeOut} option={option} valid={!timeError} attended={attendanceIntent === 'attended'} />
  </fieldset>;
  return <Surface aria-label={review ? 'Attendance corrections review' : 'Attendance corrections'} className="space-y-4 p-4 sm:p-5">
-  {!review && <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-lg">Attendance corrections</h2><p className="text-sm text-slate-500 dark:text-slate-400">Report recording mistakes within 30 days after an institutional event or ceremony ends. For an absence reason, use the excuse workflow.</p></div>
+  {!review && <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-lg">Attendance corrections</h2><p className="text-sm text-slate-500 dark:text-slate-400">Report recording mistakes within 30 days after an institutional event, ceremony, service, or merit activity ends. For an absence reason, use the excuse workflow.</p></div>
    <Button fullWidth={false} variant="secondary" disabled={loading || busy} onClick={() => { choose(''); setReason(''); setFile(null); setError(''); setReporting(true); }}><FilePenLine size={16} />Report a problem / missing record</Button></div>}
   {loading && <p role="status">Loading attendance corrections...</p>}
   {error && <p role="alert" className="text-red-600 dark:text-red-400">{error} <button type="button" className="underline" disabled={busy} onClick={() => void load()}>Refresh requests</button></p>}
-  {!loading && <ApprovalQueue title={review ? 'Attendance correction queue' : 'My correction requests'} description={review ? 'Review the original recording, student evidence, and verified times. Approval reconciles the affected session penalty.' : 'Your original records remain available in each request alongside the decision.'}
+  {!loading && <ApprovalQueue title={review ? 'Attendance correction queue' : 'My correction requests'} description={review ? 'Review the original recording, student evidence, and verified times. Approval reconciles attendance penalties or service and merit credits.' : 'Your original records remain available in each request alongside the decision.'}
    initialStatus={review ? 'pending' : 'all'}
    rows={rows.map(row => ({ id: row.id, title: `${row.event_title} / ${row.slot}${review ? ` - ${row.student_name}` : ''}`, status: row.status, searchText: `${row.student_number} ${row.reason}`, subtitle: `${row.status} · ${formatManilaDateTime(row.created_at)}` }))}
    onOpen={row => { const item = rows.find(r => r.id === row.id)!; setSelectedId(row.id); setKey(''); setNote(''); setTimeIn(manilaInput(item.proposed_time_in)); setTimeOut(manilaInput(item.proposed_time_out)); setAttendanceIntent(item.proposed_time_in ? 'attended' : 'absent'); setError(''); }} />}
   <Modal open={reporting} onClose={() => { if (!busy) setReporting(false); }} title="Report an attendance problem" description="Ask OSSA to review a missing scan or an incorrect attendance entry." size="lg"
    footer={<><Button variant="secondary" fullWidth={false} disabled={busy} onClick={() => setReporting(false)}>{options.length ? 'Cancel' : 'Close'}</Button>{options.length ? <Button type="submit" form={formId} variant="gold" fullWidth={false} disabled={busy || !option || reason.trim().length < 10 || Boolean(timeError || fileError)}>{busy ? 'Submitting...' : 'Submit for OSSA review'}</Button> : <Button fullWidth={false} disabled={loading} onClick={() => void load()}>Refresh sessions</Button>}</>}>
    {!options.length ? <div className="space-y-4">
-    <div role="status" className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/50"><CalendarClock size={28} className="mb-3 text-gold-600 dark:text-gold-400" /><h3 className="font-bold text-brand-900 dark:text-white">No sessions available for correction</h3><p className={`${muted} mt-2`}>You can request corrections for institutional events and flag ceremonies that ended within the last 30 days.</p></div>
-    <div className="space-y-2"><h3 className="text-sm font-bold">What you can do next</h3><ul className="list-disc space-y-2 pl-5 text-sm leading-6 text-slate-600 dark:text-slate-300"><li>Wait until your activity ends, then refresh the sessions.</li><li>Check your request history if you already submitted a correction.</li><li>Contact OSSA if the activity is older, has an excuse request, or belongs to an organization, service, or merit activity.</li></ul></div>
+    <div role="status" className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/50"><CalendarClock size={28} className="mb-3 text-gold-600 dark:text-gold-400" /><h3 className="font-bold text-brand-900 dark:text-white">No sessions available for correction</h3><p className={`${muted} mt-2`}>You can request corrections for institutional events, flag ceremonies, service, and merit activities that ended within the last 30 days.</p></div>
+    <div className="space-y-2"><h3 className="text-sm font-bold">What you can do next</h3><ul className="list-disc space-y-2 pl-5 text-sm leading-6 text-slate-600 dark:text-slate-300"><li>Wait until your activity ends, then refresh the sessions.</li><li>Check your request history if you already submitted a correction.</li><li>Contact OSSA if the activity is older, has an excuse request, or belongs to an organization or involves volunteer credit.</li></ul></div>
     {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
    </div> : <form id={formId} onSubmit={submit} className="space-y-6">
     <div className="flex items-start gap-3 rounded-xl bg-brand-50 p-3 dark:bg-brand-950/40"><Info size={18} className="mt-0.5 shrink-0 text-brand-700 dark:text-gold-400" /><p className="text-sm leading-6 text-brand-900 dark:text-slate-200">Choose the session, enter the correct attendance, then explain the mistake. Review the comparison before submitting.</p></div>
@@ -212,7 +243,7 @@ export default function AttendanceCorrections({ review = false, target, onTarget
    </form>}
   </Modal>
   <Modal open={Boolean(selected)} onClose={() => { if (!busy && !openingProof) setSelectedId(null); }} title="Attendance correction request" size="lg"
-   footer={review && selected?.status === 'pending' ? <><Button variant="danger" disabled={busy || note.trim().length < 5} onClick={() => decide('rejected')}>Reject correction</Button><Button variant="gold" disabled={busy || selected.student_id === uid || note.trim().length < 5 || Boolean(timeError)} onClick={() => decide('approved')}>{busy ? 'Saving...' : 'Approve correction'}</Button></> : undefined}>
+   footer={review && selected?.status === 'pending' ? <><Button variant="danger" disabled={busy || note.trim().length < 5} onClick={() => decide('rejected')}>Reject correction</Button><Button variant="gold" disabled={busy || selected.student_id === uid || note.trim().length < 5 || Boolean(timeError) || (creditKind && !creditValid)} onClick={() => decide('approved')}>{busy ? 'Saving...' : 'Approve correction'}</Button></> : undefined}>
    {selected && <div className="space-y-4 text-sm">
     <ApprovalStatus status={selected.status} />
     <DetailFields fields={[{ label: 'Student', value: `${selected.student_name} (${selected.student_number})` }, { label: 'Activity / session', value: `${selected.event_title} / ${selected.slot}` }, { label: 'Submitted', value: formatManilaDateTime(selected.created_at) },
@@ -221,7 +252,13 @@ export default function AttendanceCorrections({ review = false, target, onTarget
     <div><h3 className="font-bold">Student explanation</h3><p className="whitespace-pre-wrap break-words">{selected.reason}</p></div>
     <DetailFields fields={[{ label: 'Requested time-in', value: selected.proposed_time_in ? formatManilaDateTime(selected.proposed_time_in) : 'Absent (no time-in)' }, { label: 'Requested time-out', value: selected.proposed_time_out ? formatManilaDateTime(selected.proposed_time_out) : 'Not requested' }]} />
     {selected.proof_url && <Button variant="secondary" fullWidth={false} disabled={openingProof} onClick={openProof}><ExternalLink size={16} />{openingProof ? 'Opening...' : 'View supporting evidence'}</Button>}
-    {review && selected.status === 'pending' ? <>{timeInputs(true)}<p className="text-slate-500 dark:text-slate-400">Approval adjusts this session's penalty. Reductions stop at the outstanding balance; previously completed service is preserved.</p><label className={approvalLabel}>Decision notes (required)<textarea aria-label="Decision notes" className={approvalControl} required minLength={5} maxLength={2000} rows={3} disabled={busy} value={note} onChange={event => setNote(event.target.value)} /></label></> : selected.status !== 'pending' && <>
+    {review && selected.status === 'pending' ? <>{timeInputs(true)}{creditKind ? <>
+      {creditLoading && <p role="status">Calculating credit adjustment...</p>}
+      {creditValid && <CreditPreview plan={credit!.plan} />}
+      {creditError && <p role="alert" className="text-red-600 dark:text-red-400">{creditError}</p>}
+      <Button variant="secondary" fullWidth={false} disabled={busy || creditLoading} onClick={() => setPreviewVersion(v => v + 1)}>Refresh credit preview</Button>
+     </> : <p className="text-slate-500 dark:text-slate-400">Approval adjusts this session's penalty. Reductions stop at the outstanding balance; previously completed service is preserved.</p>}<label className={approvalLabel}>Decision notes (required)<textarea aria-label="Decision notes" className={approvalControl} required minLength={5} maxLength={2000} rows={3} disabled={busy} value={note} onChange={event => setNote(event.target.value)} /></label></> : selected.status !== 'pending' && <>
+     {selected.credit_adjustment && <CreditPreview plan={selected.credit_adjustment} />}
      {selected.corrected && <AttendanceSnapshot title="Approved corrected recording" record={selected.corrected} />}
      <DetailFields fields={[{ label: 'Decision notes', value: selected.review_note }, { label: 'Reviewer', value: selected.reviewer_name || '' }, { label: 'Reviewed', value: formatManilaDateTime(selected.reviewed_at) }, { label: 'Sanction balance adjustment', value: `${Number(selected.sanction_change).toFixed(2)} hours` }]} />
     </>}

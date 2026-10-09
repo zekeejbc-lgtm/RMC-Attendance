@@ -376,7 +376,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
           </dl>
           {selectedRecord.event?.description && <div><h4 className="font-semibold">Activity description</h4><p className="mt-1 whitespace-pre-line text-slate-600 dark:text-slate-300">{selectedRecord.event.description}</p></div>}
           {selectedRecord.completionPending && <p role="status" className="rounded-xl bg-amber-50 p-3 text-amber-800 dark:bg-amber-950 dark:text-amber-200">Merit is pending activity completion.</p>}
-          {!embedded && !student && selectedRecord.event && !selectedRecord.event.organizationId && !['service', 'merit'].includes(selectedRecord.event.kind || '') && <Button variant="secondary" onClick={() => { setCorrectionTarget({ eventId: selectedRecord.event!.id, slot: selectedRecord.slot }); setSelectedRecordId(null); }}>Report a problem with this record</Button>}
+          {!embedded && !student && selectedRecord.event && !selectedRecord.event.organizationId && <Button variant="secondary" onClick={() => { setCorrectionTarget({ eventId: selectedRecord.event!.id, slot: selectedRecord.slot }); setSelectedRecordId(null); }}>Report a problem with this record</Button>}
         </div>}
       </Modal>
       <Modal open={Boolean(selectedSanction)} onClose={() => setSelectedSanctionId(null)} title="Sanction details" description="All times are in Manila local time (UTC+8)." size="md">

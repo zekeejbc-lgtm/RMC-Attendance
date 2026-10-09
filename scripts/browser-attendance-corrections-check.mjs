@@ -91,6 +91,43 @@ try {
    }
    console.log('PASS browser custom session/time controls, file selector and absent-to-present preview (read-only fixture)');
   }
+  if (role === 'admin') {
+   // Read-only fixtures exercise the credit review without saving a decision.
+   const fixture = {
+    id: 'credit-preview-request', student_id: 'fixture-student', student_name: 'Credit Demo Student', student_number: '123',
+    event_id: 'credit-event', event_title: 'Service correction demo', kind: 'service', slot: 'default',
+    reason: 'The officer confirmed that checkout was one hour earlier.', proof_url: null,
+    original: { status: 'present', time_in: Date.parse('2026-10-08T00:00:00Z'), time_out: Date.parse('2026-10-08T02:00:00Z'), rendered_hours: 2 },
+    corrected: null, proposed_time_in: '2026-10-08T00:00:00Z', proposed_time_out: '2026-10-08T01:00:00Z',
+    session_starts_at: '2026-10-08T00:00:00Z', session_ends_at: '2026-10-08T02:00:00Z', session_late_at: '2026-10-08T00:15:00Z',
+    status: 'pending', created_at: '2026-10-09T00:00:00Z', reviewed_at: null, reviewer_name: null, review_note: '', sanction_change: 0,
+   };
+   const plan = { kind: 'service', rendered_before: 2, rendered_after: 1, cleared_before: 1, cleared_after: 1,
+    merit_before: 1, merit_after: 0, sanction_change: 0, merit_change: -1, balance_before: 3, balance_after: 3, complete: true };
+   await page.setRequestInterception(true);
+   page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    const body = path === '/rest/v1/rmc_attendance_corrections' && request.method() === 'GET' ? [fixture]
+     : path === '/rest/v1/rpc/rmc_preview_correction_credit' && request.method() === 'POST' ? plan : null;
+    if (body) void request.respond({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' }, body: JSON.stringify(body) });
+    else void request.continue();
+   });
+   await page.goto(`${base}/#${route}`, { waitUntil: 'networkidle0' });
+   await page.reload({ waitUntil: 'networkidle0' });
+   await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.includes('Service correction demo / default')));
+   await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.includes('Service correction demo / default')).click());
+   await page.waitForSelector('[aria-label="Credit change preview"]');
+   await page.type('[aria-label="Decision notes"]', 'Officer verified the service checkout.');
+   assert.ok(await page.evaluate(() => [...document.querySelectorAll('button')].some(button => button.textContent.includes('Approve correction') && !button.disabled)));
+   for (const width of [375, 1280]) {
+    await page.setViewport({ width, height: 900 });
+    await new Promise(resolve => setTimeout(resolve, 250));
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2), false, `Credit review overflows at ${width}px`);
+    await page.$eval('[aria-label="Credit change preview"]', element => element.scrollIntoView({ block: 'center' }));
+    await page.screenshot({ path: `.attendance-credit-review-${width}.local.png`, fullPage: false });
+   }
+   console.log('PASS browser service credit preview and approval availability at mobile/desktop widths (read-only fixture)');
+  }
   await context.close();
  }
  assert.deepEqual(errors, []);
