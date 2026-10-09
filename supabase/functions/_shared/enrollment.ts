@@ -1,4 +1,5 @@
 import { readJson, responseHeaders } from './http.ts';
+import { rateLimit } from './rateLimit.ts';
 
 export const sha256 = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join('');
 // Clients are injected so the security branches can be tested without live users.
@@ -18,6 +19,8 @@ export function enrollmentHandler(admin: any, client: any, verifyGoogle: (creden
   return async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response(null, { headers: responseHeaders });
     if (req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
+    const limited = await rateLimit(admin, req, 'enroll');
+    if (limited) return limited;
     try {
       const body = await readJson(req, 32 * 1024);
       const { action, credential, nonce, password, enrollmentKey } = body;

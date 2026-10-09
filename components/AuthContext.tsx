@@ -9,6 +9,7 @@ import { clearOfflineRosters, refreshCachedRosterProfiles, restoreActiveOfflineS
 import { refreshAutomaticRosters } from '../lib/autoRosterSync';
 import { hasPermission } from '../lib/accessControl';
 import { createIdleSession, sessionIdentity } from '../lib/idleSession';
+import { backgroundPollDelay } from '../lib/backgroundPolling';
 interface AuthContextType {
   user: { uid: string; email?: string } | null;
   profile: UserProfile | null; stats: UserStats | null;
@@ -26,6 +27,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let welcomePending: string | null = null;
     let rosterAuthorizedVersion = -1;
     let expiredOwner: string | null = null;
+    let pollFailures = 0;
+    let poll: ReturnType<typeof setTimeout> | undefined;
+    const schedulePoll = () => {
+      if (poll) clearTimeout(poll);
+      if (disposed) return;
+      const profile = appAuth.getCurrentUser()?.profile;
+      poll = setTimeout(() => {
+        if (navigator.onLine && document.visibilityState === 'visible') void sync();
+        else schedulePoll();
+      }, backgroundPollDelay(profile?.role, Boolean(profile && hasPermission(profile.role, 'attendance.scan')), pollFailures));
+    };
     const idleSession = createIdleSession(owner => {
       if (disposed || expiredOwner === owner) return;
       expiredOwner = owner;
@@ -100,6 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // A superseded request has not finished loading this session's workspace.
         if (!applied) { syncAgain = true; return; }
         const account = appAuth.getCurrentUser();
+        pollFailures = 0;
         rosterAuthorizedVersion = !needsMfa && account?.profile.account_status === 'active' ? version : -1;
         refreshRosters();
         if (welcomePending === identity && account?.profile.account_status === 'active' && !needsMfa && !appData.isUserScopeFrozen(account.profile)) {
@@ -113,8 +126,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!disposed) console.warn('Attendance remains on this device until synchronization succeeds.', error instanceof Error ? error.message : 'Sync unavailable.');
         });
       }
-      catch (error) { if (version === identityVersion) failed(error); }
-      finally { syncing = false; if (syncAgain && !disposed) { syncAgain = false; void sync(); } }
+      catch (error) { if (version === identityVersion) { pollFailures++; failed(error); } }
+      finally { syncing = false; schedulePoll(); if (syncAgain && !disposed) { syncAgain = false; void sync(); } }
     };
     const unsubscribeData = subscribeData(() => {
       if (disposed) return;
@@ -142,6 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (previousOwner) void clearOfflineRosters(previousOwner).catch(error => toast.error(error));
         rosterAuthorizedVersion = -1;
         identityVersion++;
+        pollFailures = 0;
         if (syncing) syncAgain = true;
         identity = uid; resetData(uid);
         welcomePending = uid;
@@ -151,7 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTimeout(() => void sync(), 0);
     });
     if (!navigator.onLine) void restorePreparedScanner();
-    const poll = setInterval(() => { if (navigator.onLine && document.visibilityState === 'visible') void sync(); }, 15000);
+    schedulePoll();
     const rosterPoll = setInterval(() => { if (navigator.onLine) refreshRosters(); }, 60000);
     const onFocus = () => { if (idleSession.check() && navigator.onLine) void sync(); }; window.addEventListener('focus', onFocus);
     window.addEventListener('online', onFocus);
@@ -160,7 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const onSyncError = (event: Event) => failed(new Error((event as CustomEvent).detail));
     window.addEventListener('rmc_sync_error', onSyncError);
     if (configurationError) failed(new Error(configurationError));
-    return () => { disposed = true; idleSession.dispose(); clearInterval(poll); clearInterval(rosterPoll); subscription.unsubscribe(); unsubscribeData(); window.removeEventListener('focus', onFocus); window.removeEventListener('online', onFocus); window.removeEventListener('unhandledrejection', onRejection); window.removeEventListener('rmc_sync_error', onSyncError); };
+    return () => { disposed = true; idleSession.dispose(); clearTimeout(poll); clearInterval(rosterPoll); subscription.unsubscribe(); unsubscribeData(); window.removeEventListener('focus', onFocus); window.removeEventListener('online', onFocus); window.removeEventListener('unhandledrejection', onRejection); window.removeEventListener('rmc_sync_error', onSyncError); };
   }, []);
   const scopeFrozen = appData.isUserScopeFrozen(state.profile);
   useEffect(() => {

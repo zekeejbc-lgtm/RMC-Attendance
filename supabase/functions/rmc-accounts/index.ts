@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 import { readJson, responseHeaders as cors } from '../_shared/http.ts';
+import { rateLimit } from '../_shared/rateLimit.ts';
 
 const respond = (body: unknown, status = 200) => Response.json(body, { status, headers: cors });
 Deno.serve(async (req: Request) => {
@@ -7,10 +8,14 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
   const url = Deno.env.get('SUPABASE_URL')!;
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false, autoRefreshToken: false } });
+  const limited = await rateLimit(admin, req, 'accounts');
+  if (limited) return limited;
   const token = req.headers.get('Authorization')?.replace(/^Bearer /i, '');
   if (!token) return respond({ error: 'Sign in first.' }, 401);
   const { data: { user }, error: authError } = await admin.auth.getUser(token);
   if (authError || !user) return respond({ error: 'Invalid session.' }, 401);
+  const actorLimited = await rateLimit(admin, req, 'accounts', user.id);
+  if (actorLimited) return actorLimited;
   const caller = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } });
   const created: string[] = [];
   try {

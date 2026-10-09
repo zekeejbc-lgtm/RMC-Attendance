@@ -179,6 +179,22 @@ it('avoids backend polling while offline and restores the workspace on reconnect
   expect(screen.queryAllByText('Reconnect to load your school information and records.')).toHaveLength(0);
 });
 
+it.each([['student', 120_000], ['mayor', 15_000]] as const)('uses the %s background interval and stops polling after unmount', async (role, delay) => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, 'random').mockReturnValue(0);
+  api.rpc.mockResolvedValue({ data: { ...snapshot, profiles: [{ ...snapshot.profiles[0], role }] }, error: null });
+  const view = render(<AuthProvider><Probe /></AuthProvider>); emit('student');
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+  expect(api.rpc).toHaveBeenCalledOnce();
+  await act(async () => { await vi.advanceTimersByTimeAsync(delay - 2); });
+  expect(api.rpc).toHaveBeenCalledOnce();
+  await act(async () => { await vi.advanceTimersByTimeAsync(2); });
+  expect(api.rpc).toHaveBeenCalledTimes(2);
+  view.unmount();
+  await act(async () => { await vi.advanceTimersByTimeAsync(240_000); });
+  expect(api.rpc).toHaveBeenCalledTimes(2);
+});
+
 it('shows school data on first open as soon as the public request finishes', async () => {
   const request = deferred(); api.select.mockReturnValue(request.promise);
   render(<AuthProvider><Probe /></AuthProvider>); emit(null);

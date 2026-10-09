@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 import { readJson, responseHeaders } from '../_shared/http.ts';
+import { rateLimit } from '../_shared/rateLimit.ts';
 
 const fail = (status: number) => Response.json({ error: 'The authorized profile photo is unavailable.' }, { status, headers: responseHeaders });
 Deno.serve(async (req: Request) => {
@@ -9,10 +10,14 @@ Deno.serve(async (req: Request) => {
   if (!token) return fail(401);
   const url = Deno.env.get('SUPABASE_URL')!;
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false, autoRefreshToken: false } });
+  const limited = await rateLimit(admin, req, 'scanner-photo');
+  if (limited) return limited;
   const caller = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } });
   try {
     const { data: { user }, error: authError } = await admin.auth.getUser(token);
     if (authError || !user) return fail(401);
+    const actorLimited = await rateLimit(admin, req, 'scanner-photo', user.id);
+    if (actorLimited) return actorLimited;
     const body = await readJson(req, 2048);
     if (![body.sessionId, body.studentUid].every(id => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id))) return fail(400);
     // The source is obtained from a current, scoped profile; callers cannot supply fetch URLs.

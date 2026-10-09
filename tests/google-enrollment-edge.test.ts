@@ -42,12 +42,12 @@ it('uses the server-verified email and creates only after complete validation', 
   expect(result.status).toBe(200);
   expect(admin.auth.admin.createUser).toHaveBeenCalledWith(expect.objectContaining({ email: 'verified@gmail.com', email_confirm: true,
     user_metadata: expect.objectContaining({ profile: expect.objectContaining({ email: 'verified@gmail.com' }), enrollment_ticket: expect.any(String) }) }));
-  expect(rpc.mock.calls.map((call: any[]) => call[0])).toEqual(['rmc_login_limit', 'rmc_validate_enrollment', 'rmc_enrollment_reserve']);
+  expect(rpc.mock.calls.map((call: any[]) => call[0])).toEqual(['rmc_edge_rate_limit', 'rmc_login_limit', 'rmc_validate_enrollment', 'rmc_enrollment_reserve']);
 });
 it('rejects invalid or expired Google proof before any lookup, session, or creation', async () => {
   verify.mockRejectedValue(new Error('Invalid Google token'));
   expect((await call({ action: 'google', ...google })).status).toBe(400);
-  expect(find).not.toHaveBeenCalled(); expect(rpc).not.toHaveBeenCalled();
+  expect(find).not.toHaveBeenCalled(); expect(rpc.mock.calls.map((call: any[]) => call[0])).toEqual(['rmc_edge_rate_limit']);
   expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
 });
 it('does not create an account when enrollment validation fails', async () => {

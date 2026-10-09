@@ -8,7 +8,7 @@ beforeEach(() => {
   lookup = vi.fn().mockResolvedValue({ data: null });
   status = vi.fn().mockResolvedValue({ data: { status: 'active' } });
   filter = vi.fn(() => ({ maybeSingle: lookup, single: status }));
-  admin = { rpc: vi.fn().mockResolvedValue({ error: null }), from: vi.fn(() => ({ select: () => ({ eq: filter }) })) };
+  admin = { rpc: vi.fn().mockResolvedValue({ data: 0, error: null }), from: vi.fn(() => ({ select: () => ({ eq: filter }) })) };
   client = { auth: { signInWithPassword: vi.fn().mockResolvedValue({ data: { session: null }, error: { code: 'invalid_credentials' } }) } };
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -34,7 +34,7 @@ it('does not mistake a lookup failure for a missing account', async () => {
   expect((await login()).body.code).toBeUndefined();
 });
 it('enforces the attempt limit before checking credentials or looking up accounts', async () => {
-  admin.rpc.mockResolvedValue({ error: new Error('Limited') });
+  admin.rpc.mockImplementation(async (name: string) => name === 'rmc_edge_rate_limit' ? { data: 0 } : { error: new Error('Limited') });
   expect((await login()).status).toBe(429);
   expect(client.auth.signInWithPassword).not.toHaveBeenCalled();
   expect(admin.from).not.toHaveBeenCalled();

@@ -1,4 +1,5 @@
 import { readJson, responseHeaders as cors } from './http.ts';
+import { rateLimit } from './rateLimit.ts';
 
 const respond = (body: unknown, status = 200) => Response.json(body, { status, headers: cors });
 
@@ -6,6 +7,8 @@ export function loginHandler(admin: any, client: any) {
   return async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
     if (req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
+    const limited = await rateLimit(admin, req, 'login');
+    if (limited) return limited;
     try {
       const { identifier, password } = await readJson(req, 16 * 1024);
       if (typeof identifier !== 'string' || typeof password !== 'string' || identifier.length > 254 || password.length > 1024) throw new Error('Invalid credentials');
