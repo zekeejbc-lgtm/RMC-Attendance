@@ -23,6 +23,14 @@ import AttendanceDashboard from '../views/AttendanceDashboard';
 import OSSADashboard from '../views/OSSADashboard';
 import AdminControls from '../views/AdminControls';
 import { changeField } from './ui-select';
+import { defaultLegalPages } from '../lib/legalPages';
+
+vi.mock('../lib/legalPageStore', () => ({ loadLegalPage: vi.fn(async () => defaultLegalPages.agreement) }));
+vi.mock('../lib/attendanceCorrections', async importOriginal => ({
+  ...await importOriginal<any>(),
+  loadAttendanceCorrections: vi.fn(async () => []),
+  loadCorrectionOptions: vi.fn(async () => []),
+}));
 
 vi.mock('virtual:pwa-register/react', () => ({
   useRegisterSW: () => ({ needRefresh: [false, vi.fn()], updateServiceWorker: vi.fn() }),
@@ -150,6 +158,8 @@ vi.mock('../lib/backend', () => ({
     submitExcuseApplication: vi.fn(async () => undefined),
     getExcuseApplications: () => staffState.excuses,
     getOrganizationPeople: async () => [],
+    getOrganizations: () => [],
+    getOrganizationSanctions: () => [],
     getSchoolStructure: () => staffState.schoolStructure,
     getStudentsBySection: () => staffState.students,
     getUserDetail: (uid: string) => {
@@ -215,6 +225,18 @@ vi.mock('html5-qrcode', () => ({
 async function openDisclosure(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
   const trigger = screen.getByRole('button', { name });
   if (trigger.getAttribute('aria-expanded') !== 'true') await user.click(trigger);
+}
+
+async function agreeToPrivacy() {
+  const panel = await screen.findByRole('region', { name: 'Data privacy agreement text' });
+  Object.defineProperties(panel, {
+    scrollHeight: { configurable: true, value: 1000 },
+    clientHeight: { configurable: true, value: 400 },
+    scrollTop: { configurable: true, writable: true, value: 600 },
+  });
+  fireEvent.scroll(panel);
+  fireEvent.click(screen.getByRole('checkbox', { name: 'I have read and agree to the Data Privacy Agreement.' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 }
 
 function renderRoute(element: React.ReactElement) {
@@ -353,6 +375,10 @@ describe('public route UI behavior', () => {
     await user.click(screen.getByRole('button', { name: /^register$/i }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /create your student account/i })).toHaveFocus();
+    expect(screen.getByRole('heading', { name: 'Data privacy agreement' })).toBeVisible();
+    expect(screen.queryByRole('textbox', { name: /legal full name/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^next$/i })).toBeDisabled();
+    await agreeToPrivacy();
     expect(screen.getByRole('textbox', { name: /legal full name/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /next/i })).toBeInTheDocument();
 
@@ -379,6 +405,8 @@ describe('public route UI behavior', () => {
     const user = userEvent.setup();
     renderRoute(<Register />);
 
+    await agreeToPrivacy();
+
     await user.type(screen.getByRole('textbox', { name: /legal full name/i }), 'Juan Dela Cruz');
     expect(screen.getByRole('textbox', { name: /legal full name/i })).toHaveValue('Juan Dela Cruz');
     expect(screen.getByRole('list', { name: /enrollment progress/i })).toBeInTheDocument();
@@ -387,6 +415,8 @@ describe('public route UI behavior', () => {
   it('requires identity details before showing academic enrollment fields', async () => {
     const user = userEvent.setup();
     renderRoute(<Register />);
+
+    await agreeToPrivacy();
 
     const next = screen.getByRole('button', { name: /^next$/i });
     await user.click(next);
@@ -414,6 +444,7 @@ describe('public route UI behavior', () => {
     await user.keyboard('{Escape}');
     await user.click(screen.getByRole('button', { name: /current theme: light mode/i }));
     if (_name === 'login') await user.click(screen.getAllByRole('button', { name: /^log in$/i })[0]);
+    else await agreeToPrivacy();
     expect(document.documentElement).toHaveClass('dark');
 
     const card = screen.getByRole(_name === 'login' ? 'dialog' : 'main', { name: headingName });

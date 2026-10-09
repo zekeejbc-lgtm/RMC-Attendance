@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useId, useState } from 'react';
-import { Download, X } from 'lucide-react';
+import { Download, RefreshCw, X } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import Button from './Button';
 import CountdownBar from './CountdownBar';
@@ -14,6 +14,7 @@ export const usePwaInstall = () => useContext(InstallContext);
 
 export default function PwaStatus({ children }: { children?: React.ReactNode }) {
   const installTitleId = useId();
+  const updateTitleId = useId();
   const [online, setOnline] = useState(navigator.onLine);
   const [install, setInstall] = useState<InstallEvent | null>(null);
   const [installing, setInstalling] = useState(false);
@@ -83,14 +84,22 @@ export default function PwaStatus({ children }: { children?: React.ReactNode }) 
     finally { setUpdating(false); }
   };
   return <InstallContext.Provider value={{ available: Boolean(install) && online && !installed, installed, installing, installApp }}>
-  {(!online || needRefresh) && <aside aria-label="App status" className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 print:hidden">
+  {!online && <aside aria-label="App status" className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 print:hidden">
     {!online && <p role="status">You’re offline. Prepared attendance rosters can be used offline. New sign-ins, other records and uploads need internet; attendance stays pending until synced.</p>}
-    {needRefresh && <div className="flex flex-wrap items-center gap-3" role="status">
-      <p>An app update is ready. Save your work before reloading.</p>
-      <button type="button" disabled={!online || updating} onClick={() => void update()} className="min-h-11 font-semibold underline disabled:opacity-50">{updating ? 'Updating…' : 'Reload to update'}</button>
-      <button type="button" onClick={() => setNeedRefresh(false)} className="min-h-11 underline">Later</button>
+  </aside>}
+  {needRefresh && <aside aria-labelledby={updateTitleId} className="fixed top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] z-[10000] w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 print:hidden">
+    <div className="flex items-start gap-3" role="status" aria-live="polite">
+      <RefreshCw aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-brand-900 dark:text-gold-400" />
+      <div className="min-w-0 flex-1">
+        <h2 id={updateTitleId} className="text-base font-semibold">App update ready</h2>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">An app update is ready. Save your work before reloading.</p>
+      </div>
+    </div>
+    <div className="mt-4 flex flex-wrap gap-2">
+      <Button disabled={!online || updating} onClick={() => void update()}>{updating ? 'Updating…' : 'Reload to update'}</Button>
+      <Button variant="secondary" disabled={updating} onClick={() => setNeedRefresh(false)}>Later</Button>
+    </div>
       {updateError && <p role="alert">{updateError}</p>}
-    </div>}
   </aside>}
   {online && install && showInstall && !installed && <aside aria-labelledby={installTitleId} className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-40 w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 print:hidden">
     <div className="flex items-start gap-3">

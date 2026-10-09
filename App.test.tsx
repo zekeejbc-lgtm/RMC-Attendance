@@ -69,12 +69,20 @@ it('redirects students who open the transfer route without permission', async ()
   expect(screen.queryByRole('heading', { name: 'Transfer students' })).not.toBeInTheDocument();
 });
 
-it.each(['activities', 'requests', 'sanctions', 'excuses', 'analytics', 'organizations'])('opens the OSSA %s subpage directly', async section => {
+it.each(['activities', 'requests', 'sanctions', 'excuses', 'corrections', 'organizations'])('opens the OSSA %s subpage directly', async section => {
   state.auth.profile.role = 'ossa';
   window.location.hash = `#/ossa/dashboard/${section}`;
   render(<App />);
   await screen.findByRole('heading', { name: `OSSA ${section}` });
   expect(window.location.hash).toBe(`#/ossa/dashboard/${section}`);
+});
+
+it('redirects the legacy OSSA analytics route to sanctions', async () => {
+  state.auth.profile.role = 'ossa';
+  window.location.hash = '#/ossa/dashboard/analytics';
+  render(<App />);
+  await screen.findByRole('heading', { name: 'OSSA sanctions' });
+  expect(window.location.hash).toBe('#/ossa/dashboard/sanctions');
 });
 
 it('denies a student access to the OSSA request subpage', async () => {

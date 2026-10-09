@@ -16,10 +16,16 @@ vi.mock('../../lib/backend', () => ({ refreshData: vi.fn(), appData: {
 } }));
 beforeEach(() => { api.save.mockReset(); api.save.mockResolvedValue({}); });
 afterEach(cleanup);
-const open = () => render(<ThemeProvider><AccountFreezeControls /></ThemeProvider>);
+const open = async (user: ReturnType<typeof userEvent.setup>) => {
+  render(<ThemeProvider><AccountFreezeControls /></ThemeProvider>);
+  const trigger = screen.getByRole('button', { name: 'Individual account freezes' });
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+  await user.click(trigger);
+};
 
 it('freezes a single pending account with the entered reason', async () => {
-  const user = userEvent.setup(); open();
+  const user = userEvent.setup(); await open(user);
   await user.click(screen.getByRole('button', { name: 'Freeze Student One' }));
   const reason = screen.getByRole('textbox', { name: 'Reason' });
   await user.clear(reason); await user.type(reason, 'Individual review');
@@ -29,7 +35,7 @@ it('freezes a single pending account with the entered reason', async () => {
 });
 
 it('unfreezes only the selected batch, retaining selection across searches', async () => {
-  const user = userEvent.setup(); open();
+  const user = userEvent.setup(); await open(user);
   await user.click(screen.getByRole('checkbox', { name: 'Select Student One' }));
   await user.type(screen.getByRole('searchbox'), 'Student Two');
   await user.click(screen.getByRole('checkbox', { name: 'Select Student Two' }));
@@ -40,7 +46,7 @@ it('unfreezes only the selected batch, retaining selection across searches', asy
 
 it('allows selecting admins and displays the server recovery restriction', async () => {
   api.save.mockRejectedValue(new Error('Keep at least one active admin unfrozen to restore access.'));
-  const user = userEvent.setup(); open();
+  const user = userEvent.setup(); await open(user);
   await user.click(screen.getByRole('button', { name: 'Freeze Admin Owner' }));
   expect(screen.getByText(/You selected your own account/)).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Confirm freeze' }));

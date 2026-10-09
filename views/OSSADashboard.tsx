@@ -7,6 +7,8 @@ import { formatManilaDateTime } from '../lib/dateTime';
 import ActivityApprovalQueue from '../components/events/ActivityApprovalQueue';
 import OrganizationApprovalQueue from '../components/events/OrganizationApprovalQueue';
 import ExcuseApprovalQueue from '../components/events/ExcuseApprovalQueue';
+import AttendanceCorrections from '../components/attendance/AttendanceCorrections';
+import { loadAttendanceCorrections } from '../lib/attendanceCorrections';
 import ProfileRequests from '../components/members/ProfileRequests';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import { downloadCsv } from '../lib/export';
@@ -61,20 +63,27 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
   const [adjustSuccess, setAdjustSuccess] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingInformationCount, setPendingInformationCount] = useState<number | null>(null);
+  const [pendingCorrectionCount, setPendingCorrectionCount] = useState<number | null>(null);
   const [pendingActivityCount, setPendingActivityCount] = useState(0);
   const [pendingOrganizationCount, setPendingOrganizationCount] = useState(0);
   const canReviewInformation = hasPermission(profile?.role, 'ossa.manage_cases');
 
   useEffect(() => {
     setPendingInformationCount(null);
+    setPendingCorrectionCount(null);
     if (section !== 'overview' || !profile || !canReviewInformation || refreshing) return;
     let active = true;
     let latestRequest = 0;
     const load = async () => {
       const request = ++latestRequest;
       try {
-        const requests = await loadProfileRequests();
-        if (active && request === latestRequest) setPendingInformationCount(requests.filter(row => row.status === 'pending').length);
+        const [requests, corrections] = await Promise.allSettled([loadProfileRequests(), loadAttendanceCorrections()]);
+        if (active && request === latestRequest) {
+          setPendingInformationCount(requests.status === 'fulfilled' ? requests.value.filter(row => row.status === 'pending').length : null);
+          setPendingCorrectionCount(corrections.status === 'fulfilled' ? corrections.value.filter(row => row.status === 'pending').length : null);
+          if (requests.status === 'rejected') toast.error(requests.reason);
+          if (corrections.status === 'rejected') toast.error(corrections.reason);
+        }
       } catch (error) {
         if (active && request === latestRequest) { setPendingInformationCount(null); toast.error(error); }
       }
@@ -133,6 +142,7 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
     activities: pendingActivityCount,
     requests: pendingInformationCount,
     excuses: pendingExcuseCount,
+    corrections: pendingCorrectionCount,
     sanctions: studentsWithSanctions.length,
     organizations: pendingOrganizationCount,
   };
@@ -210,12 +220,13 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
 
   const availableSections = ossaSections.filter(item => hasPermission(profile?.role, item.permission));
   const currentSection = ossaSections.find(item => item.id === section);
-  const sectionIcons = { activities: CalendarCheck, requests: PencilLine, sanctions: ShieldAlert, excuses: FileCheck2, organizations: Building2 };
+  const sectionIcons = { activities: CalendarCheck, requests: PencilLine, sanctions: ShieldAlert, excuses: FileCheck2, corrections: PencilLine, organizations: Building2 };
   const sectionTones = {
     activities: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
     requests: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
     sanctions: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
     excuses: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+    corrections: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300',
     organizations: 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
   };
 
@@ -242,7 +253,7 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
       {section === 'overview' && <PaymentNotices />}
       {section === 'overview' && <nav aria-label="OSSA workspaces" className="space-y-6">
         {[
-          { title: 'Review & approvals', description: 'Decide on submitted requests and supporting documents.', ids: ['activities', 'requests', 'excuses'] },
+          { title: 'Review & approvals', description: 'Decide on submitted requests and supporting documents.', ids: ['activities', 'requests', 'excuses', 'corrections'] },
           { title: 'Records & oversight', description: 'Manage student cases, reports, and organization requests.', ids: ['sanctions', 'organizations'] },
         ].map(group => { const items = availableSections.filter(item => group.ids.includes(item.id)); if (!items.length) return null; return <section key={group.title} className="space-y-3">
           <div><h2 className="text-base font-bold text-brand-900 dark:text-white">{group.title}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{group.description}</p></div>
@@ -273,6 +284,7 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
 
       {section === 'activities' && <ActivityApprovalQueue />}
       {section === 'requests' && <ProfileRequests review />}
+      {section === 'corrections' && <AttendanceCorrections review />}
       {section === 'organizations' && <OrganizationApprovalQueue />}
       {section === 'sanctions' && <Surface aria-labelledby="ossa-analytics-heading" className="p-4 sm:p-6">
         <h2 id="ossa-analytics-heading" className="text-lg font-bold text-brand-900 dark:text-white">Sanction Analytics</h2>

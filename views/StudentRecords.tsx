@@ -1,4 +1,5 @@
 import ActivityCredits from '../components/attendance/ActivityCredits';
+import AttendanceCorrections from '../components/attendance/AttendanceCorrections';
 import SanctionClearance from '../components/attendance/SanctionClearance';
 import RecordedBy from '../components/attendance/RecordedBy';
 import RecordPagination from '../components/ui/RecordPagination';
@@ -38,6 +39,9 @@ interface AttendanceRecord {
   deductedHours?: number;
   meritHours?: number;
   completionPending?: boolean;
+  correctedBy?: string;
+  correctedAt?: number;
+  correctionNote?: string;
 }
 
 interface SanctionEntry {
@@ -66,6 +70,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
     recordedAt: r.recorded_at || r.time_in ? formatManilaDateTime(r.recorded_at || r.time_in) : 'Not recorded',
     renderedHours: r.rendered_hours, deductedHours: r.deducted_hours, meritHours: r.merit_earned_hours,
     completionPending: r.completion_pending,
+    correctedBy: r.corrected_by_name, correctedAt: r.corrected_at, correctionNote: r.correction_note,
   })).sort((a, b) => b.sortDate - a.sortDate || b.sortTime - a.sortTime || b.id.localeCompare(a.id)), [profile?.uid, revision]);
   const sanctions: SanctionEntry[] = [...(appData.getUserDetail(profile?.uid || '')?.sanction_logs || [])].sort((a, b) => Number(b.timestamp) - Number(a.timestamp)).map(s => ({
     id: s.id, reason: s.reason, hours: s.change, dateAssigned: formatManilaDate(s.timestamp),
@@ -78,6 +83,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
   const [statusFilter, setStatusFilter] = usePageMemory<string>('statusFilter', 'all');
   const [categoryFilter, setCategoryFilter] = usePageMemory<string>('categoryFilter', 'all');
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [correctionTarget, setCorrectionTarget] = useState<{ eventId: string; slot: string } | null>(null);
   const [selectedSanctionId, setSelectedSanctionId] = useState<string | null>(null);
   const selectedRecord = records.find(record => record.id === selectedRecordId);
   const selectedSanction = sanctions.find(sanction => sanction.id === selectedSanctionId);
@@ -301,6 +307,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
       </Surface>
 
       {/* SANCTION RECORDS SECTION */}
+      {!embedded && !student && <AttendanceCorrections target={correctionTarget} onTargetHandled={() => setCorrectionTarget(null)} />}
       <Surface className="overflow-hidden">
         <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-200 bg-red-50/50 p-5 dark:border-slate-700 dark:bg-red-950/30 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
@@ -361,6 +368,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
               ['Event starts', selectedRecord.event ? formatManilaDateTime(selectedRecord.event.startTime) : 'Unavailable'],
               ['Event ends', selectedRecord.event ? formatManilaDateTime(selectedRecord.event.endTime) : 'Unavailable'],
               ['Location', selectedRecord.event?.venue || 'Not specified'],
+              ...(selectedRecord.correctedAt ? [['Corrected by', selectedRecord.correctedBy || 'OSSA'], ['Corrected at', formatManilaDateTime(selectedRecord.correctedAt)], ['Correction notes', selectedRecord.correctionNote || '']] : []),
               ...(selectedRecord.renderedHours != null ? [['Rendered hours', Number(selectedRecord.renderedHours).toFixed(2)]] : []),
               ...(selectedRecord.deductedHours != null ? [['Sanctions cleared', `${Number(selectedRecord.deductedHours).toFixed(2)} hours`]] : []),
               ...(selectedRecord.meritHours != null ? [['Merit earned', `${Number(selectedRecord.meritHours).toFixed(2)} hours`]] : []),
@@ -368,6 +376,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
           </dl>
           {selectedRecord.event?.description && <div><h4 className="font-semibold">Activity description</h4><p className="mt-1 whitespace-pre-line text-slate-600 dark:text-slate-300">{selectedRecord.event.description}</p></div>}
           {selectedRecord.completionPending && <p role="status" className="rounded-xl bg-amber-50 p-3 text-amber-800 dark:bg-amber-950 dark:text-amber-200">Merit is pending activity completion.</p>}
+          {!embedded && !student && selectedRecord.event && !selectedRecord.event.organizationId && !['service', 'merit'].includes(selectedRecord.event.kind || '') && <Button variant="secondary" onClick={() => { setCorrectionTarget({ eventId: selectedRecord.event!.id, slot: selectedRecord.slot }); setSelectedRecordId(null); }}>Report a problem with this record</Button>}
         </div>}
       </Modal>
       <Modal open={Boolean(selectedSanction)} onClose={() => setSelectedSanctionId(null)} title="Sanction details" description="All times are in Manila local time (UTC+8)." size="md">

@@ -7,6 +7,8 @@ vi.mock('../components/AuthContext', () => ({ useAuth: () => ({ profile: state.p
 vi.mock('../lib/accessControl', () => ({ hasPermission: (_: unknown, permission: string) => state.permissions.includes(permission) }));
 vi.mock('../lib/backend', () => ({ refreshData: vi.fn(async () => {}), appData: { getPaymentInfo: () => ({ reminders: [] }), getAllStudents: () => state.students, getExcuseApplications: () => state.excuses, getCustomRoles: () => [], getCoreRoles: () => [], getOrganizations: () => state.organizations, getEvents: () => state.events, getOrganizationSanctions: () => state.sanctions } }));
 vi.mock('../lib/profileRequests', () => ({ loadProfileRequests: vi.fn(async () => state.requests) }));
+vi.mock('../lib/attendanceCorrections', () => ({ loadAttendanceCorrections: vi.fn(async () => []) }));
+vi.mock('../components/attendance/AttendanceCorrections', () => ({ default: () => <div>Attendance correction review queue</div> }));
 vi.mock('../components/events/ActivityApprovalQueue', () => ({ default: () => <div>Activity review queue</div> }));
 vi.mock('../components/members/ProfileRequests', () => ({ default: () => <div>Student information review queue</div> }));
 beforeEach(() => { state.permissions = ['ossa.manage_cases', 'events.approve']; state.events = []; state.organizations = []; state.sanctions = []; state.students = []; state.excuses = []; state.requests = []; });
@@ -37,7 +39,7 @@ it('shows pending badges in scope and clears them after requests are reviewed', 
 it('organizes the hub into linked workspaces without embedding queues or charts', () => {
  renderPage();
  expect(screen.getByRole('heading', { name: 'OSSA Hub' })).toBeVisible();
- const pages = { 'Event & ceremony approvals': 'activities', 'Student information requests': 'requests', 'Student sanctions & analytics': 'sanctions', 'Excuse applications': 'excuses', 'Organization approvals': 'organizations' };
+ const pages = { 'Event & ceremony approvals': 'activities', 'Student information requests': 'requests', 'Student sanctions & analytics': 'sanctions', 'Excuse applications': 'excuses', 'Attendance corrections': 'corrections', 'Organization approvals': 'organizations' };
  for (const [name, path] of Object.entries(pages)) expect(screen.getByRole('link', { name: new RegExp(name.replace('&', '&') + '.*Open workspace', 'i') })).toHaveAttribute('href', `/ossa/dashboard/${path}`);
  expect(screen.queryByText('Activity review queue')).not.toBeInTheDocument();
  expect(screen.queryByText('Student information review queue')).not.toBeInTheDocument();

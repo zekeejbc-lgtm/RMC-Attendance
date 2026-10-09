@@ -20,14 +20,14 @@ export function ApprovalStatus({ status }: { status: string }) {
 
 export interface ApprovalRow { id: string; title: string; status: string; searchText?: string; type?: string; subtitle?: string; }
 
-export default function ApprovalQueue<T extends ApprovalRow>({ title, description, rows, onOpen, types, collapsible = false, emptyMessage = 'No requests match your filters.' }: {
+export default function ApprovalQueue<T extends ApprovalRow>({ title, description, rows, onOpen, types, collapsible = false, initialStatus = 'pending', emptyMessage = 'No requests match your filters.' }: {
   title: string; description: string; rows: T[]; onOpen: (row: T) => void;
-  types?: { value: string; label: string }[]; emptyMessage?: string; collapsible?: boolean;
+  types?: { value: string; label: string }[]; emptyMessage?: string; collapsible?: boolean; initialStatus?: 'pending' | 'all';
 }) {
   const inputId = useId();
   const [open, setOpen] = useState(true);
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('pending');
+  const [status, setStatus] = useState<string>(initialStatus);
   const [type, setType] = useState('all');
   const filtered = rows.filter(row => (status === 'all' || row.status === status) && (type === 'all' || row.type === type)
     && `${row.title} ${row.searchText || ''}`.toLowerCase().includes(search.trim().toLowerCase()));
