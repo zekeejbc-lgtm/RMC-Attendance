@@ -2,7 +2,7 @@ import { SelectField } from '../ui/SelectField';
 import { Collapsible } from '../ui/Collapsible';
 import ProfileAvatar from '../ui/ProfileAvatar';
 import { FormEvent, useMemo, useState } from 'react';
-import { Check, ChevronDown, Copy, Eye, EyeOff, KeyRound, Pencil, Plus, ShieldCheck, Trash2, UserRoundCog } from 'lucide-react';
+import { Check, ChevronDown, Eye, EyeOff, Plus, ShieldCheck, Trash2, UserRoundCog } from 'lucide-react';
 import { hasPermission, roleLabels } from '../../lib/accessControl';
 import { appData } from '../../lib/backend';
 import { accountUnits, canProvisionRole, managedAccountRoles, supportsAccountRole } from '../../lib/accountProvisioning';

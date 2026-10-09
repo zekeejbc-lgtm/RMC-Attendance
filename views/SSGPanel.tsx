@@ -1,3 +1,4 @@
+import { hierarchyPathForRole } from '../lib/workspaceRoutes';
 import RecordPagination from '../components/ui/RecordPagination';
 import { usePagination } from '../components/usePagination';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -26,15 +27,7 @@ import { createEventAudienceTarget, serializeAcademicAssignment } from '../lib/a
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { NodeOfficerManager, NodeOfficerSummary } from '../components/academic/NodeOfficerManager';
 import { hasPermission, roleLabels } from '../lib/accessControl';
-import { 
-  Users, Check, X, Shield, Plus, UserCheck, Search, Filter,
-  ChevronRight, School, BookOpen, Grid, List, ShieldAlert,
-  Mail, Phone, User as UserIcon, Minus, ImageIcon, LayoutGrid,
-  Upload, Trash2, Home, Clock, Lock, CalendarPlus, MapPin, Target,
-  AlignLeft, Info, Users2, AlertTriangle, Compass, Crosshair, Map,
-  Globe, ChevronDown, FileText, Fingerprint, Trash, Building2, CalendarDays, Inbox, Pencil, Archive, WandSparkles,
-  Eye, EyeOff, AlertCircle, CheckCircle2,
-} from 'lucide-react';
+import { Users, X, Shield, Plus, UserCheck, ChevronRight, School, BookOpen, ShieldAlert, Mail, Phone, User as UserIcon, Minus, LayoutGrid, Trash2, Home, Lock, CalendarPlus, MapPin, Target, Users2, AlertTriangle, Crosshair, Map, ChevronDown, FileText, Fingerprint, Building2, CalendarDays, Pencil, Archive, WandSparkles, Eye, EyeOff } from 'lucide-react';
 
 const memberFieldClass = 'mt-1.5 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
 
@@ -42,6 +35,7 @@ const SSGPanel: React.FC = () => {
   const { profile, isMock, revision } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const hierarchyPath = hierarchyPathForRole(profile?.role);
   const [tab, setTab] = usePageMemory<'hub' | 'events'>('tab', 'hub');
 
   useEffect(() => {
@@ -249,10 +243,10 @@ const SSGPanel: React.FC = () => {
 
   const changePath = (next: SchoolNode[]) => {
     setPath(next);
-    if (window.location.hash.startsWith('#/ssg/panel')) {
+    if (location.pathname === hierarchyPath) {
       const params = new URLSearchParams(location.search || window.location.hash.split('?')[1] || '');
       if (next.length) params.set('unit', next[next.length - 1].id); else params.delete('unit');
-      navigate(`/ssg/panel${params.size ? `?${params}` : ''}`);
+      navigate(`${hierarchyPath}${params.size ? `?${params}` : ''}`);
     }
   };
   const navigateTo = (node: SchoolNode) => changePath([...path, node]);
@@ -327,10 +321,6 @@ const SSGPanel: React.FC = () => {
     }
   };
 
-  const tabs = [
-    { id: 'hub' as const, label: 'Directory', icon: Building2, count: structure.length }
-  ];
-
   const mapUrl = `https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d15844.0!2d${eventData.lng}!3d${eventData.lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2sph!4v1620000000000!5m2!1sen!2sph&maptype=satellite`;
   const isOSSA = profile?.role === 'ossa' || profile?.role === 'ossa_staff';
   const workspaceName = profile?.role === 'admin' ? 'System Owner' : isOSSA ? 'OSSA' : profile?.role === 'mayor' ? 'Classroom' : 'SSG';
@@ -357,21 +347,12 @@ const SSGPanel: React.FC = () => {
             <img 
               src={`${import.meta.env.BASE_URL}academic-seal-transparent.png`} 
               alt="IARS Academic Seal" 
-              className="w-9 h-9 rounded-full object-contain p-0.5 ring-2 ring-gold-400/50 shadow-md shrink-0" 
+              className="w-9 h-9 rounded-full bg-white object-contain p-0.5 ring-2 ring-gold-400/50 shadow-md shrink-0"
             />
             <div>
               <h2 className="text-lg font-bold tracking-tight text-white sm:text-xl">{workspaceName} Control Hub</h2>
               <p className="mt-0.5 text-xs font-semibold text-emerald-300">{isOSSA ? 'Student services operations' : 'Administrative operations'}</p>
             </div>
-          </div>
-          <div role="tablist" aria-label={`${workspaceName} panel sections`} className={`grid w-full ${tabs.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5 rounded-xl border border-white/10 bg-brand-950/40 p-1.5 lg:w-auto`}>
-            {tabs.map(({ id, label, icon: Icon, count }) => (
-              <button key={id} aria-label={label} aria-pressed={tab === id} onClick={() => { setTab(id); const params = new URLSearchParams(location.search); params.set('tab', id); navigate(`/ssg/panel?${params}`); }} className={`flex min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2.5 text-xs font-bold transition-all sm:px-4 ${tab === id ? 'app-button--gold text-brand-900 shadow-md' : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
-                <Icon size={15} className="hidden sm:block" />
-                <span className="truncate">{label}</span>
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${tab === id ? 'bg-brand-900/10' : 'bg-white/10'}`}>{count}</span>
-              </button>
-            ))}
           </div>
         </div>
       </Surface>
@@ -466,7 +447,7 @@ const SSGPanel: React.FC = () => {
                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                        {studentPage.visible.map((student) => (
                          <tr key={student.uid}>
-                           <td className="p-3 font-semibold text-brand-900 [overflow-wrap:anywhere] dark:text-white"><Link to={`/ssg/panel/students/${encodeURIComponent(student.uid)}?unit=${encodeURIComponent(currentNode.id)}`} aria-label={`View student profile: ${student.name}`} className="flex items-center gap-3 rounded-xl hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-500"><ProfileAvatar alt="" src={student.photo_url || undefined} className="h-12 w-12 shrink-0 rounded-xl object-cover" /><span className="min-w-0">{student.name}</span></Link></td>
+                           <td className="p-3 font-semibold text-brand-900 [overflow-wrap:anywhere] dark:text-white"><Link to={`${hierarchyPath}/students/${encodeURIComponent(student.uid)}?unit=${encodeURIComponent(currentNode.id)}`} aria-label={`View student profile: ${student.name}`} className="flex items-center gap-3 rounded-xl hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-500"><ProfileAvatar alt="" src={student.photo_url || undefined} className="h-12 w-12 shrink-0 rounded-xl object-cover" /><span className="min-w-0">{student.name}</span></Link></td>
                            <td className="p-3 text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{student.email}</td>
                            <td className="p-3 font-mono text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{student.student_id}</td>
                            <td className="p-3 text-slate-600 dark:text-slate-300">{roleLabels[student.role]}</td>
@@ -479,7 +460,7 @@ const SSGPanel: React.FC = () => {
                  <div className="grid gap-3 p-4 md:hidden">
                    {studentPage.visible.map((student) => (
                      <article aria-label={student.name} className="mobile-data-card space-y-3" key={student.uid}>
-                       <Link to={`/ssg/panel/students/${encodeURIComponent(student.uid)}?unit=${encodeURIComponent(currentNode.id)}`} aria-label={`View student profile: ${student.name}`} className="flex min-w-0 items-center gap-3 rounded-xl hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-500">
+                       <Link to={`${hierarchyPath}/students/${encodeURIComponent(student.uid)}?unit=${encodeURIComponent(currentNode.id)}`} aria-label={`View student profile: ${student.name}`} className="flex min-w-0 items-center gap-3 rounded-xl hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-500">
                          <ProfileAvatar alt="" src={student.photo_url || undefined} className="h-12 w-12 shrink-0 rounded-xl object-cover" />
                          <div className="min-w-0"><h4 className="font-bold text-brand-900 [overflow-wrap:anywhere] dark:text-white">{student.name}</h4><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-300">{student.student_id}</p><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere] dark:text-slate-300">{student.email}</p></div>
                        </Link>

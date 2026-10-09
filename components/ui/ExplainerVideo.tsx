@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, PlayCircle } from 'lucide-react';
 import CustomSelect from './CustomSelect';
 import { defaultHomepageVideo, homepageVideos, loadHomepageVideo } from '../../lib/homepageVideos';

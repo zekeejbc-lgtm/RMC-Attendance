@@ -27,7 +27,7 @@ it('shows the selected student, analytics excluding service, and a class return 
   expect(screen.getByRole('heading', { name: 'Jane Student' })).toBeInTheDocument();
   expect(within(screen.getByText('Attendance rate').closest('section')!).getByText('50%')).toBeInTheDocument();
   expect(screen.getByText('2 recorded attendance sessions')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Back to class' })).toHaveAttribute('href', '/ssg/panel?unit=class-a');
+  expect(screen.getByRole('link', { name: 'Back to class' })).toHaveAttribute('href', '/admin/hierarchy?unit=class-a');
   expect(within(screen.getByRole('region', { name: 'Monthly attendance trend' })).getByText('Oct 2026')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Profile information' }));
   expect(screen.getByText('Jane Guardian')).toBeInTheDocument();

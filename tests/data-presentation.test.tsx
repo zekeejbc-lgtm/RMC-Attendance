@@ -49,7 +49,7 @@ it('sorts admin attendance newest first, paginates both layouts and refreshes on
 });
 
 it('paginates the roster and newest sanction history, resets search, and preserves a zero attendance rate', () => {
-  mount(<OSSADashboard />);
+  mount(<OSSADashboard section="sanctions" />);
   const table = screen.getByRole('table', { name: 'Student sanction roster' });
   expect(within(table).getAllByRole('row')).toHaveLength(11);
   expect(within(table).getAllByRole('row')[1]).toHaveTextContent('0%');

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Button from '../ui/Button';
 import { Surface } from '../ui/Page';
 import { formatManilaDateTime } from '../../lib/dateTime';

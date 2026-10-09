@@ -15,8 +15,22 @@ supabase/.temp/
 dist
 dist-ssr
 *.local
+*.local.*
 .worktrees/
 .superpowers/
+
+# Generated review outputs (keep source scripts, prompts, and SQL).
+artifacts/**/*.png
+artifacts/**/*.jpg
+artifacts/**/*.jpeg
+artifacts/**/*.pdf
+artifacts/**/*.xlsx
+artifacts/**/*.json
+artifacts/ui-token-fixture.html
+
+# Python bytecode caches.
+__pycache__/
+*.py[cod]
 
 # Editor directories and files
 .vscode/*
@@ -29,4 +43,3 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
-.env*

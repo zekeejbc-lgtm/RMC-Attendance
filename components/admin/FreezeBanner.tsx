@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldAlert, AlertTriangle, Snowflake, Lock } from 'lucide-react';
+import { ShieldAlert, Snowflake, Lock } from 'lucide-react';
 import { appData } from '../../lib/backend';
 import { useAuth } from '../AuthContext';
 

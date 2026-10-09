@@ -13,11 +13,7 @@ import { useAuth } from '../components/AuthContext';
 import { appData } from '../lib/backend';
 import { AppEvent } from '../types';
 import CustomSelect from '../components/ui/CustomSelect';
-import { 
-  Filter, Calendar, Download, PieChart,
-  Users, CheckCircle, XCircle, Clock, AlertCircle, FileText, 
-  Printer
-} from 'lucide-react';
+import { Filter, Download, PieChart, Users, CheckCircle, XCircle, Clock, AlertCircle, FileText, Printer } from 'lucide-react';
 import { 
   PieChart as RePieChart, Pie, Cell, BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart as ReLineChart, Line

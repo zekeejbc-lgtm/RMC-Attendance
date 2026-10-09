@@ -22,14 +22,7 @@ import { enrollmentUsername, STUDENT_ID_ERROR, validEmergencyPhone, validStudent
 import GoogleSignIn from '../components/GoogleSignIn';
 import PasskeySignIn from '../components/PasskeySignIn';
 import { checkGoogle, submitGoogleEnrollment, type GoogleEnrollment } from '../lib/googleAuth';
-import { 
-  ArrowRight, Shield, Target, Users, 
-  MapPin, Mail, Phone, Facebook, Instagram,
-  Globe, X, Eye, EyeOff, Loader2,
-  ShieldAlert, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Copy, Check, ExternalLink,
-  UserCircle, Camera, CreditCard, Calendar, KeyRound,
-  FileText, QrCode, ShieldCheck, Clock, FileCheck2, BarChart3, UserCheck, Smartphone, CheckCircle2, Layers, Lock, Zap, Building2, GraduationCap
-} from 'lucide-react';
+import { ArrowRight, Shield, MapPin, Mail, Phone, Eye, EyeOff, Loader2, ShieldAlert, ChevronDown, ChevronLeft, Check, ExternalLink, UserCircle, Camera, KeyRound, QrCode, ShieldCheck, Clock, FileCheck2, BarChart3, UserCheck, Smartphone, CheckCircle2, Layers, Lock, Zap, Building2 } from 'lucide-react';
 
 interface LandingPageProps {
   defaultOpenLogin?: boolean;

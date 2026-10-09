@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { driveImageCandidates } from '../../lib/googleDrive';
 
 export default function EventBanner({ src, alt, background = false }: { src: string; alt: string; background?: boolean }) {

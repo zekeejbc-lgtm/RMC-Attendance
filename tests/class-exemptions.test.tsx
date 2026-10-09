@@ -1,3 +1,4 @@
+import { changeTime } from './ui-time';
 ﻿import React from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -37,9 +38,10 @@ it('saves weekly class schedules, validates end times, and preserves errors for 
  save.mockRejectedValueOnce({message:'Schedule is outside your scope.'}).mockResolvedValueOnce(undefined);
  const refreshed=vi.fn();
  render(<ClassScheduleEditor node={node} onSaved={refreshed}/>);
- fireEvent.change(screen.getByLabelText('Monday timeOut'),{target:{value:'09:00'}});
+ fireEvent.click(screen.getByRole('button', { name: 'Configure weekly class schedule' }));
+ changeTime('Monday timeOut', '09:00');
  expect(screen.getByRole('button',{name:'Save class schedule'})).toBeDisabled();
- fireEvent.change(screen.getByLabelText('Monday timeOut'),{target:{value:'12:00'}});
+ changeTime('Monday timeOut', '12:00');
  changeField('Tuesday class status', 'no_class');
  fireEvent.click(screen.getByRole('button',{name:'Save class schedule'}));
  expect(await screen.findByText('Schedule is outside your scope.')).toBeInTheDocument();

@@ -1,3 +1,4 @@
+import { hierarchyPathForRole } from '../lib/workspaceRoutes';
 import { usePageMemory } from '../components/usePageMemory';
 import { formatManilaDate, formatManilaDateTime, formatClockTime } from '../lib/dateTime';
 import EventBanner from '../components/events/EventBanner';
@@ -76,8 +77,8 @@ export default function Organizations({ publicDirectory = false }: { publicDirec
       { [action === 'reviewEvent' ? 'eventId' : 'requestId']: id, status, notes: notes[id] || '' }, `Request ${status}.`)}>{status === 'approved' ? 'Approve' : 'Reject'}</Button>)}
   </div>;
 
-  if (!publicDirectory && !organizationId && canCreateOrganization(profile)) return <Navigate replace to="/ssg/panel" />;
-  const hierarchyPath = `/ssg/panel${organization?.node_id ? `?unit=${encodeURIComponent(organization.node_id)}` : ''}`;
+  if (!publicDirectory && !organizationId && canCreateOrganization(profile)) return <Navigate replace to={hierarchyPathForRole(profile?.role)} />;
+  const hierarchyPath = `${hierarchyPathForRole(profile?.role)}${organization?.node_id ? `?unit=${encodeURIComponent(organization.node_id)}` : ''}`;
   return <Page>
     <PageHeader eyebrow="Campus community" title={organization?.name || 'Organizations'} description={organization?.description || 'Discover organizations, join your community, and take part in attendance and merit events.'}
       actions={organization ? <><Button variant="secondary" onClick={() => navigate(canCreateOrganization(profile) ? hierarchyPath : '/organizations')}>{canCreateOrganization(profile) ? 'Back to hierarchy' : 'All organizations'}</Button>{manager && <Button variant="secondary" onClick={() => setForm(organization)}><Settings size={16} /> Settings</Button>}</>

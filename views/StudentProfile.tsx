@@ -9,10 +9,7 @@ import { useAuth } from '../components/AuthContext';
 import { appAuth, appData } from '../lib/backend';
 import { verifyPassword } from '../lib/supabase';
 import { createDriveImage, deleteDriveImage, driveFileIdFromUrl, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
-import {
-  User, ShieldCheck, KeyRound, Lock, Smartphone, CheckCircle2,
-  Building2, GraduationCap, School, Sparkles, Save, Eye, EyeOff, AlertCircle, LogOut, Pencil, Upload, X
-} from 'lucide-react';
+import { User, KeyRound, Smartphone, CheckCircle2, Building2, GraduationCap, School, Save, Eye, EyeOff, AlertCircle, LogOut, Pencil, Upload, X, FilePenLine } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import Button from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -75,6 +72,7 @@ const StudentProfile: React.FC = () => {
   const [isEditingContacts, setIsEditingContacts] = useState(false);
   const [isSavingContacts, setIsSavingContacts] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [showProfileRequests, setShowProfileRequests] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState(profile?.photo_url || '');
   const [photoError, setPhotoError] = useState('');
@@ -329,7 +327,28 @@ const StudentProfile: React.FC = () => {
         Name, {isStudent ? 'student ID and academic assignment' : 'official ID, body and access role'} are verified institutional records. {isStudent ? 'Submit information corrections below for OSSA or admin approval.' : 'They can only be changed by an authorized administrator.'}
       </p>
 
-      <ProfileRequests />
+      {isStudent && (
+        <>
+          <div>
+            <Button
+              variant="secondary"
+              className="sm:w-auto"
+              aria-haspopup="dialog"
+              onClick={() => setShowProfileRequests(true)}
+            >
+              <FilePenLine size={18} /> Information requests
+            </Button>
+          </div>
+          <Modal
+            open={showProfileRequests}
+            onClose={() => setShowProfileRequests(false)}
+            title="Manage information requests"
+            size="xl"
+          >
+            <ProfileRequests />
+          </Modal>
+        </>
+      )}
 
       {/* GRID: PERSONAL INFO EDIT & SECURITY TOGGLES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

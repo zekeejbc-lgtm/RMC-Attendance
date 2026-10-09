@@ -22,6 +22,11 @@ import SSGCreateEvent from '../views/SSGCreateEvent';
 import AttendanceDashboard from '../views/AttendanceDashboard';
 import OSSADashboard from '../views/OSSADashboard';
 import AdminControls from '../views/AdminControls';
+import { changeField } from './ui-select';
+
+vi.mock('virtual:pwa-register/react', () => ({
+  useRegisterSW: () => ({ needRefresh: [false, vi.fn()], updateServiceWorker: vi.fn() }),
+}));
 
 const studentProfile = {
   uid: 'student-1',
@@ -144,6 +149,7 @@ vi.mock('../lib/backend', () => ({
     resolveQr: vi.fn(async (token: string) => { if (!token.startsWith('RMC1.')) throw new Error('Invalid or expired QR code.'); return staffState.students[0]; }),
     submitExcuseApplication: vi.fn(async () => undefined),
     getExcuseApplications: () => staffState.excuses,
+    getOrganizationPeople: async () => [],
     getSchoolStructure: () => staffState.schoolStructure,
     getStudentsBySection: () => staffState.students,
     getUserDetail: (uid: string) => {
@@ -206,10 +212,15 @@ vi.mock('html5-qrcode', () => ({
   },
 }));
 
+async function openDisclosure(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
+  const trigger = screen.getByRole('button', { name });
+  if (trigger.getAttribute('aria-expanded') !== 'true') await user.click(trigger);
+}
+
 function renderRoute(element: React.ReactElement) {
   return render(
     <ThemeProvider>
-      <MemoryRouter initialEntries={[element.type === Register ? '/register' : '/']}>{element}</MemoryRouter>
+      <MemoryRouter initialEntries={[element.type === Register ? '/register' : element.type === StudentEvents ? '/student/events' : element.type === StudentCeremonies ? '/student/ceremonies' : '/']}>{element}</MemoryRouter>
     </ThemeProvider>,
   );
 }
@@ -253,6 +264,7 @@ afterEach(() => {
   backendState.ensureMockReferenceData.mockReset();
   backendState.mockSeed.mockReset();
   localStorage.clear();
+  sessionStorage.clear();
   document.documentElement.classList.remove('dark');
 });
 
@@ -424,9 +436,9 @@ describe('public route UI behavior', () => {
 
     renderRoute(<RegisterStatus />);
 
-    expect(await screen.findByRole('heading', { name: /application needs revision/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /application rejected/i })).toBeInTheDocument();
     expect(screen.getByText(rejectionReason)).toHaveClass('[overflow-wrap:anywhere]');
-    expect(screen.getByRole('button', { name: /revise and resubmit/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reapply with updated details/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /current theme: dark mode/i })).toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveClass('app-surface');
@@ -501,10 +513,12 @@ describe('student route UI behavior', () => {
 
     expect(screen.getByRole('main')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /save contact details/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Information requests' }));
     await waitFor(() => expect(screen.getByRole('button', { name: /request information change/i })).toBeEnabled());
     await user.click(screen.getByRole('button', { name: /request information change/i }));
     expect(screen.getByRole('textbox', { name: /mobile contact/i })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /^guardian name$/i })).toBeInTheDocument();
+    await user.click(within(screen.getByRole('dialog', { name: 'Request information change' })).getByRole('button', { name: 'Close dialog' }));
     await user.click(screen.getByRole('button', { name: /close dialog/i }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.getByRole('button', { name: /enable two-factor authentication/i })).toBeInTheDocument();
@@ -557,6 +571,7 @@ describe('student route UI behavior', () => {
       user: { uid: studentProfile.uid },
     };
     renderRoute(<StudentProfile />);
+    await user.click(screen.getByRole('button', { name: 'Information requests' }));
 
     expect(screen.queryByRole('button', { name: /edit contact details/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /save contact details/i })).not.toBeInTheDocument();
@@ -645,14 +660,14 @@ describe('student route UI behavior', () => {
     useStudent();
     staffState.events = [{ id: 'expired', title: 'Expired Activity', status: 'done', kind: ceremony ? 'flag_ceremony' : 'attendance', endTime: Date.now() - 4 * 86400000, startTime: Date.now() - 5 * 86400000, excuseWindowDays: 3 }];
     const { unmount } = renderRoute(ceremony ? <StudentCeremonies /> : <StudentEvents />);
-    await user.click(screen.getByRole('button', { name: ceremony ? /archived ceremonies/i : /archived events/i }));
+    await openDisclosure(user, ceremony ? /archived ceremonies/i : /archived events/i);
     await user.click(screen.getByRole('button', { name: /expired activity/i }));
     expect(screen.getByRole('button', { name: /file for excuse/i })).toBeDisabled();
     expect(screen.getAllByText(/submission window has closed/i).length).toBeGreaterThan(0);
     unmount();
     staffState.events[0].excuseWindowDays = 7;
     renderRoute(ceremony ? <StudentCeremonies /> : <StudentEvents />);
-    await user.click(screen.getByRole('button', { name: ceremony ? /archived ceremonies/i : /archived events/i }));
+    await openDisclosure(user, ceremony ? /archived ceremonies/i : /archived events/i);
     await user.click(screen.getByRole('button', { name: /expired activity/i }));
     expect(screen.getByRole('button', { name: /file for excuse/i })).toBeEnabled();
   });
@@ -662,7 +677,7 @@ describe('student route UI behavior', () => {
     useStudent();
     const { unmount } = renderRoute(<StudentEvents />);
 
-    await user.click(screen.getByRole('button', { name: /archived events/i }));
+    await openDisclosure(user, /archived events/i);
     await user.click(screen.getByRole('button', { name: /first semester general assembly 2025/i }));
     expect(screen.getByRole('dialog', { name: /first semester general assembly 2025/i })).toBeInTheDocument();
 
@@ -670,7 +685,7 @@ describe('student route UI behavior', () => {
 
     unmount();
     renderRoute(<StudentCeremonies />);
-    await user.click(screen.getByRole('button', { name: /archived ceremonies/i }));
+    await openDisclosure(user, /archived ceremonies/i);
     await user.click(screen.getByRole('button', { name: /annual founders day thanksgiving mass/i }));
     expect(screen.getByRole('dialog', { name: /annual founders day thanksgiving mass/i })).toBeInTheDocument();
 
@@ -1094,6 +1109,7 @@ describe('staff route UI behavior', () => {
   it('keeps SSG unit creation in a named dialog', async () => {
     const user = userEvent.setup();
     useStaff();
+    routeState.auth.profile!.role = 'admin';
     seedStaffDirectory();
     renderRoute(<SSGPanel />);
 
@@ -1185,7 +1201,7 @@ describe('staff route UI behavior', () => {
     let dialog = screen.getByRole('dialog', { name: /live assembly/i });
     expect(within(dialog).getByText('Complete event details')).toBeInTheDocument();
     const activeEdit = within(dialog).getByRole('button', { name: /^edit$/i });
-    expect(within(dialog).getAllByRole('button')).toHaveLength(2);
+    expect(within(dialog).getAllByRole('button', { name: /^edit$/i })).toHaveLength(1);
     await user.click(activeEdit);
     expect(screen.getByRole('heading', { name: /edit event/i })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /event title/i })).toHaveValue('Live Assembly');
@@ -1197,7 +1213,7 @@ describe('staff route UI behavior', () => {
     await user.click(screen.getByRole('button', { name: /scheduled upcoming events/i }));
     await user.click(screen.getByRole('button', { name: /open future fair details/i }));
     dialog = screen.getByRole('dialog', { name: /future fair/i });
-    expect(within(dialog).getAllByRole('button')).toHaveLength(2);
+    expect(within(dialog).getAllByRole('button', { name: /^edit$/i })).toHaveLength(1);
     await user.click(within(dialog).getByRole('button', { name: /^edit$/i }));
     expect(screen.getByRole('textbox', { name: /event title/i })).toHaveValue('Future Fair');
     expect(screen.getByRole('button', { name: /reschedule/i })).toBeInTheDocument();
@@ -1209,10 +1225,10 @@ describe('staff route UI behavior', () => {
     expect(editActions).toHaveClass('grid-cols-2', 'sm:flex');
     expect(within(editActions).getByRole('button', { name: /reschedule/i })).toHaveClass('sm:w-auto');
     expect(within(editActions).getByRole('button', { name: /delete/i })).toHaveClass('text-red-700');
-    expect(within(editActions).getByRole('button', { name: /^save$/i })).toHaveClass('sm:min-w-32');
+    expect(within(editActions).getByRole('button', { name: /submit changes for approval/i })).toHaveClass('sm:min-w-32');
     await user.click(screen.getByRole('button', { name: /back to events/i }));
 
-    await user.click(screen.getByRole('button', { name: /archived events/i }));
+    await openDisclosure(user, /archived events/i);
     await user.click(screen.getByRole('button', { name: /open past program details/i }));
     dialog = screen.getByRole('dialog', { name: /past program/i });
     expect(within(dialog).getByText(/read-only archived record/i)).toBeInTheDocument();
@@ -1230,26 +1246,9 @@ describe('staff route UI behavior', () => {
     const details = within(form).getByRole('textbox', { name: /event details/i });
     expect(details).toHaveClass('input-field');
     await user.type(details, 'Required institutional assembly.');
+    await user.click(screen.getByRole('button', { name: 'Next: Schedule' }));
     fireEvent.change(within(form).getByLabelText(/^start date$/i), { target: { value: '2026-08-10' } });
     fireEvent.change(within(form).getByLabelText(/^end date$/i), { target: { value: '2026-08-11' } });
-    const recipientPicker = within(form).getByRole('group', { name: /choose recipient unit/i });
-    await user.click(within(recipientPicker).getAllByRole('button')[0]);
-    await user.click(screen.getByRole('option', { name: 'RMC Campus' }));
-    await user.click(within(recipientPicker).getAllByRole('button')[1]);
-    await user.click(screen.getByRole('option', { name: 'College' }));
-    await user.click(within(form).getByRole('button', { name: /^add recipient$/i }));
-    await user.click(within(form).getByRole('button', { name: /^recipient type/i }));
-    await user.click(screen.getByRole('option', { name: 'All Mayors' }));
-    await user.click(within(form).getByRole('button', { name: /^add recipient$/i }));
-    const addedRecipients = within(form).getByRole('status', { name: /added event recipients/i });
-    expect(addedRecipients).toHaveTextContent('RMC Campus / College');
-    expect(addedRecipients).toHaveTextContent('All Mayors');
-    expect(addedRecipients).toHaveTextContent('2 recipients added');
-    await user.click(within(form).getByRole('switch', { name: /enable geofencing/i }));
-    expect(within(form).getByRole('region', { name: /event geofence map/i })).toBeInTheDocument();
-    const radius = within(form).getByRole('spinbutton', { name: /geofence radius/i });
-    await user.clear(radius);
-    await user.type(radius, '275');
     fireEvent.change(within(form).getByRole('combobox', { name: 'Time In 1 hour' }), { target: { value: '8' } });
     fireEvent.change(within(form).getByRole('combobox', { name: 'Time In 1 minute' }), { target: { value: '00' } });
     fireEvent.change(within(form).getByRole('combobox', { name: 'Time In 1 AM/PM' }), { target: { value: 'AM' } });
@@ -1266,10 +1265,31 @@ describe('staff route UI behavior', () => {
     fireEvent.change(within(form).getByRole('combobox', { name: 'Time Out 2 hour' }), { target: { value: '4' } });
     fireEvent.change(within(form).getByRole('combobox', { name: 'Time Out 2 minute' }), { target: { value: '00' } });
     fireEvent.change(within(form).getByRole('combobox', { name: 'Time Out 2 AM/PM' }), { target: { value: 'PM' } });
+    await user.click(screen.getByRole('button', { name: 'Next: Attendees' }));
+    const recipientPicker = within(form).getByRole('group', { name: /choose recipient unit/i });
+    await user.click(within(recipientPicker).getAllByRole('button')[0]);
+    await user.click(screen.getByRole('option', { name: 'RMC Campus' }));
+    await user.click(within(recipientPicker).getAllByRole('button')[1]);
+    await user.click(screen.getByRole('option', { name: 'College' }));
+    await user.click(within(form).getByRole('button', { name: /^add recipient$/i }));
+    await user.click(within(form).getByRole('button', { name: /^recipient type/i }));
+    await user.click(screen.getByRole('option', { name: 'All Mayors' }));
+    await user.click(within(form).getByRole('button', { name: /^add recipient$/i }));
+    const addedRecipients = within(form).getByRole('status', { name: /added event recipients/i });
+    expect(addedRecipients).toHaveTextContent('RMC Campus / College');
+    expect(addedRecipients).toHaveTextContent('All Mayors');
+    expect(addedRecipients).toHaveTextContent('2 recipients added');
+    await user.click(screen.getByRole('button', { name: 'Next: Rules & Location' }));
+    await user.click(within(form).getByRole('switch', { name: /enable geofencing/i }));
+    expect(within(form).getByRole('region', { name: /event geofence map/i })).toBeInTheDocument();
+    const radius = within(form).getByRole('spinbutton', { name: /geofence radius/i });
+    await user.clear(radius);
+    await user.type(radius, '275');
     const lateSanction = within(form).getByRole('spinbutton', { name: /late sanction value/i });
     await user.clear(lateSanction);
     await user.type(lateSanction, '30');
-    const scheduleButton = within(form).getByRole('button', { name: /schedule event/i });
+    await user.click(screen.getByRole('button', { name: 'Next: Review' }));
+    const scheduleButton = within(form).getByRole('button', { name: /submit for ossa approval/i });
     expect(scheduleButton).toBeEnabled();
     await user.click(scheduleButton);
 
@@ -1306,6 +1326,7 @@ describe('staff route UI behavior', () => {
     renderRoute(<SSGCreateEvent />);
     fireEvent.change(screen.getByLabelText(/event title/i), { target: { value: 'Two sessions' } });
     fireEvent.change(screen.getByLabelText(/event details/i), { target: { value: 'Morning and afternoon' } });
+    await user.click(screen.getByRole('button', { name: 'Next: Schedule' }));
     fireEvent.change(screen.getByLabelText(/^start date$/i), { target: { value: '2026-10-01' } });
     fireEvent.change(screen.getByLabelText(/^end date$/i), { target: { value: '2026-10-01' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Time In 1 hour' }), { target: { value: '1' } });
@@ -1322,13 +1343,16 @@ describe('staff route UI behavior', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 minute' }), { target: { value: '00' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 AM/PM' }), { target: { value: 'PM' } });
     expect(screen.getByRole('alert')).toHaveTextContent('Attendance windows must not overlap.');
-    expect(screen.getByRole('button', { name: /schedule event/i })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /submit for ossa approval/i })).not.toBeInTheDocument();
     fireEvent.submit(screen.getByRole('form'));
     expect(staffState.createEvent).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 hour' }), { target: { value: '10' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 minute' }), { target: { value: '00' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Time Out 2 AM/PM' }), { target: { value: 'AM' } });
-    await user.click(screen.getByRole('button', { name: /schedule event/i }));
+    await user.click(screen.getByRole('button', { name: 'Next: Attendees' }));
+    await user.click(screen.getByRole('button', { name: 'Next: Rules & Location' }));
+    await user.click(screen.getByRole('button', { name: 'Next: Review' }));
+    await user.click(screen.getByRole('button', { name: /submit for ossa approval/i }));
     expect(staffState.createEvent).toHaveBeenCalledWith(expect.objectContaining({
       startTime: new Date('2026-10-01T08:00:00+08:00').getTime(),
       endTime: new Date('2026-10-01T16:00:00+08:00').getTime(),
@@ -1347,7 +1371,7 @@ describe('staff route UI behavior', () => {
     );
 
     const actions = screen.getByRole('group', { name: /event form actions/i });
-    expect(within(actions).getByRole('button', { name: /schedule event/i })).toHaveClass('sm:w-auto');
+    expect(within(actions).getByRole('button', { name: /next: schedule/i })).toHaveClass('sm:w-auto');
     await user.click(within(actions).getByRole('button', { name: /^cancel$/i }));
 
     expect(screen.getByText('Events registry destination')).toBeInTheDocument();
@@ -1395,7 +1419,8 @@ describe('staff route UI behavior', () => {
     renderRoute(<SSGPanel />);
 
     expect(screen.getByRole('heading', { name: /ossa control panel/i })).toBeInTheDocument();
-    expect(screen.getByRole('tablist', { name: /ossa panel sections/i })).toBeInTheDocument();
+    expect(screen.getByText('Assigned scope only')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
     expect(screen.queryByText(/ssg administration/i)).not.toBeInTheDocument();
   });
 
@@ -1437,7 +1462,7 @@ describe('staff route UI behavior', () => {
     expect(within(mobileRecord).getByText('ID-1000')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /export report/i }));
-    const exportDialog = screen.getByRole('dialog', { name: /export configuration/i });
+    const exportDialog = screen.getByRole('dialog', { name: /download attendance report/i });
     expect(within(exportDialog).getByRole('combobox', { name: /group data by/i })).toBeInTheDocument();
     expect(within(exportDialog).getByRole('checkbox', { name: /include visualizations/i })).toBeChecked();
     expect(within(exportDialog).getByRole('button', { name: /generate pdf report/i })).toBeInTheDocument();
@@ -1455,14 +1480,16 @@ describe('staff route UI behavior', () => {
 
   it('keeps OSSA analytics, filters, dense records, and sanction actions accessible', async () => {
     const user = userEvent.setup();
-    useStaff();
+    useOSSA();
     seedStaffDirectory();
-    renderRoute(<OSSADashboard />);
+    renderRoute(<OSSADashboard section="analytics" />);
 
     expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /ossa student affairs & sanctions hub/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /sanction analytics/i, level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /sanction status chart/i })).toHaveClass('h-64', 'sm:h-72');
     expect(screen.getByRole('region', { name: /department sanction hours chart/i })).toHaveClass('h-64', 'sm:h-72');
+    cleanup();
+    renderRoute(<OSSADashboard section="sanctions" />);
     expect(screen.getByRole('searchbox', { name: /search student sanctions/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /filter by department/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^all \(/i })).toHaveAttribute('aria-pressed', 'true');
@@ -1498,7 +1525,7 @@ describe('staff route UI behavior', () => {
 
   it('reviews an OSSA excuse through the standardized dialog without changing the mutation payload', async () => {
     const user = userEvent.setup();
-    useStaff();
+    useOSSA();
     staffState.excuses = [{
       id: 'excuse-1',
       student_uid: 'student-1',
@@ -1512,15 +1539,15 @@ describe('staff route UI behavior', () => {
       submission_date: Date.now(),
       status: 'pending',
     }];
-    renderRoute(<OSSADashboard />);
+    renderRoute(<OSSADashboard section="excuses" />);
 
-    await user.click(screen.getByRole('tab', { name: /excuse applications/i }));
-    await user.click(screen.getByRole('button', { name: /review/i }));
-    const dialog = screen.getByRole('dialog', { name: /review excuse submission/i });
+
+    await user.click(screen.getByRole('button', { name: /institutional assembly.*juan dela cruz/i }));
+    const dialog = screen.getByRole('dialog', { name: /^excuse application$/i });
     const waiveHours = within(dialog).getByRole('spinbutton', { name: /sanction hours to waive/i });
     await user.clear(waiveHours);
     await user.type(waiveHours, '4');
-    await user.type(within(dialog).getByRole('textbox', { name: /director's decision note/i }), 'Medical certificate verified.');
+    await user.type(within(dialog).getByRole('textbox', { name: /decision notes/i }), 'Medical certificate verified.');
     await user.click(within(dialog).getByRole('button', { name: /approve/i }));
 
     expect(staffState.reviewExcuseApplication).toHaveBeenCalledWith(
@@ -1529,12 +1556,12 @@ describe('staff route UI behavior', () => {
       'Medical certificate verified.',
       4,
     );
-    expect(screen.queryByRole('dialog', { name: /review excuse submission/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /^excuse application$/i })).not.toBeInTheDocument();
   });
 
-  it('keeps OSSA excuse categories and decisions visually distinct in light and dark themes', async () => {
+  it('filters OSSA excuses by category and status and distinguishes decisions in the review dialog', async () => {
     const user = userEvent.setup();
-    useStaff();
+    useOSSA();
     staffState.excuses = [
       {
         id: 'medical-pending', student_uid: 'student-1', student_name: 'Medical Pending',
@@ -1557,34 +1584,32 @@ describe('staff route UI behavior', () => {
         category: 'institutional', reason: 'Official duty', submission_date: Date.now(), status: 'approved',
       },
     ];
-    renderRoute(<OSSADashboard />);
+    renderRoute(<OSSADashboard section="excuses" />);
 
-    await user.click(screen.getByRole('tab', { name: /excuse applications/i }));
 
-    expect(screen.getByText('medical Excuse')).toHaveClass(
-      'bg-blue-100', 'text-blue-700', 'dark:bg-blue-950', 'dark:text-blue-300',
-    );
-    expect(screen.getByText('personal Excuse')).toHaveClass(
-      'bg-purple-100', 'text-purple-700', 'dark:bg-purple-950', 'dark:text-purple-300',
-    );
-    expect(screen.getByText('institutional Excuse')).toHaveClass(
-      'bg-indigo-100', 'text-indigo-700', 'dark:bg-indigo-950', 'dark:text-indigo-300',
-    );
-    expect(screen.getByText('emergency Excuse')).toHaveClass(
-      'bg-rose-100', 'text-rose-700', 'dark:bg-rose-950', 'dark:text-rose-300',
-    );
-    expect(screen.getByText('pending')).toHaveClass(
-      'bg-amber-100', 'text-amber-800', 'dark:bg-amber-950', 'dark:text-amber-300',
-    );
-    expect(screen.getByText('rejected')).toHaveClass(
-      'bg-red-100', 'text-red-700', 'dark:bg-red-950', 'dark:text-red-300',
-    );
-    screen.getAllByText('approved').forEach((status) => {
-      expect(status).toHaveClass(
-        'bg-emerald-100', 'text-emerald-700', 'dark:bg-emerald-950', 'dark:text-emerald-300',
-      );
-    });
+
+    expect(screen.getByRole('button', { name: /medical pending/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /personal approved/i })).not.toBeInTheDocument();
+    changeField('Request status', 'all');
+    expect(screen.getAllByRole('button', { name: /assembly.*(medical pending|personal approved|emergency rejected|institutional approved)/i })).toHaveLength(4);
+    changeField('Request type', 'medical');
+    expect(screen.queryByRole('button', { name: /personal approved/i })).not.toBeInTheDocument();
+    changeField('Request type', 'all');
+    for (const [name, category, status, colors] of [
+      ['Medical Pending', 'medical', 'Pending', ['bg-amber-100', 'text-amber-800', 'dark:bg-amber-950', 'dark:text-amber-300']],
+      ['Personal Approved', 'personal', 'Approved', ['bg-emerald-100', 'text-emerald-700', 'dark:bg-emerald-950', 'dark:text-emerald-300']],
+      ['Emergency Rejected', 'emergency', 'Rejected', ['bg-red-100', 'text-red-700', 'dark:bg-red-950', 'dark:text-red-300']],
+      ['Institutional Approved', 'institutional', 'Approved', ['bg-emerald-100', 'text-emerald-700', 'dark:bg-emerald-950', 'dark:text-emerald-300']],
+    ] as const) {
+      await user.click(screen.getByRole('button', { name: new RegExp(name, 'i') }));
+      const dialog = screen.getByRole('dialog', { name: 'Excuse application' });
+      expect(within(dialog).getByText(category + ' excuse')).toBeInTheDocument();
+      expect(within(dialog).getByText(status)).toHaveClass(...colors);
+      if (status !== 'Pending') expect(within(dialog).queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    }
   });
+
 
   it('uses named SSG dialogs, mobile registry cards, and protected confirmation for sanction changes', async () => {
     const user = userEvent.setup();

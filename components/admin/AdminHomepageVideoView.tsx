@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Surface } from '../ui/Page';
 import { homepageVideos, HomepageVideoSetting, loadHomepageVideo, saveHomepageVideo } from '../../lib/homepageVideos';
 

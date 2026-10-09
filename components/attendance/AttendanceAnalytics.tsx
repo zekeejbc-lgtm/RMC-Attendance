@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Activity, ArrowDownRight, ArrowUpRight, CheckCircle, Clock, Lightbulb, Users } from 'lucide-react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { analyzeAttendance, attendanceGroups, attendanceTrend, AnalyticsCoverage, AnalyticsGrouping, AnalyticsPeriod, AnalyticsRecord } from '../../lib/attendanceAnalytics';

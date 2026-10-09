@@ -1,9 +1,9 @@
 import { formatManilaDate, formatManilaDateTime } from '../../lib/dateTime';
 import { SelectField } from '../ui/SelectField';
 import React, { useState, useEffect } from 'react';
-import { CreditCard, BellRing, Calendar, Send, CheckCircle2, Clock, AlertTriangle, ShieldCheck, Mail, DollarSign, History } from 'lucide-react';
+import { CreditCard, BellRing, Calendar, Send, CheckCircle2, Clock, AlertTriangle, ShieldCheck, DollarSign, History } from 'lucide-react';
 import { appData } from '../../lib/backend';
-import { PaymentInfo, PaymentReminderLog } from '../../types';
+import { PaymentInfo } from '../../types';
 import { MetricCard } from '../ui/Page';
 import { Modal } from '../ui/Modal';
 

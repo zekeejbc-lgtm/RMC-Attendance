@@ -12,7 +12,7 @@ afterEach(cleanup);
 it('shows grouped events with the location, named window and separate open/add actions', () => {
   const onOpen = vi.fn(), onAdd = vi.fn();
   render(<EventGroups events={[parent, child]} onOpen={onOpen} onAdd={onAdd} />);
-  expect(screen.getByText('Opening program: 08:00–10:00')).toBeVisible();
+  expect(screen.getByText('Opening program: 8:00 AM–10:00 AM')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: /Day 1.*Main gymnasium/ }));
   expect(onOpen).toHaveBeenCalledWith(child);
   fireEvent.click(screen.getByRole('button', { name: 'Add specific event' }));

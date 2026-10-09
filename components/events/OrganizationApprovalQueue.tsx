@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { appData } from '../../lib/backend';
 import { canReviewOrganizations, organizationError } from '../../lib/organizations';

@@ -12,28 +12,7 @@ import { downloadCsv } from '../lib/export';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ossaSections, ossaSectionPath, type OSSASection } from '../lib/ossaHub';
-import {
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  Download,
-  FileCheck2,
-  Filter,
-  MinusCircle,
-  PlusCircle,
-  RotateCcw,
-  School,
-  ShieldAlert,
-  ShieldCheck,
-  Users,
-  X,
-  ArrowLeft,
-  ArrowUpRight,
-  BarChart3,
-  Building2,
-  CalendarCheck,
-  PencilLine,
-} from 'lucide-react';
+import { CheckCircle2, ChevronRight, Clock, Download, FileCheck2, MinusCircle, PlusCircle, RotateCcw, School, ShieldAlert, ShieldCheck, Users, X, ArrowLeft, ArrowUpRight, BarChart3, Building2, CalendarCheck, PencilLine } from 'lucide-react';
 import {
   Bar,
   BarChart,

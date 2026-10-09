@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { googleClientId } from '../lib/googleAuth';
 
 type GoogleApi = { accounts: { id: {

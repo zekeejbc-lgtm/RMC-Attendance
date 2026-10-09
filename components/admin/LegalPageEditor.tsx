@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { LegalContent, Section } from '../../lib/legalPages';
 
 type Props = { content: LegalContent; saving: boolean; onSave: (content: LegalContent) => Promise<void>; onCancel: () => void };

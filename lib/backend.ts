@@ -1,7 +1,7 @@
-﻿import { toast, type OperationProgress } from './toast';
+import { toast, type OperationProgress } from './toast';
 import { supabase, requireConfiguration, verifyPassword, executeSensitiveAction, type SensitiveConfirmation } from './supabase';
 import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, CoreRole, CustomRole, PaymentInfo, SystemFreezeState, NodeFreezeState, Organization, OrganizationMembership, OrganizationSanctionRequest } from '../types';
-import { DEFAULT_CORE_ROLES, setMockDataRef, hasPermission } from './accessControl';
+import { setMockDataRef, hasPermission } from './accessControl';
 import { findNodeById, findNodePath, flattenDirectory, getDirectorySubtree, isNodeInSubtree, profileMatchesDirectorySection } from './academicDirectory';
 import { isEventRecipient, canManageEventInScope } from './eventAudience';
 import { publicDriveImageUrl } from './googleDrive';

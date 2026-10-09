@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { timeValue } from './ui-time';
+import { useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { SearchSuggest, rankSuggestions } from '../components/ui/SearchSuggest';
@@ -43,7 +44,7 @@ it('adds/removes exemptions and class overrides without listing everyone or offe
  const classes=screen.getByRole('combobox',{name:'Search classes for ceremony time overrides'});
  fireEvent.blur(student,{relatedTarget:classes});
  fireEvent.change(classes,{target:{value:'2spb'}});fireEvent.click(screen.getByRole('option',{name:/2SP - B/}));
- expect(screen.getByLabelText('a timeIn 1')).toHaveValue('16:30');expect(screen.getByLabelText('a timeOut 1')).toHaveValue('17:00');
+ expect(timeValue('a timeIn 1')).toBe('16:30');expect(timeValue('a timeOut 1')).toBe('17:00');
  fireEvent.change(classes,{target:{value:'2spb'}});expect(screen.queryByRole('option',{name:/2SP - B/})).not.toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Use default windows'}));expect(screen.queryByLabelText('a timeIn 1')).not.toBeInTheDocument();
  fireEvent.change(classes,{target:{value:'Old'}});expect(screen.queryByRole('option',{name:/Old/})).not.toBeInTheDocument();

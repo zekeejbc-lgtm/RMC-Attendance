@@ -1,3 +1,4 @@
+import { hierarchyPathForRole } from '../lib/workspaceRoutes';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
@@ -15,7 +16,7 @@ export default function StudentTransfers() {
   const unit = new URLSearchParams(location.search).get('unit');
   const currentNode = unit ? findNodePath(nodes, unit)?.at(-1) : undefined;
   const initialNodeId = currentNode?.id;
-  const backPath = `/ssg/panel${currentNode ? `?unit=${encodeURIComponent(currentNode.id)}` : ''}`;
+  const backPath = `${hierarchyPathForRole(profile?.role)}${currentNode ? `?unit=${encodeURIComponent(currentNode.id)}` : ''}`;
 
   return <Page>
     <PageHeader eyebrow="Student directory" title="Transfer students" description="Move students to another class or year level. Attendance records and balances stay with each student." actions={<Button fullWidth={false} variant="secondary" onClick={() => navigate(backPath)}><ArrowLeft size={16} />Back to directory</Button>} />

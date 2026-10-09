@@ -17,11 +17,7 @@ import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { Collapsible } from '../components/ui/Collapsible';
 import CustomSelect from '../components/ui/CustomSelect';
 import SearchInput from '../components/ui/SearchInput';
-import { 
-  Award, Filter, MapPin, Clock,
-  FileUp, CheckCircle2, ArrowRight, Flag, Calendar, Send, Building2,
-  ChevronDown, FileText
-} from 'lucide-react';
+import { Award, Filter, MapPin, Clock, FileUp, CheckCircle2, ArrowRight, Flag, Calendar, Send, ChevronDown, FileText } from 'lucide-react';
 
 interface SchoolCeremony {
   event: import('../types').AppEvent;

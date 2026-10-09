@@ -1,3 +1,4 @@
+import { hierarchyPathForRole } from '../lib/workspaceRoutes';
 import React, { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowUpRight, Award, BarChart3, BookOpen, CheckCircle2, ChevronRight, Clock, FileText, Mail, ShieldAlert, UserRound, UsersRound } from 'lucide-react';
@@ -66,7 +67,7 @@ export default function ClassStudentDetail() {
   const visibleNodes = actor ? appData.getVisibleSchoolStructure(actor.uid) : [];
   const requestedUnit = params.get('unit') || '';
   const unit = findNodePath(visibleNodes, requestedUnit)?.at(-1)?.id || academicPath.at(-1)?.id;
-  const back = `/ssg/panel${unit ? `?unit=${encodeURIComponent(unit)}` : ''}`;
+  const back = `${hierarchyPathForRole(actor?.role)}${unit ? `?unit=${encodeURIComponent(unit)}` : ''}`;
   if (!student || !detail) return <Page><Link className={linkClass} to={back}><ArrowLeft size={16} /> Back to class</Link><PageHeader title="Student unavailable" description="This student is unavailable or outside your assigned scope." /></Page>;
   const attendance = appData.getAttendanceRecords(student.uid).filter(row => !['service', 'merit'].includes(row.event?.kind || ''));
   const counts = ['present', 'late', 'absent', 'excused'].map(status => ({ status, count: attendance.filter(row => row.status === status).length }));

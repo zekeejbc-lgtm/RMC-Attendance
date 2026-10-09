@@ -1,3 +1,4 @@
+import { hierarchyPathForRole } from '../../lib/workspaceRoutes';
 import AttendanceConfirmation from '../attendance/AttendanceConfirmation';
 import { formatManilaDate } from '../../lib/dateTime';
 import ProfileAvatar from './ProfileAvatar';
@@ -13,7 +14,7 @@ import {
 import { useAuth } from '../AuthContext';
 import { ThemeToggle } from './ThemeToggle';
 import { Collapsible } from './Collapsible';
-import { hasPermission } from '../../lib/accessControl';
+import { hasPermission, roleLabels } from '../../lib/accessControl';
 import { FreezeBanner } from '../admin/FreezeBanner';
 import { Notifications } from './Notifications';
 
@@ -95,6 +96,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   const role = profile?.role || '';
+  const hierarchyPath = hierarchyPathForRole(role);
   const navItems = [
   { label: 'Organizations', icon: Building2, path: '/organizations', roles: [] },
   {
@@ -192,7 +194,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     icon: ShieldCheck,
 
-    path: '/ssg/panel',
+    path: hierarchyPath,
 
     permissionAny: [
       'directory.manage_structure',
@@ -254,7 +256,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (
     item.roles &&
     item.roles.length > 0 &&
-    !item.roles.includes(userRole) && !(item.path === '/ssg/panel' && hasPermission(userRole, 'directory.transfer_students'))
+    !item.roles.includes(userRole) && !(item.path === hierarchyPath && hasPermission(userRole, 'directory.transfer_students'))
   ) {
     return false;
   }
@@ -411,7 +413,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <nav aria-label="Main navigation" className="min-h-0 flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
             {allowedNavItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path || (item.path === '/ossa/dashboard' && location.pathname.startsWith('/ossa/dashboard/')) || (item.path === '/ssg/panel' && location.pathname === '/ssg/transfers') || (item.path === '/ssg/panel' && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
+              const isActive = location.pathname === item.path || (item.path === '/ossa/dashboard' && location.pathname.startsWith('/ossa/dashboard/')) || (item.path === hierarchyPath && (location.pathname === '/ssg/transfers' || location.pathname.startsWith(`${hierarchyPath}/students/`))) || (item.path === hierarchyPath && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
               return <button type="button" key={item.path} aria-current={isActive ? 'page' : undefined} onClick={() => navigateAndClose(item.path)} className={navButtonClass(isActive)}><Icon size={22} /><span className="font-medium text-sm">{item.label}</span></button>;
             })}
             {renderDirectory(true)}
@@ -420,7 +422,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-widest text-gold-400/80">Appearance</span><ThemeToggle size="sm" className="min-h-11 min-w-11" /></div>
             <button type="button" aria-label="View profile" onClick={() => navigateAndClose('/student/profile')} className="w-full min-h-14 group flex items-center gap-3 p-3 rounded-2xl bg-brand-950/80 border border-gold-400/30 hover:border-gold-400/60 transition-all text-left">
               <ProfileAvatar src={profile?.photo_url || '/avatar-placeholder.svg'} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400" />
-              <span className="min-w-0 flex-1"><span className="block text-xs font-bold text-white truncate">{profile?.name || 'Account'}</span><span className="block text-[10px] text-gold-400 font-mono font-bold truncate">{identityLabel}: {profile?.student_id || 'Not assigned'}</span></span><User size={18} className="text-gold-400 shrink-0" />
+              <span className="min-w-0 flex-1"><span className="block text-xs font-bold text-white truncate">{profile?.name || 'Account'}</span><span className="block text-[10px] font-semibold text-white/80 truncate" title={roleLabels[role] || role}>{roleLabels[role] || role}</span><span className="block text-[10px] text-gold-400 font-mono font-bold truncate">{identityLabel}: {profile?.student_id || 'Not assigned'}</span></span><User size={18} className="text-gold-400 shrink-0" />
             </button>
           </div>
         </aside>
@@ -439,13 +441,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <nav aria-label="Desktop navigation" className="min-h-0 flex-1 p-3 mt-2 space-y-2 overflow-y-auto custom-scrollbar">
           {allowedNavItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path || (item.path === '/ossa/dashboard' && location.pathname.startsWith('/ossa/dashboard/')) || (item.path === '/ssg/panel' && location.pathname === '/ssg/transfers') || (item.path === '/ssg/panel' && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
+            const isActive = location.pathname === item.path || (item.path === '/ossa/dashboard' && location.pathname.startsWith('/ossa/dashboard/')) || (item.path === hierarchyPath && (location.pathname === '/ssg/transfers' || location.pathname.startsWith(`${hierarchyPath}/students/`))) || (item.path === hierarchyPath && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
             return <button type="button" key={item.path} aria-label={item.label} title={isSidebarCollapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined} onClick={() => navigate(item.path)} className={`app-sidebar-link ${navButtonClass(isActive, isSidebarCollapsed)}`}><Icon size={22} className="shrink-0" /><span aria-hidden={isSidebarCollapsed} className="app-sidebar-label truncate font-medium text-sm">{item.label}</span></button>;
           })}
           {isSidebarCollapsed && hasDirectory ? <div className="pt-4 mt-4 border-t border-brand-800/80 space-y-2">{canViewAttendance && <button type="button" aria-label="Attendance dashboard" aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined} onClick={() => navigate('/admin/attendance')} className={navButtonClass(location.pathname === '/admin/attendance', true)}><BarChart3 size={22} /></button>}{role === 'admin' && <button type="button" aria-label="System Controls" aria-current={location.pathname.startsWith('/admin/controls') ? 'page' : undefined} onClick={() => navigate('/admin/controls')} className={navButtonClass(location.pathname.startsWith('/admin/controls'), true)}><Sliders size={22} /></button>}</div> : renderDirectory()}
         </nav>
         <div className="shrink-0 p-3 border-t border-brand-800 space-y-2.5">
-          {!isSidebarCollapsed ? <><div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-widest text-gold-400/80">Theme Mode</span><ThemeToggle size="sm" className="min-h-11 min-w-11" /></div><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="w-full min-h-14 group flex items-center gap-3 p-2.5 rounded-2xl bg-brand-950/80 hover:bg-brand-800/90 border border-gold-400/30 hover:border-gold-400/60 transition-all text-left"><ProfileAvatar src={profile?.photo_url || '/avatar-placeholder.svg'} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/70" /><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-white truncate">{profile?.name || 'Account'}</span><span className="block text-[10px] font-mono font-bold text-gold-400/90 truncate">{identityLabel}: {profile?.student_id || 'Not assigned'}</span></span><User size={16} className="text-gold-400/80 shrink-0" /></button></> : <div className="flex flex-col items-center gap-2.5"><ThemeToggle size="sm" className="min-h-11 min-w-11" /><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="min-h-11 min-w-11 relative rounded-full ring-2 ring-gold-400/70"><ProfileAvatar src={profile?.photo_url || '/avatar-placeholder.svg'} alt="" className="w-10 h-10 rounded-full object-cover" /></button></div>}
+          {!isSidebarCollapsed ? <><div className="flex items-center justify-between px-1"><span className="text-[10px] font-black uppercase tracking-widest text-gold-400/80">Theme Mode</span><ThemeToggle size="sm" className="min-h-11 min-w-11" /></div><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="w-full min-h-14 group flex items-center gap-3 p-2.5 rounded-2xl bg-brand-950/80 hover:bg-brand-800/90 border border-gold-400/30 hover:border-gold-400/60 transition-all text-left"><ProfileAvatar src={profile?.photo_url || '/avatar-placeholder.svg'} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/70" /><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-white truncate">{profile?.name || 'Account'}</span><span className="block text-[10px] font-semibold text-white/80 truncate" title={roleLabels[role] || role}>{roleLabels[role] || role}</span><span className="block text-[10px] font-mono font-bold text-gold-400/90 truncate">{identityLabel}: {profile?.student_id || 'Not assigned'}</span></span><User size={16} className="text-gold-400/80 shrink-0" /></button></> : <div className="flex flex-col items-center gap-2.5"><ThemeToggle size="sm" className="min-h-11 min-w-11" /><button type="button" aria-label="View profile" onClick={() => navigate('/student/profile')} className="min-h-11 min-w-11 relative rounded-full ring-2 ring-gold-400/70"><ProfileAvatar src={profile?.photo_url || '/avatar-placeholder.svg'} alt="" className="w-10 h-10 rounded-full object-cover" /></button></div>}
         </div>
       </aside>
       <FreezeBanner />

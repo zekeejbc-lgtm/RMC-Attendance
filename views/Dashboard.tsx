@@ -1,14 +1,11 @@
+import { hierarchyPathForRole } from '../lib/workspaceRoutes';
 import { formatManilaTime, formatManilaDateTime, formatManilaDate } from '../lib/dateTime';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { AppEvent } from '../types';
-import {
-  Calendar, Award, QrCode, FileText, User, ShieldAlert, CheckCircle2,
-  Clock, ArrowRight, Sparkles, TrendingUp, AlertTriangle, ChevronRight, Activity, MapPin,
-  Building2, Users2, ScanLine, BarChart3, CalendarDays, ShieldCheck
-} from 'lucide-react';
+import { Calendar, Award, QrCode, FileText, User, ShieldAlert, CheckCircle2, Clock, ArrowRight, Sparkles, TrendingUp, AlertTriangle, ChevronRight, Activity, Building2, Users2, ScanLine, BarChart3, CalendarDays, ShieldCheck } from 'lucide-react';
 import { appData } from '../lib/backend';
 import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
 import { hasPermission } from '../lib/accessControl';
@@ -280,7 +277,7 @@ const StaffHome = ({ name, role, navigate }: { name: string; role: 'admin' | 'ss
   const workspaceName = role === 'admin' ? 'Administration' : isOSSA ? 'OSSA' : 'SSG';
 
   const actions = [
-    ...(role !== 'ossa_staff' ? [{ label: `${workspaceName} Control Panel`, description: 'Manage the institution directory and applications.', path: '/ssg/panel', icon: ShieldCheck, tone: 'bg-brand-50 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200' }] : []),
+    ...(role !== 'ossa_staff' ? [{ label: `${workspaceName} Control Panel`, description: 'Manage the institution directory and applications.', path: hierarchyPathForRole(role), icon: ShieldCheck, tone: 'bg-brand-50 text-brand-800 dark:bg-brand-900/40 dark:text-brand-200' }] : []),
     ...(hasPermission(role, 'attendance.manage') ? [{ label: 'Attendance', description: 'Review attendance trends and institutional records.', path: '/admin/attendance', icon: BarChart3, tone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' }] : []),
     { label: 'Attendance Scanner', description: 'Open attendance scanning and verification tools.', path: '/mayor/scan', icon: ScanLine, tone: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
   ];
@@ -303,7 +300,7 @@ const StaffHome = ({ name, role, navigate }: { name: string; role: 'admin' | 'ss
             <h2 className="mt-1 text-2xl font-bold text-white">Your administration command center</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Review pending work, oversee active attendance events, and manage the school community from one place.</p>
           </div>
-          <button onClick={() => navigate('/ssg/panel')} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl app-button--gold px-5 py-3 text-sm font-bold text-brand-900 shadow-md transition hover:brightness-105">
+          <button onClick={() => navigate(hierarchyPathForRole(role))} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl app-button--gold px-5 py-3 text-sm font-bold text-brand-900 shadow-md transition hover:brightness-105">
             Open {workspaceName} Control Panel <ArrowRight size={16} />
           </button>
         </div>

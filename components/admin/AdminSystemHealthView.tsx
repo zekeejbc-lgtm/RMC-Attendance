@@ -1,6 +1,6 @@
 import { formatManilaDateTime } from '../../lib/dateTime';
 import React, { useState, useEffect } from 'react';
-import { Activity, Database, HardDrive, Cpu, ShieldCheck, Zap, Server, RefreshCw, CheckCircle2, AlertTriangle, FileText, Users, Calendar, QrCode } from 'lucide-react';
+import { Activity, Database, HardDrive, Zap, Server, RefreshCw, CheckCircle2, FileText, Users } from 'lucide-react';
 import { appData } from '../../lib/backend';
 import { SystemHealthMetric } from '../../types';
 import { MetricCard } from '../ui/Page';

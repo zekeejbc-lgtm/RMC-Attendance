@@ -1,3 +1,4 @@
+import { hierarchyPathForRole } from './lib/workspaceRoutes';
 
 import React, { lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -5,7 +6,6 @@ import { AuthProvider, useAuth } from './components/AuthContext';
 import { ThemeProvider } from './components/ThemeContext';
 import Layout from './components/ui/Layout';
 import NavigationMemory from './components/NavigationMemory';
-const Register = lazy(() => import('./views/Register'));
 const RegisterStatus = lazy(() => import('./views/RegisterStatus'));
 const Dashboard = lazy(() => import('./views/Dashboard'));
 const StudentQR = lazy(() => import('./views/StudentQR'));
@@ -81,6 +81,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
   return <Layout>{children}</Layout>;
 };
 
+// Keep saved links working while giving administrators their own hierarchy URL.
+const HierarchyWorkspace: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { profile } = useAuth();
+  const location = useLocation();
+  const base = hierarchyPathForRole(profile?.role);
+  const currentBase = location.pathname.startsWith('/admin/hierarchy') ? '/admin/hierarchy' : '/ssg/panel';
+  if (base !== currentBase) return <Navigate replace to={`${base}${location.pathname.slice(currentBase.length)}${location.search}${location.hash}`} state={location.state} />;
+  return <>{children}</>;
+};
+
 const App: React.FC = () => {
   return (
     <ThemeProvider>
@@ -149,13 +159,13 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
-          <Route path="/ssg/panel" element={
+          {['/ssg/panel', '/admin/hierarchy'].map(path => <Route key={path} path={path} element={
             <ProtectedRoute permissionAny={['directory.manage_structure', 'directory.manage_members', 'directory.transfer_students', 'attendance.scan', 'events.manage']} roles={['mayor', 'ssg', 'admin', 'ossa', 'ossa_staff']}>
-              <SSGPanel />
+              <HierarchyWorkspace><SSGPanel /></HierarchyWorkspace>
             </ProtectedRoute>
-          } />
+          } />)}
 
-          <Route path="/ssg/panel/students/:studentUid" element={<ProtectedRoute permissionAny={['directory.manage_structure', 'directory.manage_members', 'directory.transfer_students', 'attendance.scan', 'events.manage']}><ClassStudentDetail /></ProtectedRoute>} />
+          {['/ssg/panel/students/:studentUid', '/admin/hierarchy/students/:studentUid'].map(path => <Route key={path} path={path} element={<ProtectedRoute permissionAny={['directory.manage_structure', 'directory.manage_members', 'directory.transfer_students', 'attendance.scan', 'events.manage']}><HierarchyWorkspace><ClassStudentDetail /></HierarchyWorkspace></ProtectedRoute>} />)}
           <Route path="/ssg/transfers" element={<ProtectedRoute permission="directory.transfer_students"><StudentTransfers /></ProtectedRoute>} />
 
           <Route path="/ssg/events" element={
@@ -199,7 +209,7 @@ const App: React.FC = () => {
           } />
 
           <Route path="/admin/members" element={
-            <Navigate to="/ssg/panel" replace />
+            <Navigate to="/admin/hierarchy" replace />
           } />
 
           <Route path="/ossa/dashboard" element={
@@ -213,7 +223,7 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />)}
           <Route path="/admin/accounts" element={
-            <Navigate to="/ssg/panel" replace />
+            <Navigate to="/admin/hierarchy" replace />
           } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes></Suspense>

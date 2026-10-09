@@ -6,6 +6,7 @@ import SSGCreateCeremony from '../views/SSGCreateCeremony';
 import SSGCreateEvent from '../views/SSGCreateEvent';
 import SSGEventCreation from '../views/SSGEventCreation';
 import userEvent from '@testing-library/user-event';
+import { changeTime, timeControls, timeValue } from './ui-time';
 
 const state = vi.hoisted(() => ({
   auth: { profile: { uid: 'officer', role: 'ssg', official_data: { assignment_node_id: 'school' } }, revision: 0, loading: false },
@@ -49,9 +50,11 @@ function ceremonySchedule() {
 function fill() {
   for (const [label, value] of [
     [/(?:event|ceremony) title/i, 'Assembly'], [/(?:event|ceremony) details/i, 'School assembly'], [/^start date$/i, '2026-11-10'],
-    [/^end date$/i, '2026-11-10'], [/time in 1/i, '08:00'], [/time out 1/i, '10:00'],
+    [/^end date$/i, '2026-11-10'],
   ] as const) fireEvent.change(screen.getByLabelText(label), { target: { value } });
   if (screen.queryByRole('progressbar')) next();
+  changeTime('Time In 1', '08:00');
+  changeTime('Time Out 1', '10:00');
 }
 it('requires and saves the admin-selected management unit', async () => {
   state.auth.profile.role = 'admin';
@@ -80,21 +83,21 @@ it.each(['event', 'ceremony'])('guides %s creation through visible phases and pr
   mount(purpose === 'ceremony' ? '/ssg/ceremonies/create' : '/ssg/events/create');
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
   expect(screen.getByLabelText('Start Date')).not.toBeVisible();
-  expect(screen.getByLabelText('Time In 1')).toBeDisabled();
+  expect(timeControls('Time In 1').hour).toBeDisabled();
   await user.click(screen.getByRole('button', { name: 'Next: Schedule' }));
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
   await user.type(screen.getByRole('textbox', { name: /title/i }), 'Phase test');
   await user.type(screen.getByRole('textbox', { name: /details/i }), 'Bring your student ID.');
   await user.click(screen.getByRole('button', { name: 'Next: Schedule' }));
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '25');
-  expect(screen.getByLabelText('Time In 1')).toBeVisible();
-  expect(screen.getByLabelText('Time In 1')).toBeEnabled();
+  expect(timeControls('Time In 1').hour).toBeVisible();
+  expect(timeControls('Time In 1').hour).toBeEnabled();
   expect(screen.getByLabelText(/(?:event|ceremony) title/i)).not.toBeVisible();
-  fireEvent.change(screen.getByLabelText('Time In 1'), { target: { value: '08:00' } });
+  changeTime('Time In 1', '08:00');
   await user.click(screen.getByRole('button', { name: 'Back' }));
   expect(screen.getByRole('textbox', { name: /title/i })).toHaveValue('Phase test');
   await user.click(screen.getByRole('button', { name: 'Next: Schedule' }));
-  expect(screen.getByLabelText('Time In 1')).toHaveValue('08:00');
+  expect(timeValue('Time In 1')).toBe('08:00');
   fireEvent.submit(screen.getByRole('form'));
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '25');
   expect(screen.queryByRole('button', { name: /^Schedule (Event|Ceremonies)$/ })).not.toBeInTheDocument();
@@ -136,7 +139,7 @@ it('sets standard flag retreat to Friday afternoon while keeping school times ed
   mount('/ssg/ceremonies/create');
   fireEvent.click(screen.getByLabelText('Use Philippine standard ceremony week'));
   ceremonySchedule();
-  expect(screen.getByLabelText('Time In 1')).toHaveValue('07:00');
+  expect(timeValue('Time In 1')).toBe('07:00');
   expect(screen.getByLabelText('Monday')).toBeChecked();
   expect(screen.getByLabelText('Monday')).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Back' }));
@@ -144,8 +147,8 @@ it('sets standard flag retreat to Friday afternoon while keeping school times ed
   fireEvent.click(screen.getByRole('option', { name: 'Flag retreat / lowering' }));
   next();
   expect(screen.getByLabelText('Friday')).toBeChecked();
-  expect(screen.getByLabelText('Time In 1')).toHaveValue('16:30');
-  expect(screen.getByLabelText('Time In 1')).toBeEnabled();
+  expect(timeValue('Time In 1')).toBe('16:30');
+  expect(timeControls('Time In 1').hour).toBeEnabled();
 });
 it('creates service from the event form with duration, windows, and OSAS overflow policy', async () => {
   state.auth.profile.role = 'ossa';
@@ -157,8 +160,8 @@ it('creates service from the event form with duration, windows, and OSAS overflo
   fill();
   fireEvent.change(screen.getByLabelText(/duration in days/i), { target: { value: '3' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Attendance Window' }));
-  fireEvent.change(screen.getByLabelText('Time In 2'), { target: { value: '13:00' } });
-  fireEvent.change(screen.getByLabelText('Time Out 2'), { target: { value: '15:00' } });
+  changeTime('Time In 2', '13:00');
+  changeTime('Time Out 2', '15:00');
   review();
   fireEvent.submit(screen.getByRole('form'));
   await screen.findByText('Event registry');
@@ -361,7 +364,7 @@ it('saves a duration container without attendance windows or sanctions', async (
   next();
   fireEvent.change(screen.getByLabelText('Start Date'), { target: { value: '2026-11-10' } });
   fireEvent.change(screen.getByLabelText('End Date'), { target: { value: '2026-11-12' } });
-  expect(screen.queryByLabelText('Time In 1')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Time In 1 hour')).not.toBeInTheDocument();
   review();
   fireEvent.submit(screen.getByRole('form'));
   await screen.findByText('Event registry');

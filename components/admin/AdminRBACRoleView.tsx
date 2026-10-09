@@ -1,9 +1,9 @@
 import { SelectField } from '../ui/SelectField';
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Plus, Edit2, Trash2, CheckCircle2, Lock, UserCheck, Shield, Key, Sparkles, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Plus, Edit2, Trash2, Lock, Sparkles } from 'lucide-react';
 import { appData } from '../../lib/backend';
 import { CustomRole, CoreRole, AppPermission } from '../../types';
-import { ALL_PERMISSIONS, roleLabels } from '../../lib/accessControl';
+import { ALL_PERMISSIONS } from '../../lib/accessControl';
 import { Modal } from '../ui/Modal';
 
 export const AdminRBACRoleView: React.FC<{ actorName?: string }> = ({ actorName }) => {

@@ -1,7 +1,7 @@
 import DetailFields from '../components/ui/DetailFields';
 import { useSmartBack } from '../components/NavigationMemory';
 import { formatManilaTime, formatClockTime } from '../lib/dateTime';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, MapPin, Plus } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';

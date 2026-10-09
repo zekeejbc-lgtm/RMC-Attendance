@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AppEvent } from '../../types';
 import { excuseDeadline } from '../../lib/excusePolicy';
 import { formatManilaDateTime } from '../../lib/dateTime';

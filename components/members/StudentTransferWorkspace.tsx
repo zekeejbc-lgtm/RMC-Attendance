@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SchoolNode } from '../../types';
 import { appData } from '../../lib/backend';
 import { Surface } from '../ui/Page';

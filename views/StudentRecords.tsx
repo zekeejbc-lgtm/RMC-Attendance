@@ -1,4 +1,5 @@
 import ActivityCredits from '../components/attendance/ActivityCredits';
+import SanctionClearance from '../components/attendance/SanctionClearance';
 import RecordedBy from '../components/attendance/RecordedBy';
 import RecordPagination from '../components/ui/RecordPagination';
 import { getProfileSchoolName } from '../lib/academicDirectory';
@@ -11,10 +12,7 @@ import { toast } from '../lib/toast';
 import { appData } from '../lib/backend';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../components/AuthContext';
-import { 
-  FileText, Filter, CheckCircle2, Clock, XCircle, FileSpreadsheet,
-  Download, ShieldAlert, Award, Calendar, AlertCircle, ArrowUpRight, Sparkles
-} from 'lucide-react';
+import { FileText, CheckCircle2, Clock, XCircle, Download, ShieldAlert, Award, Calendar, ArrowUpRight } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
 import CustomSelect from '../components/ui/CustomSelect';
@@ -114,6 +112,9 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
   }, [records, revision, userStats, embedded]);
 
   const [exporting, setExporting] = useState(false);
+  const latestClearance = sanctions.find(sanction => sanction.hours < 0);
+  const showClearance = !embedded && !student && Boolean(profile && userStats)
+    && userStats?.sanction_hours === 0 && Boolean(latestClearance);
 
   const handleExportPDF = async () => {
     if (!profile || exporting) return;
@@ -159,6 +160,15 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
           </div>
         }
       />
+
+      {showClearance && profile && latestClearance && (
+        <SanctionClearance
+          key={`${profile.uid}:${latestClearance.id}`}
+          uid={profile.uid}
+          name={profile.name}
+          clearanceId={latestClearance.id}
+        />
+      )}
 
       {/* KPI METRICS OVERVIEW */}
       <div className={`grid grid-cols-2 gap-3 ${embedded ? 'xl:grid-cols-5' : 'lg:grid-cols-4'}`} aria-label="Attendance summary">

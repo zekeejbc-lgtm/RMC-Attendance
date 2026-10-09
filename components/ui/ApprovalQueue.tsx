@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { ChevronDown, ChevronRight, FileCheck2 } from 'lucide-react';
 import { Collapsible } from './Collapsible';
 import { Surface } from './Page';

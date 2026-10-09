@@ -1,10 +1,12 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import SSGPanel from '../views/SSGPanel';
 import { ensureMockReferenceData } from './fixtures/demoBackend';
 
+const sensitiveAction = vi.hoisted(() => vi.fn());
 let currentRole = 'admin';
 
 vi.mock('../components/AuthContext', () => ({
@@ -26,81 +28,57 @@ vi.mock('../components/AuthContext', () => ({
 
 afterEach(cleanup);
 
-vi.mock('../lib/backend', async () => { const m = await import('./fixtures/demoBackend'); return { appData: m.mockData, appAuth: m.mockAuth, documentUrl: async (p: string) => p }; });
+vi.mock('../lib/backend', async () => { const m = await import('./fixtures/demoBackend'); return { appData: { ...m.mockData, performSensitiveAction: sensitiveAction }, appAuth: m.mockAuth, documentUrl: async (p: string) => p }; });
 
 describe('Unit Deletion & Security Confirmation', () => {
   it('hides unit creation and directory templates from SSG', () => {
     localStorage.clear();
     ensureMockReferenceData();
     currentRole = 'ssg';
-    render(<SSGPanel />);
+    render(<MemoryRouter><SSGPanel /></MemoryRouter>);
     expect(screen.queryByRole('button', { name: /add unit/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /add template/i })).not.toBeInTheDocument();
   });
   it('hides delete unit buttons for roles without directory.delete_structure permission', () => {
     ensureMockReferenceData();
     currentRole = 'student';
-    render(<SSGPanel />);
+    render(<MemoryRouter><SSGPanel /></MemoryRouter>);
     expect(screen.queryByRole('button', { name: /delete unit/i })).toBeNull();
   });
 
-  it('shows delete unit button for Admin and requires 4-step verification before executing deletion', async () => {
+  it('requires password, MFA, exact name, action and reason before deleting a unit, and preserves backend errors for retry', async () => {
+    localStorage.clear(); sessionStorage.clear();
     ensureMockReferenceData();
     currentRole = 'admin';
+    sensitiveAction.mockReset().mockRejectedValueOnce(new Error('Incorrect password')).mockResolvedValueOnce(undefined);
     const user = userEvent.setup();
-    render(<SSGPanel />);
-
-    const deleteButtons = screen.getAllByRole('button', { name: /delete unit/i });
-    expect(deleteButtons.length).toBeGreaterThan(0);
-
-    // Click first unit delete button
-    await user.click(deleteButtons[0]);
-
-    // Modal opens
-    const dialog = screen.getByRole('dialog', { name: /delete unit/i });
-    expect(dialog).toBeDefined();
-
-    // Confirm button should be disabled initially
-    const confirmBtn = screen.getByRole('button', { name: /confirm delete/i });
-    expect(confirmBtn).toHaveProperty('disabled', true);
-
-    // Fill in inputs step-by-step
-    const nameInput = screen.getByLabelText(/1\. type first the name/i);
-    const deleteTextInput = screen.getByLabelText(/2\. type delete/i);
-    const passInput = screen.getByLabelText(/3\. password of the person/i);
-    const confirmPassInput = screen.getByLabelText(/4\. confirm password/i);
-
-    // Get expected target unit name from placeholder or label
-    const placeholderName = nameInput.getAttribute('placeholder') || '';
-
-    // Step 1: Type name
-    await user.type(nameInput, placeholderName);
-    expect(confirmBtn).toHaveProperty('disabled', true);
-
-    // Step 2: Type DELETE
-    await user.type(deleteTextInput, 'DELETE');
-    expect(confirmBtn).toHaveProperty('disabled', true);
-
-    // Step 3: Type Password
-    await user.type(passInput, 'wrongpassword');
-    // Step 4: Type Confirm Password
-    await user.type(confirmPassInput, 'wrongpassword');
-
-    // Confirm button is now enabled
-    expect(confirmBtn).toHaveProperty('disabled', false);
-
-    // Click confirm with wrong password -> shows error alert
-    await user.click(confirmBtn);
-    expect(await screen.findByRole('alert')).toBeDefined();
-    expect(screen.getByText(/incorrect password/i)).toBeDefined();
-
-    // Fix password to valid ('password123')
-    await user.clear(passInput);
-    await user.type(passInput, 'password123');
-    await user.clear(confirmPassInput);
-    await user.type(confirmPassInput, 'password123');
-
-    // Submit valid form
-    await user.click(confirmBtn);
+    render(<MemoryRouter><SSGPanel /></MemoryRouter>);
+    const deleteButton = screen.getAllByRole('button', { name: /delete unit/i })[0];
+    const targetName = deleteButton.getAttribute('title')!.replace(/^Delete /, '');
+    await user.click(deleteButton);
+    const dialog = screen.getByRole('dialog', { name: 'Delete: ' + targetName });
+    const fields = within(dialog);
+    const confirm = fields.getByRole('button', { name: 'Confirm Delete' });
+    expect(confirm).toBeDisabled();
+    await user.type(fields.getByLabelText('Current password'), 'wrongpassword');
+    await user.type(fields.getByLabelText('Google Authenticator code'), '123456');
+    await user.type(fields.getByLabelText('Type DELETE'), 'DELETE');
+    await user.type(fields.getByLabelText('Type the exact name: ' + targetName), targetName);
+    expect(confirm).toBeDisabled();
+    expect(sensitiveAction).not.toHaveBeenCalled();
+    await user.type(fields.getByLabelText('Reason'), 'Remove unused test unit');
+    await user.click(confirm);
+    expect(await fields.findByRole('alert')).toHaveTextContent('Incorrect password');
+    expect(fields.getByLabelText('Current password')).toHaveValue('');
+    expect(fields.getByLabelText('Google Authenticator code')).toHaveValue('');
+    expect(confirm).toBeDisabled();
+    await user.type(fields.getByLabelText('Current password'), 'password123');
+    await user.type(fields.getByLabelText('Google Authenticator code'), '123456');
+    await user.click(confirm);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(sensitiveAction).toHaveBeenCalledTimes(2);
+    expect(sensitiveAction).toHaveBeenLastCalledWith('deleteSchoolNode', expect.any(String), {
+      password: 'password123', code: '123456', typedAction: 'DELETE', typedName: targetName, reason: 'Remove unused test unit',
+    });
   });
 });

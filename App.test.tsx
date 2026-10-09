@@ -14,6 +14,8 @@ vi.mock('./views/Dashboard', () => ({ default: () => <h1>Dashboard</h1> }));
 vi.mock('./views/StudentTransfers', () => ({ default: () => <h1>Transfer students</h1> }));
 vi.mock('./views/OSSADashboard', () => ({ default: ({ section = 'overview' }: any) => <h1>OSSA {section}</h1> }));
 vi.mock('./views/RegisterStatus', () => ({ default: () => { state.statusVisits(); return <h1>Application status</h1>; } }));
+vi.mock('./views/SSGPanel', () => ({ default: () => <h1>School hierarchy</h1> }));
+vi.mock('./views/ClassStudentDetail', () => ({ default: () => <h1>Student detail</h1> }));
 import App from './App';
 
 beforeEach(() => {
@@ -77,6 +79,34 @@ it.each(['activities', 'requests', 'sanctions', 'excuses', 'analytics', 'organiz
 
 it('denies a student access to the OSSA request subpage', async () => {
   window.location.hash = '#/ossa/dashboard/requests';
+  render(<App />);
+  await screen.findByRole('heading', { name: 'Dashboard' });
+  expect(window.location.hash).toBe('#/dashboard');
+});
+
+
+it.each([
+  ['/ssg/panel?unit=class-a&tab=hub', '/admin/hierarchy?unit=class-a&tab=hub', 'School hierarchy'],
+  ['/ssg/panel/students/student-1?unit=class-a', '/admin/hierarchy/students/student-1?unit=class-a', 'Student detail'],
+  ['/admin/hierarchy', '/admin/hierarchy', 'School hierarchy'],
+])('opens the admin hierarchy and preserves saved context from %s', async (source, target, heading) => {
+  state.auth.profile.role = 'admin';
+  window.location.hash = `#${source}`;
+  render(<App />);
+  await screen.findByRole('heading', { name: heading });
+  expect(window.location.hash).toBe(`#${target}`);
+});
+
+it('keeps an SSG officer in the SSG workspace when opening an admin hierarchy link', async () => {
+  state.auth.profile.role = 'ssg';
+  window.location.hash = '#/admin/hierarchy?unit=class-a';
+  render(<App />);
+  await screen.findByRole('heading', { name: 'School hierarchy' });
+  expect(window.location.hash).toBe('#/ssg/panel?unit=class-a');
+});
+
+it('denies a student access to the admin hierarchy', async () => {
+  window.location.hash = '#/admin/hierarchy';
   render(<App />);
   await screen.findByRole('heading', { name: 'Dashboard' });
   expect(window.location.hash).toBe('#/dashboard');
