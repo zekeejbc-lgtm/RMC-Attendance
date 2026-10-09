@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { autoTable, type UserOptions } from 'jspdf-autotable';
+import { drawPdfSchoolSeal } from './pdfSchoolSeal';
 
 export interface AttendanceTranscript {
   schoolName: string;
@@ -117,7 +118,7 @@ export function createAttendanceTranscript(data: AttendanceTranscript, logo: Uin
   const pages = doc.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
     doc.setPage(page);
-    doc.addImage(logo, 'JPEG', margin, 13, 25, 25, 'academic-seal');
+    drawPdfSchoolSeal(doc, logo, margin, 13, 25);
     doc.setFont('helvetica', 'bold').setFontSize(17).setTextColor(navy);
     doc.text(schoolLines, margin + 31, 20, { lineHeightFactor: 7 / (17 * 25.4 / 72) });
     doc.setFontSize(10);
@@ -139,7 +140,7 @@ export function createAttendanceTranscript(data: AttendanceTranscript, logo: Uin
 }
 
 export async function downloadAttendanceTranscript(data: AttendanceTranscript) {
-  const response = await fetch(`${import.meta.env.BASE_URL}academic-seal.jpeg`);
+  const response = await fetch(`${import.meta.env.BASE_URL}academic-seal-transparent.png`);
   if (!response.ok) throw new Error('Could not load the transcript logo.');
   const logo = new Uint8Array(await response.arrayBuffer());
   const doc = createAttendanceTranscript(data, logo);

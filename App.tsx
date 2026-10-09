@@ -15,6 +15,8 @@ const StudentRecords = lazy(() => import('./views/StudentRecords'));
 const StudentProfile = lazy(() => import('./views/StudentProfile'));
 const MayorScanner = lazy(() => import('./views/MayorScanner'));
 const SSGPanel = lazy(() => import('./views/SSGPanel'));
+const ClassStudentDetail = lazy(() => import('./views/ClassStudentDetail'));
+const StudentTransfers = lazy(() => import('./views/StudentTransfers'));
 const SSGEventCreation = lazy(() => import('./views/SSGEventCreation'));
 const SSGCreateCeremony = lazy(() => import('./views/SSGCreateCeremony'));
 const SSGCreateEvent = lazy(() => import('./views/SSGCreateEvent'));
@@ -28,11 +30,11 @@ const AttendanceDashboard = lazy(() => import('./views/AttendanceDashboard'));
 const OSSADashboard = lazy(() => import('./views/OSSADashboard'));
 const AdminControls = lazy(() => import('./views/AdminControls'));
 import { UserRole } from './types';
+import { ossaSections, ossaSectionPath } from './lib/ossaHub';
 import { hasPermission, AppPermission } from './lib/accessControl';
 import { AppLoading, PageSkeleton } from './components/ui/Skeleton';
 import ToastViewport from './components/ui/ToastViewport';
 import PwaStatus from './components/ui/PwaStatus';
-import { appData } from './lib/backend';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -42,7 +44,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permission, permissionAny }) => {
-  const { user, loading, profile, error, offlineScanner, approvalNoticeSeen } = useAuth();
+  const { user, loading, profile, error, offlineScanner } = useAuth();
   const location = useLocation();
 
   if (loading) return <AppLoading label="Loading your workspace"><PageSkeleton /></AppLoading>;
@@ -60,9 +62,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
 
   // If authenticated but no profile, they are likely still in the application phase
   if (!profile) {
-    return <Navigate to="/register/status" replace />;
-  }
-  if (approvalNoticeSeen === false && appData.getApplications().some(application => application.id === user.uid && application.status === 'approved')) {
     return <Navigate to="/register/status" replace />;
   }
 
@@ -85,7 +84,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
 const App: React.FC = () => {
   return (
     <ThemeProvider>
-      <PwaStatus />
+      <PwaStatus>
       <ToastViewport />
       <AuthProvider>
         <HashRouter>
@@ -156,6 +155,9 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
+          <Route path="/ssg/panel/students/:studentUid" element={<ProtectedRoute permissionAny={['directory.manage_structure', 'directory.manage_members', 'directory.transfer_students', 'attendance.scan', 'events.manage']}><ClassStudentDetail /></ProtectedRoute>} />
+          <Route path="/ssg/transfers" element={<ProtectedRoute permission="directory.transfer_students"><StudentTransfers /></ProtectedRoute>} />
+
           <Route path="/ssg/events" element={
             <ProtectedRoute permission="events.manage" roles={['ssg', 'admin', 'ossa']}>
               <SSGEventCreation />
@@ -205,6 +207,11 @@ const App: React.FC = () => {
               <OSSADashboard />
             </ProtectedRoute>
           } />
+          {ossaSections.map(section => <Route key={section.id} path={ossaSectionPath(section.id)} element={
+            <ProtectedRoute permission={section.permission}>
+              <OSSADashboard section={section.id} />
+            </ProtectedRoute>
+          } />)}
           <Route path="/admin/accounts" element={
             <Navigate to="/ssg/panel" replace />
           } />
@@ -213,6 +220,7 @@ const App: React.FC = () => {
           </NavigationMemory>
       </HashRouter>
     </AuthProvider>
+    </PwaStatus>
   </ThemeProvider>
   );
 };

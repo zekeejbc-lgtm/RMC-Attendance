@@ -227,6 +227,10 @@ a {
   padding: var(--space-page);
 }
 
+.app-page.student-qr-page {
+  max-width: 36rem;
+}
+
 .app-surface {
   border: 1px solid var(--border-subtle);
   border-radius: 1rem;
@@ -277,6 +281,34 @@ a {
   .mobile-data-card {
     display: none;
   }
+}
+
+.app-sidebar-layout,
+.app-desktop-sidebar {
+  transition-duration: 320ms;
+  transition-timing-function: var(--motion-snappy);
+}
+.app-sidebar-label {
+  max-width: 12rem;
+  opacity: 1;
+  white-space: nowrap;
+  transition: max-width 320ms var(--motion-snappy), opacity 180ms ease, transform 320ms var(--motion-snappy);
+}
+.app-desktop-sidebar[data-collapsed='true'] .app-sidebar-label {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-8px);
+  overflow: hidden;
+}
+.app-sidebar-link { transition-duration: 320ms; }
+.app-desktop-sidebar[data-collapsed='true'] .app-sidebar-link { gap: 0; }
+.app-sidebar-link:hover > svg { transform: scale(1.08); }
+.app-sidebar-link > svg { transition: transform 160ms ease; }
+.app-navigation-drawer { animation: navigationDrawerEnter 280ms var(--motion-standard) both; }
+.app-navigation-backdrop { animation: fadeIn 200ms ease both; }
+@keyframes navigationDrawerEnter {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {

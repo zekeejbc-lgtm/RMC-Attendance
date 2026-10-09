@@ -18,8 +18,8 @@ export const move = (f: number, a: number, b: number, x = 0, y = 1) =>
   });
 export const Seal = ({ size = 70 }: { size?: number }) => (
   <CanvasImage
-    src={staticFile("assets/academic-seal.jpeg")}
-    style={{ width: size, height: size, borderRadius: "50%" }}
+    src={staticFile("assets/academic-seal-transparent.png")}
+    style={{ width: size, height: size, borderRadius: "50%", objectFit: "contain" }}
   />
 );
 export const Stage: React.FC<{

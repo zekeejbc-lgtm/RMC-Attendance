@@ -2,6 +2,7 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import PwaStatus from './PwaStatus';
+import InstallAppSettings from './InstallAppSettings';
 
 const worker = vi.hoisted(() => ({ needRefresh: false, update: vi.fn(), dismiss: vi.fn(), onRegisteredSW: undefined as undefined | ((url: string, registration?: ServiceWorkerRegistration) => void) }));
 vi.mock('virtual:pwa-register/react', () => ({ useRegisterSW: (options: { onRegisteredSW: typeof worker.onRegisteredSW }) => {
@@ -176,4 +177,30 @@ it('dismisses the install notification after twelve seconds without prompting th
   act(() => vi.advanceTimersByTime(12000));
   expect(screen.queryByRole('complementary', { name: 'Install IARS' })).toBeNull();
   expect(prompt).not.toHaveBeenCalled();
+});
+
+it('keeps native installation available in profile settings after the notification closes', async () => {
+  vi.useFakeTimers();
+  render(<PwaStatus><InstallAppSettings /></PwaStatus>);
+  const prompt = vi.fn().mockResolvedValue(undefined);
+  act(() => window.dispatchEvent(Object.assign(new Event('beforeinstallprompt'), { prompt, userChoice: Promise.resolve({ outcome: 'accepted' }) })));
+  act(() => vi.advanceTimersByTime(12000));
+  expect(screen.queryByRole('complementary', { name: 'Install IARS' })).toBeNull();
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Install IARS' })));
+  expect(prompt).toHaveBeenCalledOnce();
+});
+
+it('provides manual installation instructions when the browser has no install prompt', () => {
+  render(<PwaStatus><InstallAppSettings /></PwaStatus>);
+  fireEvent.click(screen.getByRole('button', { name: 'Install IARS' }));
+  expect(screen.getByRole('dialog', { name: 'Install IARS' })).toHaveTextContent('Add to Home Screen');
+  expect(screen.getByRole('dialog')).toHaveTextContent('Open as Web App');
+});
+
+it('removes install controls when the browser confirms installation', () => {
+  render(<PwaStatus><InstallAppSettings /></PwaStatus>);
+  act(() => window.dispatchEvent(Object.assign(new Event('beforeinstallprompt'), { prompt: vi.fn(), userChoice: Promise.resolve({ outcome: 'accepted' }) })));
+  act(() => window.dispatchEvent(new Event('appinstalled')));
+  expect(screen.queryByRole('button', { name: 'Install IARS' })).toBeNull();
+  expect(screen.getByText('You’re using the installed app.')).toBeInTheDocument();
 });

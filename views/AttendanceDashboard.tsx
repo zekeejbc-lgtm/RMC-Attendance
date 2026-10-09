@@ -1,10 +1,14 @@
-import { getProfileSchoolName } from '../lib/academicDirectory';
+import RecordPagination from '../components/ui/RecordPagination';
+import { usePagination } from '../components/usePagination';
+import { hasPermission } from '../lib/accessControl';
 import { usePageMemory } from '../components/usePageMemory';
-import { formatManilaDate, formatManilaTime, parseManilaDateTime, startOfManilaPeriod } from '../lib/dateTime';
+import { formatManilaDate, formatManilaTime, parseManilaDateTime } from '../lib/dateTime';
 import { attendanceWindowTitle, eventDisplayTitle } from '../lib/eventGroups';
 import { toast } from '../lib/toast';
+import { downloadCsv } from '../lib/export';
+import { attendanceSpreadsheetRows } from '../lib/attendanceSpreadsheet';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { appData } from '../lib/backend';
 import { AppEvent } from '../types';
@@ -18,12 +22,16 @@ import {
   PieChart as RePieChart, Pie, Cell, BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart as ReLineChart, Line
 } from 'recharts';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import html2canvas from 'html2canvas';
+import type { AttendanceReportOptions } from '../lib/attendanceReport';
+import { useAttendanceReportPreview } from '../components/attendance/useAttendanceReportPreview';
+import { studentBelongsToReportUnit } from '../lib/attendanceReportScope';
+import { findNodePath } from '../lib/academicDirectory';
+import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import Button from '../components/ui/Button';
 import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
 import { Modal } from '../components/ui/Modal';
+import AttendanceAnalytics from '../components/attendance/AttendanceAnalytics';
+import { AnalyticsRecord, attendanceBounds, attendanceTrend } from '../lib/attendanceAnalytics';
 
 // --- Types ---
 
@@ -48,13 +56,15 @@ interface FilterState {
   elemGradeLevel: string;
 }
 
-interface AttendanceRecord {
+interface AttendanceRecord extends AnalyticsRecord {
   id: string;
   eventTitle: string;
+  studentUid: string;
   studentId: string;
   studentName: string;
   status: 'present' | 'late' | 'excused' | 'absent' | 'not_recorded';
   timeIn?: number;
+  recordedAt: number;
   section: string;
   program?: string; // or strand/track
   level: string;
@@ -93,8 +103,6 @@ const AttendanceDashboard: React.FC = () => {
     includeTables: true
   });
 
-  const chartRef = useRef<HTMLDivElement>(null);
-
   const [showTimeModal, setShowTimeModal] = useState(false);
   const [showEventDropdown, setShowEventDropdown] = useState(false);
   const [eventSearch, setEventSearch] = usePageMemory('eventSearch', '');
@@ -104,15 +112,16 @@ const AttendanceDashboard: React.FC = () => {
     {
       setEvents((profile && typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents()).filter(event => !event.isGeneralEvent));
     }
-  }, [revision, profile]);
+  }, [revision, profile?.uid]);
 
   // Derived Data
-  const attendanceData = useMemo<AttendanceRecord[]>(() => {
+  const analyticsNow = useMemo(() => Date.now(), [revision, timeFilter, dateRange]);
+  const scopedAttendanceData = useMemo<AttendanceRecord[]>(() => {
     if (!profile) return [];
     const students = appData.getVisibleStudents(profile.uid);
-    const cutoff = timeFilter === 'this_month' ? startOfManilaPeriod('month') : timeFilter === 'this_week' ? startOfManilaPeriod('week') : 0;
-    return events.filter(event => !event.cancellationStatus && (!selectedEvents.length || selectedEvents.includes(event.id)) && event.startTime >= cutoff
-      && (timeFilter !== 'custom' || ((!dateRange.start || event.startTime >= parseManilaDateTime(`${dateRange.start}T00:00`)) && (!dateRange.end || event.startTime <= parseManilaDateTime(`${dateRange.end}T23:59:59.999`)))))
+    const allEvents = appData.getEvents();
+    const studentRecords = new Map(students.map(student => [student.uid, appData.getAttendanceRecords?.(student.uid) || []]));
+    return events.filter(event => !event.cancellationStatus && (!selectedEvents.length || selectedEvents.includes(event.id)))
       .flatMap(event => {
         const logs = appData.getAttendanceLogs(event.id);
         return students.filter(student => appData.isEventRecipient(event, student)).filter(student => {
@@ -126,16 +135,67 @@ const AttendanceDashboard: React.FC = () => {
             && matches(filters.major, data.major) && matches(filters.college, data.department)
             && (!filters.secondaryType || (filters.secondaryType === 'shs' ? /senior/i : /junior/i).test(data.department || ''));
         }).flatMap(student => {
-          const records = appData.getAttendanceRecords?.(student.uid).filter(record => record.event?.id === event.id) || [];
+          const records = studentRecords.get(student.uid)!.filter(record => record.event?.id === event.id);
           const rows = records.length ? records : [{ id: `${event.id}:${student.uid}`, slot: '', status: logs[student.uid]?.status || (event.status === 'done' ? 'absent' : 'not_recorded'), time_in: logs[student.uid]?.time_in }];
-          return rows.map(record => ({ id: `${student.uid}:${record.id}`, studentId: student.student_id, studentName: student.name,
-            eventTitle: [eventDisplayTitle(event, appData.getEvents()), record.slot === 'default' ? '' : record.slot.split(':')[0], attendanceWindowTitle(event, record.slot)].filter(Boolean).join(' / '),
-            status: record.status as AttendanceRecord['status'], timeIn: record.time_in, section: student.school_data.section,
+          return rows.map(record => ({ id: `${student.uid}:${record.id}`, studentUid: student.uid, studentId: student.student_id, studentName: student.name,
+            eventId: event.id, eventName: eventDisplayTitle(event, allEvents), completed: event.status === 'done',
+            attendanceDate: /^\d{4}-\d{2}-\d{2}(?::|$)/.test(record.slot) ? parseManilaDateTime(record.slot.split(':')[0]) : Number(record.time_in || event.startTime),
+            eventTitle: [eventDisplayTitle(event, allEvents), record.slot === 'default' ? '' : record.slot.split(':')[0], attendanceWindowTitle(event, record.slot)].filter(Boolean).join(' / '),
+            status: record.status as AttendanceRecord['status'], timeIn: record.time_in, recordedAt: Number(record.time_in || record.recorded_at || event.startTime || 0), section: student.school_data.section,
             program: student.school_data.program || student.school_data.strand, level: student.school_data.level,
           }));
         });
-      });
-  }, [events, filters, selectedEvents, profile, timeFilter, dateRange]);
+      }).sort((a, b) => b.recordedAt - a.recordedAt || a.studentName.localeCompare(b.studentName) || a.id.localeCompare(b.id));
+  }, [events, filters, selectedEvents, profile?.uid, revision]);
+  const attendanceData = useMemo(() => {
+    const { start, end } = attendanceBounds(timeFilter, dateRange, analyticsNow);
+    return scopedAttendanceData.filter(record => record.attendanceDate >= start && record.attendanceDate < end);
+  }, [scopedAttendanceData, timeFilter, dateRange, analyticsNow]);
+  const statusTrend = useMemo(() => attendanceTrend(attendanceData, 'day').map(point => ({ ...point, name: formatManilaDate(point.time, { month: 'short' }) })), [attendanceData]);
+  const [exportPathIds, setExportPathIds] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const directory = useMemo(() => appData.getSchoolStructure(), [revision]);
+  const exportPath = useMemo(() => {
+    const path = findNodePath(directory, exportPathIds[exportPathIds.length - 1]) || [];
+    return path.length === exportPathIds.length && path.every((node, index) => node.id === exportPathIds[index]
+      && !node.metadata?.archived && node.metadata?.selectableForRegistration !== false) ? path : [];
+  }, [directory, exportPathIds]);
+  const canExportReport = hasPermission(profile?.role, 'attendance.manage');
+  const selectedExportUnit = exportPath.some(node => !['campus', 'school'].includes(node.type)) ? exportPath[exportPath.length - 1] : undefined;
+  const exportRecords = useMemo(() => {
+    if (!selectedExportUnit || !profile) return [];
+    const studentIds = new Set(appData.getVisibleStudents(profile.uid)
+      .filter(student => studentBelongsToReportUnit(student, selectedExportUnit.id, directory))
+      .map(student => student.uid));
+    return attendanceData.filter(record => studentIds.has(record.studentUid));
+  }, [attendanceData, selectedExportUnit, profile?.uid, directory, revision]);
+
+
+  const reportPeriod = timeFilter === 'custom' ? `${dateRange.start || 'Beginning'} to ${dateRange.end || 'Present'}`
+    : { all: 'All time', this_month: 'This month', this_week: 'This week' }[timeFilter];
+  const reportEventScope = selectedEvents.length
+    ? events.filter(event => selectedEvents.includes(event.id)).map(event => eventDisplayTitle(event, appData.getEvents())).join(', ')
+    : 'All events';
+  const reportFilterLabels: Record<string, string> = { level: 'Education level', college: 'College', program: 'Program', major: 'Major', yearLevel: 'Year', section: 'Section', secondaryType: 'Secondary type', strand: 'Strand', specialization: 'Specialization', gradeLevel: 'Grade', elemGradeLevel: 'Elementary grade' };
+  const activeReportFilters = Object.entries(filters).filter(([key, value]) => key !== 'level' && value)
+    .map(([key, value]) => `${reportFilterLabels[key]}: ${value}`).join(' | ');
+  const reportDashboardLevel = { all: 'No additional restriction', tertiary: 'Tertiary (College)', secondary: 'Secondary (High School)', elementary: 'Elementary' }[filters.level];
+  const reportAcademicLevel = [...exportPath].reverse().find(node => ['grade_level', 'year_level', 'level'].includes(node.type))?.name
+    || (selectedExportUnit ? `All grades and years within ${selectedExportUnit.name}` : 'Choose an academic unit');
+  const reportOptions = useMemo<AttendanceReportOptions | null>(() => {
+    if (!showExportModal || !canExportReport || !selectedExportUnit) return null;
+    return {
+      schoolName: exportPath.find(node => !['campus', 'school'].includes(node.type))!.name,
+      scope: `Academic unit: ${exportPath.map(node => node.name).join(' / ')} | Period: ${reportPeriod} | Events: ${reportEventScope}${filters.level !== 'all' ? ' | Dashboard education filter: ' + reportDashboardLevel : ''}${activeReportFilters ? ' | ' + activeReportFilters : ''}.`,
+      records: exportRecords,
+      ...exportSettings,
+    };
+  }, [showExportModal, canExportReport, selectedExportUnit, exportPath, reportPeriod, reportEventScope, filters.level, reportDashboardLevel, activeReportFilters, exportRecords, exportSettings]);
+  const reportPreview = useAttendanceReportPreview(reportOptions);
+  const reportStudentCount = new Set(exportRecords.map(record => record.studentUid)).size;
+
+  const attendancePage = usePagination(attendanceData, JSON.stringify([profile?.uid, filters, selectedEvents, timeFilter, dateRange]));
+  const recentRecords = attendanceData.filter(record => record.status !== 'not_recorded').slice(0, 10);
   
   const stats = useMemo(() => {
     const s = { present: 0, late: 0, excused: 0, absent: 0, not_recorded: 0, total: 0 };
@@ -173,125 +233,41 @@ const AttendanceDashboard: React.FC = () => {
 
   // --- Export Logic ---
   const handleExportPDF = async () => {
-    return toast.track(async () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    const schoolName = getProfileSchoolName(profile, appData.getSchoolStructure());
-    doc.setFont('helvetica', 'bold').setFontSize(18);
-    const schoolLines: string[] = doc.splitTextToSize(schoolName, pageWidth - 28);
-    const headerHeight = 40 + (schoolLines.length - 1) * 7;
-    // Header
-    doc.setFillColor(14, 27, 66); // Brand color
-    doc.rect(0, 0, pageWidth, headerHeight, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
-    doc.text(schoolLines, 14, 15, { lineHeightFactor: 7 / (18 * 25.4 / 72) });
-    doc.setFontSize(13);
-    doc.text('Attendance Report', 14, headerHeight - 15);
-    doc.setFontSize(10);
-    doc.text(`Generated: ${formatManilaDate(Date.now())}`, 14, headerHeight - 8);
-
-    let yPos = headerHeight + 10;
-
-    // Summary
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(14);
-    doc.text('Attendance Summary', 14, yPos);
-    yPos += 10;
-    
-    const summaryData = [
-      ['Total Students', stats.total],
-      ['Present', `${stats.present} (${((stats.present/stats.total)*100).toFixed(1)}%)`],
-      ['Late', `${stats.late} (${((stats.late/stats.total)*100).toFixed(1)}%)`],
-      ['Absent', `${stats.absent} (${((stats.absent/stats.total)*100).toFixed(1)}%)`],
-    ];
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Metric', 'Value']],
-      body: summaryData,
-      theme: 'striped',
-      headStyles: { fillColor: [212, 175, 55] }, // Gold
-    });
-
-    yPos = (doc as any).lastAutoTable.finalY + 20;
-
-    // Charts
-    if (exportSettings.includeCharts && chartRef.current) {
-      try {
-        const canvas = await html2canvas(chartRef.current);
-        const imgData = canvas.toDataURL('image/png');
-        const imgProps = doc.getImageProperties(imgData);
-        const pdfWidth = pageWidth - 28;
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-        
-        if (yPos + pdfHeight > doc.internal.pageSize.getHeight()) {
-          doc.addPage();
-          yPos = 20;
-        }
-        
-        doc.text('Visualization', 14, yPos - 5);
-        doc.addImage(imgData, 'PNG', 14, yPos, pdfWidth, pdfHeight);
-        yPos += pdfHeight + 20;
-      } catch (e) {
-        console.error("Chart export failed", e);
-      }
+    if (exporting || !canExportReport || !selectedExportUnit || !reportPreview.doc) return;
+    setExporting(true);
+    try {
+      await toast.track(async () => {
+        const doc = reportPreview.doc!;
+        const filename = exportPath.map(node => node.name).join('_').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '').toLowerCase();
+        await doc.save(`attendance_report_${filename || 'school'}.pdf`, { returnPromise: true });
+        setShowExportModal(false);
+      }, 'Export PDF', 'PDF download started');
+    } finally {
+      setExporting(false);
     }
-
-    // Detailed Table
-    if (exportSettings.includeTables) {
-      doc.addPage();
-      doc.text('Detailed Records', 14, 20);
-      
-      const tableBody = attendanceData.map(r => [
-        r.eventTitle,
-        r.studentName,
-        r.studentId,
-        r.status.toUpperCase(),
-        r.section,
-        r.level,
-        r.timeIn ? formatManilaTime(r.timeIn) : '-'
-      ]);
-
-      autoTable(doc, {
-        startY: 30,
-        head: [['Event / Window', 'Name', 'ID', 'Status', 'Section', 'Level', 'Time In']],
-        body: tableBody,
-        theme: 'grid',
-        headStyles: { fillColor: [14, 27, 66] },
-      });
-    }
-
-    doc.save('attendance_report.pdf');
-    setShowExportModal(false);
-    }, 'Export PDF', 'PDF download started');
   };
 
   const handleExportCSV = () => {
-    return toast.sync(() => {
-    const headers = ['Event / Window', 'Student Name', 'Student ID', 'Status', 'Section', 'Level', 'Time In'];
-    const rows = attendanceData.map(r => [
-      r.eventTitle,
-      r.studentName,
-      r.studentId,
-      r.status,
-      r.section,
-      r.level,
-      r.timeIn ? formatManilaTime(r.timeIn) : ''
-    ]);
-    
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-      
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "attendance_data.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    }, 'Export CSV', 'CSV download started');
+    downloadCsv('attendance_data.csv', attendanceSpreadsheetRows(attendanceData));
+  };
+
+  const [exportingSpreadsheet, setExportingSpreadsheet] = useState(false);
+  const handleExportSpreadsheet = async () => {
+    if (exportingSpreadsheet) return;
+    setExportingSpreadsheet(true);
+    const progress = toast.start('Export Excel report', ['Preparing summary and charts']);
+    try {
+      const { downloadAttendanceWorkbook } = await import('../lib/attendanceSpreadsheet');
+      await downloadAttendanceWorkbook({
+        records: attendanceData,
+        scope: `Period: ${reportPeriod} | Events: ${reportEventScope} | Education filter: ${reportDashboardLevel}${activeReportFilters ? ' | ' + activeReportFilters : ''}`,
+      });
+      progress.complete('Excel report download started');
+    } catch (error) {
+      progress.fail(error, 'Could not export the Excel report. Please try again.');
+    } finally {
+      setExportingSpreadsheet(false);
+    }
   };
 
   return (
@@ -299,10 +275,13 @@ const AttendanceDashboard: React.FC = () => {
       <PageHeader
         actions={(
           <>
-            <Button aria-label="Export report" className="sm:w-auto" onClick={() => setShowExportModal(true)} size="sm">
-              <Printer size={16} /> Export
+            <Button aria-label="Export report" disabled={!canExportReport} className="sm:w-auto" onClick={() => setShowExportModal(true)} size="sm">
+              <Printer size={16} /> PDF report
             </Button>
-            <Button className="sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-white" onClick={handleExportCSV} size="sm" variant="secondary">
+            <Button aria-label="Export Excel report" title="Formatted workbook with a summary, charts, and detailed records (.xlsx)" disabled={exportingSpreadsheet} className="sm:w-auto" onClick={handleExportSpreadsheet} size="sm" variant="gold">
+              <Download size={16} /> {exportingSpreadsheet ? 'Preparing Excel...' : 'Excel report'}
+            </Button>
+            <Button title="Plain data for importing into other tools; use Excel report for styling and charts" className="sm:w-auto dark:border-slate-600 dark:bg-slate-800 dark:text-white" onClick={handleExportCSV} size="sm" variant="secondary">
               <Download size={16} /> CSV
             </Button>
           </>
@@ -383,12 +362,14 @@ const AttendanceDashboard: React.FC = () => {
       </Surface>
 
       <div aria-label="Attendance summary" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard detail={`${stats.total} total students`} icon={<CheckCircle size={22} />} label="Present" value={stats.present} />
+        <MetricCard detail={`${new Set(attendanceData.map(record => record.studentUid)).size} students / ${stats.total} entries`} icon={<CheckCircle size={22} />} label="Present" value={stats.present} />
         <MetricCard icon={<Clock size={22} />} label="Late" value={stats.late} />
         <MetricCard icon={<FileText size={22} />} label="Excused" value={stats.excused} />
         <MetricCard icon={<XCircle size={22} />} label="Absent" value={stats.absent} />
         <MetricCard icon={<AlertCircle size={22} />} label="No Record" value={stats.not_recorded} />
       </div>
+
+      <AttendanceAnalytics records={scopedAttendanceData} period={timeFilter} range={dateRange} now={analyticsNow} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Surface className="min-w-0 p-4 sm:p-6 lg:col-span-2">
@@ -404,7 +385,7 @@ const AttendanceDashboard: React.FC = () => {
               ))}
             </div>
           </div>
-          <div aria-label="Attendance visualization" className="h-64 min-h-64 min-w-0 w-full sm:h-72 sm:min-h-72" ref={chartRef} role="region">
+          <div aria-label="Attendance visualization" className="h-64 min-h-64 min-w-0 w-full sm:h-72 sm:min-h-72" role="region">
             <ResponsiveContainer height="100%" initialDimension={{ width: 1, height: 256 }} minHeight={256} minWidth={0} width="100%">
               {chartType === 'pie' || chartType === 'donut' ? (
                 <RePieChart>
@@ -418,7 +399,7 @@ const AttendanceDashboard: React.FC = () => {
               ) : chartType === 'column' ? (
                 <ReBarChart data={chartData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="value" fill="#0E1B42" radius={[4, 4, 0, 0]} /></ReBarChart>
               ) : (
-                <ReLineChart data={chartData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Line dataKey="value" dot={{ r: 5 }} stroke="#D4AF37" strokeWidth={3} type="monotone" /></ReLineChart>
+                <ReLineChart data={statusTrend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Line name="Present" dataKey="present" dot={{ r: 4 }} stroke="#22c55e" strokeWidth={2} type="linear" /><Line name="Late" dataKey="late" stroke="#eab308" strokeWidth={2} type="linear" /><Line name="Absent" dataKey="absent" stroke="#ef4444" strokeWidth={2} type="linear" /><Line name="Excused" dataKey="excused" stroke="#3b82f6" strokeWidth={2} type="linear" /></ReLineChart>
               )}
             </ResponsiveContainer>
           </div>
@@ -427,13 +408,14 @@ const AttendanceDashboard: React.FC = () => {
         <Surface className="flex min-w-0 flex-col p-4 sm:p-6">
           <h2 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-brand-900 dark:text-white"><Users size={14} className="text-gold-500" /> Recent Logs</h2>
           <div className="max-h-72 flex-1 space-y-3 overflow-y-auto pr-1">
-            {attendanceData.slice(0, 10).map((record) => (
+            {recentRecords.map((record) => (
               <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900" key={record.id}>
                 <span aria-hidden="true" className={`h-10 w-2 shrink-0 rounded-full ${record.status === 'present' ? 'bg-emerald-500' : record.status === 'late' ? 'bg-amber-500' : record.status === 'absent' ? 'bg-red-500' : 'bg-slate-300'}`} />
                 <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></p><p className="text-[10px] uppercase tracking-wider text-slate-500">{record.studentId}</p></div>
                 <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-500">{record.timeIn ? formatManilaTime(record.timeIn, { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
               </div>
             ))}
+            {!recentRecords.length && <p className="py-6 text-center text-sm text-slate-500">No recorded attendance yet.</p>}
           </div>
         </Surface>
       </div>
@@ -441,37 +423,84 @@ const AttendanceDashboard: React.FC = () => {
       <Surface aria-labelledby="attendance-records-heading" className="overflow-hidden">
         <div className="border-b border-slate-200 p-4 dark:border-slate-700 sm:p-6">
           <h2 id="attendance-records-heading" className="text-sm font-black uppercase tracking-widest text-brand-900 dark:text-white">Detailed Attendance Records</h2>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{attendanceData.length} student attendance entries</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{attendanceData.length} student attendance entries · Newest first</p>
         </div>
         <div className="desktop-data-table overflow-x-auto">
           <table aria-label="Attendance records" className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-900 dark:text-slate-300"><tr><th className="px-5 py-3">Student</th><th className="px-5 py-3">ID</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Section</th><th className="px-5 py-3">Level</th><th className="px-5 py-3">Time In</th></tr></thead>
+            <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-900 dark:text-slate-300"><tr><th className="px-5 py-3">Student</th><th className="px-5 py-3">ID</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Section</th><th className="px-5 py-3">Level</th><th className="px-5 py-3">Date / time in</th></tr></thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-              {attendanceData.map((record) => <tr key={record.id}><td className="px-5 py-3 font-semibold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></td><td className="px-5 py-3 font-mono text-xs text-slate-500">{record.studentId}</td><td className="px-5 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.section}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.level}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.timeIn ? formatManilaTime(record.timeIn) : '-'}</td></tr>)}
+              {attendancePage.visible.map((record) => <tr key={record.id}><td className="px-5 py-3 font-semibold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></td><td className="px-5 py-3 font-mono text-xs text-slate-500">{record.studentId}</td><td className="px-5 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.section}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300">{record.level}</td><td className="px-5 py-3 text-slate-600 dark:text-slate-300"><span className="block font-semibold">{formatManilaDate(record.recordedAt, { month: 'short' })}</span><span className="mt-1 block text-xs text-slate-500">{record.timeIn ? formatManilaTime(record.timeIn) : 'Not recorded'}</span></td></tr>)}
+              {!attendanceData.length && <tr><td colSpan={6} className="px-5 py-10 text-center text-slate-500">No attendance records match these filters.</td></tr>}
             </tbody>
           </table>
         </div>
         <div className="space-y-3 p-4 md:hidden">
-          {attendanceData.map((record) => (
+          {attendancePage.visible.map((record) => (
             <article aria-label={`${record.studentName} attendance record`} className="mobile-data-card rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900" key={record.id}>
               <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="font-bold text-brand-900 dark:text-white">{record.studentName}<span className="block text-xs font-normal text-slate-500">{record.eventTitle}</span></h3><p className="font-mono text-xs text-slate-500">{record.studentId}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${statusClasses[record.status]}`}>{formatStatus(record.status)}</span></div>
-              <dl className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt className="font-semibold text-slate-500">Section</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.section}</dd></div><div><dt className="font-semibold text-slate-500">Level</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.level}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">Time In</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.timeIn ? formatManilaTime(record.timeIn) : '-'}</dd></div></dl>
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><dt className="font-semibold text-slate-500">Section</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.section}</dd></div><div><dt className="font-semibold text-slate-500">Level</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{record.level}</dd></div><div className="col-span-2"><dt className="font-semibold text-slate-500">Date / time in</dt><dd className="mt-0.5 text-slate-800 dark:text-slate-200">{formatManilaDate(record.recordedAt, { month: 'short' })} · {record.timeIn ? formatManilaTime(record.timeIn) : 'Not recorded'}</dd></div></dl>
             </article>
           ))}
+          {!attendanceData.length && <p className="p-4 text-center text-sm text-slate-500">No attendance records match these filters.</p>}
         </div>
+        <RecordPagination {...attendancePage} label="Admin attendance pagination" />
       </Surface>
 
       <Modal
-        footer={<Button aria-label="Generate PDF report" className="sm:w-auto" onClick={handleExportPDF} variant="gold"><Printer size={16} /> PDF</Button>}
-        onClose={() => setShowExportModal(false)}
+        footer={<>
+          <p className="mr-auto self-center text-xs text-slate-500 dark:text-slate-400">{reportPreview.doc ? `${reportPreview.pages} ${reportPreview.pages === 1 ? 'page' : 'pages'} | A4 PDF | Manila time (UTC+8)` : 'Choose a unit and review the preview before downloading.'}</p>
+          <Button variant="secondary" className="sm:w-auto" disabled={exporting} onClick={() => setShowExportModal(false)}>Cancel</Button>
+          <Button aria-label="Generate PDF report" disabled={exporting || !canExportReport || !reportPreview.doc} className="sm:w-auto" onClick={handleExportPDF} variant="gold"><Download size={16} /> {exporting ? 'Downloading...' : 'Download PDF'}</Button>
+        </>}
+        onClose={() => { if (!exporting) setShowExportModal(false); }}
         open={showExportModal}
-        size="sm"
-        title="Export Configuration"
+        size="xl"
+        title="Download attendance report"
+        description="Choose your academic scope, customize the contents, and review the exact PDF before downloading."
       >
-        <div className="space-y-5">
-          <CustomSelect ariaLabel="Group data by" combobox label="Group Data By" onChange={(value) => setExportSettings({ ...exportSettings, groupBy: value as typeof exportSettings.groupBy })} options={[{ value: 'status', label: 'Attendance Status' }, { value: 'section', label: 'Section' }, { value: 'level', label: 'Level' }, { value: 'program', label: 'Program' }]} value={exportSettings.groupBy} />
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900"><input checked={exportSettings.includeCharts} className="h-4 w-4 accent-gold-500" onChange={(event) => setExportSettings({ ...exportSettings, includeCharts: event.target.checked })} type="checkbox" /><span className="text-sm font-bold text-brand-900 dark:text-white">Include Visualizations</span></label>
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900"><input checked={exportSettings.includeTables} className="h-4 w-4 accent-gold-500" onChange={(event) => setExportSettings({ ...exportSettings, includeTables: event.target.checked })} type="checkbox" /><span className="text-sm font-bold text-brand-900 dark:text-white">Include Detailed Tables</span></label>
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          <div className="min-w-0 space-y-5">
+            <section className="space-y-3" aria-labelledby="export-scope-heading">
+              <div><h3 id="export-scope-heading" className="text-sm font-bold text-brand-900 dark:text-white">1. Choose the academic unit</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Use the enrollment directory to select a whole educational unit or narrow it to a program, grade, year, or section. &ldquo;All of&rdquo; includes the students below that unit.</p></div>
+              <AcademicPathPicker roots={directory} value={exportPathIds} purpose="registration" allowParentSelection
+                disabled={exporting} onChange={path => setExportPathIds(path.map(node => node.id))} />
+              <p className="text-xs text-slate-500 dark:text-slate-400">{!directory.length
+                ? 'No educational units are available. Add a unit in the academic directory before exporting.'
+                : selectedExportUnit ? `${exportRecords.length} attendance entries match this unit and your current filters.`
+                  : 'Select an educational unit to prepare your report.'}</p>
+            </section>
+            <section aria-labelledby="export-filters-heading" className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+              <h3 id="export-filters-heading" className="text-sm font-bold text-brand-900 dark:text-white">Current report scope</h3>
+              <dl className="mt-3 space-y-3 text-xs">
+                {[['Selected academic scope', exportPath.map(node => node.name).join(' / ') || 'Choose an academic unit'], ['Grade / year', reportAcademicLevel], ['Period', reportPeriod], ['Events', reportEventScope], ['Dashboard education filter', reportDashboardLevel], ['Additional filters', activeReportFilters || 'None']].map(([label, value]) => <div key={label}><dt className="font-semibold text-slate-500 dark:text-slate-400">{label}</dt><dd className="mt-0.5 break-words text-slate-800 dark:text-slate-200">{value}</dd></div>)}
+              </dl>
+              <p className="mt-3 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-500 dark:border-slate-700 dark:text-slate-400">The selected academic scope limits this report. Dashboard filters narrow it further; no additional restriction includes only students within your selection. Close this panel to change dashboard filters. Only students you are authorized to view are included.</p>
+            </section>
+            <section aria-labelledby="export-contents-heading" className="space-y-3">
+              <div><h3 id="export-contents-heading" className="text-sm font-bold text-brand-900 dark:text-white">2. Customize report contents</h3><p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Every report includes the school seal, generation time, student and entry totals, attendance rate, and a summary of all five statuses.</p></div>
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700"><input aria-label="Include Visualizations" disabled={exporting} checked={exportSettings.includeCharts} className="mt-0.5 h-4 w-4 shrink-0 accent-gold-500" onChange={event => setExportSettings({ ...exportSettings, includeCharts: event.target.checked })} type="checkbox" /><span><span className="block text-sm font-semibold text-brand-900 dark:text-white">Include Visualizations</span><span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">Compact bars show entry counts and percentages for the grouping you choose.</span></span></label>
+              <CustomSelect ariaLabel="Group data by" combobox label="Group visualization by" disabled={exporting || !exportSettings.includeCharts} onChange={value => setExportSettings({ ...exportSettings, groupBy: value as typeof exportSettings.groupBy })} options={[{ value: 'status', label: 'Attendance Status' }, { value: 'section', label: 'Section' }, { value: 'level', label: 'Level' }, { value: 'program', label: 'Program' }]} value={exportSettings.groupBy} />
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700"><input aria-label="Include Detailed Tables" disabled={exporting} checked={exportSettings.includeTables} className="mt-0.5 h-4 w-4 shrink-0 accent-gold-500" onChange={event => setExportSettings({ ...exportSettings, includeTables: event.target.checked })} type="checkbox" /><span><span className="block text-sm font-semibold text-brand-900 dark:text-white">Include Detailed Tables</span><span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">Lists each student's name, ID, event or session, status, section, level, and attendance date and time.</span></span></label>
+            </section>
+          </div>
+          <section aria-labelledby="export-preview-heading" className="min-w-0 space-y-3 lg:sticky lg:top-0 lg:self-start">
+            <div className="flex flex-wrap items-center justify-between gap-2"><h3 id="export-preview-heading" className="text-sm font-bold text-brand-900 dark:text-white">3. Preview your PDF</h3>{reportPreview.url && <a href={reportPreview.url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-gold-700 underline dark:text-gold-300">Open full preview</a>}</div>
+            <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">This is the PDF you will download. It updates when you change the unit or report contents.</p>
+            <dl aria-label="Export totals" className="grid grid-cols-3 gap-2">
+              {[['Students', selectedExportUnit ? reportStudentCount : '—'], ['Entries', selectedExportUnit ? exportRecords.length : '—'], ['Pages', reportPreview.pages || '—']].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-100 p-3 dark:bg-slate-900"><dt className="text-[11px] text-slate-500 dark:text-slate-400">{label}</dt><dd className="mt-1 text-lg font-bold text-brand-900 dark:text-white">{value}</dd></div>)}
+            </dl>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-900" aria-busy={reportPreview.loading}>
+              {reportPreview.url ? <iframe title="Attendance PDF preview" src={`${reportPreview.url}#toolbar=0&navpanes=0&view=FitH`} className="h-[460px] w-full sm:h-[580px]" />
+                : <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 p-6 text-center">
+                  <FileText size={32} className="text-slate-400" />
+                  {reportPreview.error ? <><p role="alert" className="text-sm text-red-700 dark:text-red-300">{reportPreview.error}</p><Button onClick={reportPreview.retry} variant="secondary" fullWidth={false}>Retry preview</Button></>
+                    : <p role="status" className="text-sm text-slate-500 dark:text-slate-400">{reportPreview.loading ? 'Preparing your PDF preview...' : 'Choose an educational unit to see your report here.'}</p>}
+                </div>}
+            </div>
+            {selectedExportUnit && exportRecords.length === 0 && <p role="status" className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">No attendance entries match this unit and your dashboard filters. The PDF will contain an empty report. Choose another unit or adjust your dashboard filters.</p>}
+            <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">A student can have several attendance entries across events and sessions. Attendance rate counts present, late, and excused entries. All dates and times use Asia/Manila (UTC+8). If your browser does not display the PDF here, use &ldquo;Open full preview.&rdquo;</p>
+          </section>
         </div>
       </Modal>
 

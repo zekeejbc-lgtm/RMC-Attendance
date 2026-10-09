@@ -73,6 +73,7 @@ vi.mock('../../lib/backend', () => ({
 
 afterEach(() => {
   cleanup();
+  localStorage.removeItem('iars.sidebar.collapsed');
   document.body.classList.remove('app-scroll-lock');
   restoreMatchMedia?.();
   restoreMatchMedia = undefined;
@@ -259,4 +260,23 @@ it('moves logout to the profile page and expands from the arrow beside the logo'
 
   await user.click(expandButton);
   expect(screen.getByRole('button', { name: /collapse sidebar/i })).toBeInTheDocument();
+});
+
+it('restores the collapsed preference and keeps navigation accessible', async () => {
+  localStorage.setItem('iars.sidebar.collapsed', 'true');
+  const user = userEvent.setup();
+  render(
+    <ThemeProvider>
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Layout><p>Dashboard content</p></Layout>
+      </MemoryRouter>
+    </ThemeProvider>,
+  );
+  const expand = screen.getByRole('button', { name: 'Expand sidebar' });
+  expect(expand).toHaveAttribute('aria-expanded', 'false');
+  const navigation = screen.getByRole('navigation', { name: 'Desktop navigation' });
+  expect(within(navigation).getByRole('button', { name: 'Home' })).toHaveAttribute('title', 'Home');
+  await user.click(expand);
+  expect(localStorage.getItem('iars.sidebar.collapsed')).toBe('false');
+  expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toHaveAttribute('aria-expanded', 'true');
 });

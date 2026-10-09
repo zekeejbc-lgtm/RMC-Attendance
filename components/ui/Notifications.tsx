@@ -8,7 +8,12 @@ import { formatManilaDateTime } from '../../lib/dateTime';
 import { loadNotifications, readNotifications, subscribeNotifications, type InboxNotice } from '../../lib/notifications';
 import { toast } from '../../lib/toast';
 
-export function Notifications() {
+interface NotificationsProps {
+  desktopContainer?: HTMLElement | null;
+  desktopCollapsed?: boolean;
+}
+
+export function Notifications({ desktopContainer, desktopCollapsed = false }: NotificationsProps) {
   const { profile } = useAuth();
   const uid = profile?.uid;
   const navigate = useNavigate();
@@ -69,13 +74,14 @@ export function Notifications() {
     finally { if (currentUid.current === uid) setSaving(false); }
   };
   const trigger = (desktop: boolean) => <button type="button" aria-label="Notifications" aria-haspopup="dialog" aria-expanded={open}
-    ref={desktop ? desktopBell : mobileBell} onClick={() => setOpen(value => !value)} className={`${desktop ? 'hidden md:inline-flex' : 'inline-flex md:hidden'} relative min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-gold-100 hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-400`}>
-    <Bell size={20} />
-    {unread > 0 && <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white ring-2 ring-brand-900" aria-label={`${unread} unread notifications`}>{unread > 99 ? '99+' : unread}</span>}
+    ref={desktop ? desktopBell : mobileBell} onClick={() => setOpen(value => !value)} className={`${desktop ? `hidden md:flex w-full gap-4 rounded-xl py-3 ${desktopCollapsed ? 'justify-center px-2' : 'px-4'}` : 'inline-flex md:hidden justify-center rounded-full'} relative min-h-11 min-w-11 shrink-0 items-center text-gold-100 hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-400`}>
+    <span className="relative shrink-0"><Bell size={desktop ? 22 : 20} />
+    {unread > 0 && <span className="absolute -right-2 -top-2 min-w-5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white ring-2 ring-brand-900" aria-label={`${unread} unread notifications`}>{unread > 99 ? '99+' : unread}</span>}</span>
+    {desktop && !desktopCollapsed && <span className="truncate text-sm font-medium">Notifications</span>}
   </button>;
   return <>
     {trigger(false)}
-    {createPortal(<div className="fixed right-4 top-3 z-40 hidden rounded-full bg-brand-900 shadow-md md:block">{trigger(true)}</div>, document.body)}
+    {desktopContainer ? createPortal(trigger(true), desktopContainer) : trigger(true)}
     <Modal open={open} onClose={() => setOpen(false)} title="Notifications" size="sm" anchor={anchor}
       bodyClassName="flex min-h-0 min-w-0 flex-col overflow-hidden"
       footer={<span className="text-xs text-slate-500 dark:text-slate-300">{unread} unread · {rows.length} total</span>}>

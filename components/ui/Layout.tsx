@@ -1,3 +1,4 @@
+import AttendanceConfirmation from '../attendance/AttendanceConfirmation';
 import { formatManilaDate } from '../../lib/dateTime';
 import ProfileAvatar from './ProfileAvatar';
 import type { AppPermission } from '../../types';
@@ -23,11 +24,20 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isDirectoryOpen, setIsDirectoryOpen] = useState(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('iars.sidebar.collapsed') === 'true'; }
+    catch { return false; }
+  });
+  const [desktopNotificationContainer, setDesktopNotificationContainer] = useState<HTMLDivElement | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileDrawerRef = useRef<HTMLElement>(null);
   const drawerWasOpen = useRef(false);
+
+  useEffect(() => {
+    try { localStorage.setItem('iars.sidebar.collapsed', String(isSidebarCollapsed)); }
+    catch { /* Navigation still works when browser storage is unavailable. */ }
+  }, [isSidebarCollapsed]);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -341,7 +351,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   return (
-    <div className={`min-h-dvh bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row transition-[padding] duration-base ease-standard ${
+    <div className={`app-sidebar-layout min-h-dvh bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col md:flex-row transition-[padding] duration-base ease-standard ${
       isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'
     }`}>
       <header className="md:hidden sticky top-0 z-40 min-h-14 bg-brand-900 text-white px-4 pt-[max(0.625rem,env(safe-area-inset-top))] pb-2.5 flex justify-between items-center shadow-md">
@@ -358,14 +368,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <div className="flex items-center gap-2.5 select-none">
-            <img src="https://i.imgur.com/K3T5yIT.jpeg" alt="IARS Academic Seal" className="w-8 h-8 rounded-full object-cover ring-2 ring-gold-400/50 shadow shrink-0" />
+            <img src={`${import.meta.env.BASE_URL}academic-seal-transparent.png`} alt="IARS Academic Seal" className="w-8 h-8 rounded-full bg-white object-contain p-0.5 ring-2 ring-gold-400/50 shadow shrink-0" />
             <h1 className="font-extrabold text-base tracking-tight text-white">IARS</h1>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle className="min-h-11 min-w-11" />
           {isMock && <span className="text-[8px] bg-gold-400/20 text-gold-400 px-2 py-0.5 rounded-full font-extrabold tracking-wider">LOCAL TEST</span>}
-          <Notifications />
+          <Notifications desktopContainer={desktopNotificationContainer} desktopCollapsed={isSidebarCollapsed} />
+          <AttendanceConfirmation />
         </div>
       </header>
 
@@ -374,7 +385,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           type="button"
           aria-label="Close navigation backdrop"
           onClick={() => setIsMobileMenuOpen(false)}
-          className="fixed inset-0 z-40 bg-brand-950/70 backdrop-blur-sm md:hidden"
+          className="app-navigation-backdrop fixed inset-0 z-40 bg-brand-950/70 backdrop-blur-sm md:hidden"
         />
       )}
 
@@ -386,11 +397,11 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           aria-modal="true"
           aria-label="Main navigation"
           onKeyDown={trapDrawerFocus}
-          className="fixed inset-y-0 left-0 z-50 w-72 max-w-[calc(100vw-env(safe-area-inset-left))] bg-brand-900 text-white border-r border-brand-800 shadow-2xl md:hidden flex flex-col pl-[env(safe-area-inset-left)]"
+          className="app-navigation-drawer fixed inset-y-0 left-0 z-50 w-72 max-w-[calc(100vw-env(safe-area-inset-left))] bg-brand-900 text-white border-r border-brand-800 shadow-2xl md:hidden flex flex-col pl-[env(safe-area-inset-left)]"
         >
           <div className="shrink-0 p-5 pt-[max(1.25rem,env(safe-area-inset-top))] border-b border-brand-800 flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <img src="https://i.imgur.com/K3T5yIT.jpeg" alt="IARS Academic Seal" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/60 shadow-lg" />
+              <img src={`${import.meta.env.BASE_URL}academic-seal-transparent.png`} alt="IARS Academic Seal" className="w-10 h-10 rounded-full bg-white object-contain p-0.5 ring-2 ring-gold-400/60 shadow-lg" />
               <div><h2 className="font-extrabold text-xl leading-none">IARS</h2><p className="text-emerald-400 text-[10px] font-semibold uppercase tracking-wider mt-1">Attendance &amp; Records</p></div>
             </div>
             <button type="button" aria-label="Close navigation" onClick={() => setIsMobileMenuOpen(false)} className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg text-gold-200 hover:text-white hover:bg-brand-800">
@@ -400,7 +411,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <nav aria-label="Main navigation" className="min-h-0 flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
             {allowedNavItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path || (item.path === '/ssg/panel' && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
+              const isActive = location.pathname === item.path || (item.path === '/ossa/dashboard' && location.pathname.startsWith('/ossa/dashboard/')) || (item.path === '/ssg/panel' && location.pathname === '/ssg/transfers') || (item.path === '/ssg/panel' && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
               return <button type="button" key={item.path} aria-current={isActive ? 'page' : undefined} onClick={() => navigateAndClose(item.path)} className={navButtonClass(isActive)}><Icon size={22} /><span className="font-medium text-sm">{item.label}</span></button>;
             })}
             {renderDirectory(true)}
@@ -415,20 +426,21 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </aside>
       )}
 
-      <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 z-30 bg-brand-900 text-white border-r border-brand-800 shadow-2xl transition-[width] duration-base ease-standard ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}>
+      <aside id="desktop-main-navigation" data-collapsed={isSidebarCollapsed} className={`app-desktop-sidebar hidden md:flex flex-col fixed inset-y-0 left-0 z-30 bg-brand-900 text-white border-r border-brand-800 shadow-2xl transition-[width] duration-base ease-standard ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}>
         <div className={`relative shrink-0 p-4 border-b border-brand-800 flex items-center justify-between ${isSidebarCollapsed ? 'overflow-visible' : 'overflow-hidden'}`}>
-          <div className="flex items-center gap-3 min-w-0"><img src="https://i.imgur.com/K3T5yIT.jpeg" alt="IARS Academic Seal" className="w-10 h-10 rounded-full object-cover ring-2 ring-gold-400/60 shadow-md shrink-0" />{!isSidebarCollapsed && <div className="min-w-0 truncate"><h2 className="font-extrabold text-lg leading-tight">IARS</h2><p className="text-emerald-400 text-[10px] font-semibold uppercase tracking-wider truncate">Attendance &amp; Records</p></div>}</div>
+          <div className="flex items-center gap-3 min-w-0"><img src={`${import.meta.env.BASE_URL}academic-seal-transparent.png`} alt="IARS Academic Seal" className="w-10 h-10 rounded-full bg-white object-contain p-0.5 ring-2 ring-gold-400/60 shadow-md shrink-0" /><div aria-hidden={isSidebarCollapsed} className="app-sidebar-label min-w-0 truncate"><h2 className="font-extrabold text-lg leading-tight">IARS</h2><p className="text-emerald-400 text-[10px] font-semibold uppercase tracking-wider truncate">Attendance &amp; Records</p></div></div>
           {!isSidebarCollapsed ? (
-            <button type="button" aria-label="Collapse sidebar" onClick={() => setIsSidebarCollapsed(true)} className="min-h-11 min-w-11 shrink-0 inline-flex items-center justify-center rounded-lg text-gold-200 hover:text-white hover:bg-brand-800"><PanelLeftClose size={18} /></button>
+            <button type="button" aria-label="Collapse sidebar" title="Collapse sidebar" aria-expanded={true} aria-controls="desktop-main-navigation" onClick={() => setIsSidebarCollapsed(true)} className="min-h-11 min-w-11 shrink-0 inline-flex items-center justify-center rounded-lg text-gold-200 hover:text-white hover:bg-brand-800"><PanelLeftClose size={18} /></button>
           ) : (
-            <button type="button" aria-label="Expand sidebar" onClick={() => setIsSidebarCollapsed(false)} className="absolute right-0 top-1/2 z-10 inline-flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-gold-400/50 bg-brand-900 text-gold-300 shadow-md transition-colors hover:bg-brand-800 hover:text-white"><ChevronRight size={15} strokeWidth={2.5} /></button>
+            <button type="button" aria-label="Expand sidebar" title="Expand sidebar" aria-expanded={false} aria-controls="desktop-main-navigation" onClick={() => setIsSidebarCollapsed(false)} className="absolute right-0 top-1/2 z-10 inline-flex h-8 w-8 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-gold-400/50 bg-brand-900 text-gold-300 shadow-md transition-colors hover:bg-brand-800 hover:text-white"><ChevronRight size={15} strokeWidth={2.5} /></button>
           )}
         </div>
+        <div ref={setDesktopNotificationContainer} className="shrink-0 px-3 pt-3" />
         <nav aria-label="Desktop navigation" className="min-h-0 flex-1 p-3 mt-2 space-y-2 overflow-y-auto custom-scrollbar">
           {allowedNavItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path || (item.path === '/ssg/panel' && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
-            return <button type="button" key={item.path} aria-label={isSidebarCollapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined} onClick={() => navigate(item.path)} className={navButtonClass(isActive, isSidebarCollapsed)}><Icon size={22} />{!isSidebarCollapsed && <span className="truncate font-medium text-sm">{item.label}</span>}</button>;
+            const isActive = location.pathname === item.path || (item.path === '/ossa/dashboard' && location.pathname.startsWith('/ossa/dashboard/')) || (item.path === '/ssg/panel' && location.pathname === '/ssg/transfers') || (item.path === '/ssg/panel' && location.pathname.startsWith('/organizations/') && hasPermission(role, 'directory.manage_structure'));
+            return <button type="button" key={item.path} aria-label={item.label} title={isSidebarCollapsed ? item.label : undefined} aria-current={isActive ? 'page' : undefined} onClick={() => navigate(item.path)} className={`app-sidebar-link ${navButtonClass(isActive, isSidebarCollapsed)}`}><Icon size={22} className="shrink-0" /><span aria-hidden={isSidebarCollapsed} className="app-sidebar-label truncate font-medium text-sm">{item.label}</span></button>;
           })}
           {isSidebarCollapsed && hasDirectory ? <div className="pt-4 mt-4 border-t border-brand-800/80 space-y-2">{canViewAttendance && <button type="button" aria-label="Attendance dashboard" aria-current={location.pathname === '/admin/attendance' ? 'page' : undefined} onClick={() => navigate('/admin/attendance')} className={navButtonClass(location.pathname === '/admin/attendance', true)}><BarChart3 size={22} /></button>}{role === 'admin' && <button type="button" aria-label="System Controls" aria-current={location.pathname.startsWith('/admin/controls') ? 'page' : undefined} onClick={() => navigate('/admin/controls')} className={navButtonClass(location.pathname.startsWith('/admin/controls'), true)}><Sliders size={22} /></button>}</div> : renderDirectory()}
         </nav>

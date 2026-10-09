@@ -4,8 +4,10 @@ export const NAVIGATION_PREFIX = 'rmc:navigation:v1:';
 // still survive a refresh through their URL, but Back never reopens them.
 export function isReturnDestination(url: string): boolean {
   const path = url.split('?')[0];
+  if (/^\/ossa\/dashboard\/(activities|requests|sanctions|excuses|analytics|organizations)$/.test(path)) return true;
   if (/^\/(dashboard|student\/(qr|events|ceremonies|records|profile)|mayor\/scan|ssg\/(panel|events)|admin\/(attendance|controls)|ossa\/dashboard|organizations)$/.test(path)) return true;
   if (/\/(create|edit|public)$/.test(path)) return false;
+  if (/^\/ssg\/panel\/students\/[a-z0-9_-]+$/i.test(path)) return true;
   return /^\/(student|ssg)\/events\/[a-z0-9_-]+$/i.test(path)
     || /^\/organizations\/[a-z0-9_-]+(\/events\/[a-z0-9_-]+)?$/i.test(path);
 }

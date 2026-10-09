@@ -3,6 +3,7 @@ import { act, render, screen, waitFor, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({ rpc: vi.fn(), select: vi.fn(), onAuthStateChange: vi.fn(), assurance: vi.fn(), restoreOffline: vi.fn(), restoreActive: vi.fn(), clearRosters: vi.fn(), syncOffline: vi.fn(), autoRosters: vi.fn(), signOut: vi.fn(), refreshProfiles: vi.fn() }));
+vi.mock('../lib/liveAttendance', () => ({ subscribeAttendance: () => () => {} }));
 vi.mock('../lib/autoRosterSync', () => ({ refreshAutomaticRosters: api.autoRosters }));
 vi.mock('../lib/offlineAttendance', () => ({ restoreActiveOfflineScanner: api.restoreActive, restoreOfflineScanner: api.restoreOffline, clearOfflineRosters: api.clearRosters, syncOfflineAttendance: api.syncOffline, refreshCachedRosterProfiles: api.refreshProfiles }));
 vi.mock('../lib/supabase', () => ({

@@ -26,7 +26,7 @@ const PublicHeader: React.FC<PublicHeaderProps> = ({ onSection, onLogin }) => {
   return <header className={`fixed top-0 left-0 right-0 z-40 transition-all duration-base ${scrolled ? 'bg-white/85 dark:bg-slate-900/85 backdrop-blur-md shadow-sm py-4 border-b border-slate-200/50 dark:border-slate-800/50' : 'bg-transparent py-6'}`}>
     <nav aria-label="Main navigation" className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 sm:flex-nowrap sm:px-6">
       <button type="button" className="flex min-w-0 items-center gap-2 text-left sm:gap-3" onClick={() => openSection('home')} aria-label="IARS home">
-        <img src={`${import.meta.env.BASE_URL}academic-seal.jpeg`} alt="IARS Academic Seal" className="w-10 h-10 rounded-full object-cover shadow-lg ring-2 ring-gold-400/50 hover:scale-105 transition-transform shrink-0" />
+        <img src={`${import.meta.env.BASE_URL}academic-seal-transparent.png`} alt="IARS Academic Seal" className="w-10 h-10 rounded-full object-contain p-0.5 shadow-lg ring-2 ring-gold-400/50 hover:scale-105 transition-transform shrink-0" />
         <span className="min-w-0">
           <span className="block font-black uppercase tracking-tighter leading-none text-brand-900 dark:text-white text-base">IARS</span>
           <span className="hidden text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400 sm:block">Attendance & Records System</span>

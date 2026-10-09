@@ -1,9 +1,9 @@
-import { formatManilaDateTime, formatClockTime } from '../../lib/dateTime';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import Button from '../ui/Button';
-import { Surface } from '../ui/Page';
+import ApprovalQueue, { approvalControl, approvalLabel } from '../ui/ApprovalQueue';
+import ActivityRequestDetails, { activityRequester } from './ActivityRequestDetails';
 import { Modal } from '../ui/Modal';
 import { appData } from '../../lib/backend';
 import { hasPermission } from '../../lib/accessControl';
@@ -26,42 +26,32 @@ export default function ActivityApprovalQueue({ purpose }: { purpose?: 'event' |
   const canReview = (event: AppEvent) => reviewer && event.created_by !== profile.uid
     && event.approvalStatus === 'pending' && canManageEventInScope(profile, event, appData.getSchoolStructure());
   const review = async (decision: 'approved' | 'rejected') => {
-    if (!selected || busy) return;
+    if (!selected || busy || !canReview(selected) || (decision === 'rejected' && !notes.trim()) || (decision === 'approved' && selected.startTime <= Date.now())) return;
     setBusy(true); setError('');
-    try { await appData.reviewEvent(selected.id, decision, notes); setSelectedId(null); }
+    try { await appData.reviewEvent(selected.id, decision, notes.trim()); setSelectedId(null); }
     catch (err) { setError(err && typeof err === 'object' && 'message' in err ? String(err.message) : 'Unable to save decision.'); }
     finally { setBusy(false); }
   };
   if (!requests.length && !reviewer) return null;
-  return <Surface className="space-y-4 p-4 sm:p-6" aria-label="OSSA activity approvals">
-    <div><h2 className="text-lg font-bold">Event &amp; ceremony approvals</h2><p className="text-sm text-slate-500">Submitted → OSSA review → Approved → Active at the scheduled time</p></div>
-    <p className="text-sm font-semibold">{requests.filter(event => event.approvalStatus === 'pending').length} pending review</p>
-    {!requests.length && <p className="text-sm text-slate-500">No activity requests to review.</p>}
-    <div className="grid gap-3 md:grid-cols-2">{requests.map(event => <article key={event.id} className="space-y-2 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-      <h3 className="font-bold">{event.title}</h3>
-      <p className="text-sm">{event.kind === 'flag_ceremony' ? 'Ceremony' : 'Event'} · {formatManilaDateTime(event.startTime)}</p>
-      <p className={`text-sm font-bold ${event.approvalStatus === 'approved' ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>{event.approvalStatus === 'pending' ? 'Pending OSSA review · Inactive' : event.approvalStatus === 'rejected' ? 'Rejected · Inactive' : event.status === 'active' ? 'OSSA approved · Active' : 'OSSA approved · Scheduled'}</p>
-      {event.reviewNotes && <p className="text-sm">OSSA feedback: {event.reviewNotes}</p>}
-      <div className="flex flex-wrap gap-2"><Button fullWidth={false} variant="secondary" onClick={() => { setSelectedId(event.id); setNotes(''); setError(''); }}>{canReview(event) ? 'Review request' : 'View request'}</Button>
-        {event.approvalStatus !== 'approved' && hasPermission(profile.role, 'events.manage') && canManageEventInScope(profile, event, appData.getSchoolStructure()) && <Button fullWidth={false} variant="secondary" onClick={() => navigate(event.organizationId ? `/organizations/${event.organizationId}/events/${event.id}/edit` : `/ssg/${event.kind === 'flag_ceremony' ? 'ceremonies' : 'events'}/${event.id}/edit`)}>Edit request</Button>}</div>
-    </article>)}</div>
-    <Modal open={Boolean(selected)} onClose={() => { if (!busy) setSelectedId(null); }} title={selected?.title || 'Activity request'} description="Review the activity before it becomes available for attendance." size="lg">
+  return <>
+    <ApprovalQueue collapsible title={purpose === 'event' ? 'Event approvals' : purpose === 'ceremony' ? 'Ceremony approvals' : 'Event & ceremony approvals'} description="Open a request to review its schedule, recipients, attendance rules, and supporting details."
+      rows={requests.map(event => {
+        const requester = activityRequester(event.created_by);
+        return { id: event.id, title: event.title, status: event.approvalStatus || 'pending', type: event.kind === 'flag_ceremony' ? 'ceremony' : 'event',
+          subtitle: `Requested by ${requester.name}`,
+          searchText: `${event.description || ''} ${requester.name} ${requester.identity} ${event.organizationId ? appData.getOrganizations().find(org => org.id === event.organizationId)?.name || '' : ''}` };
+      })}
+      types={purpose ? undefined : [{ value: 'event', label: 'Events' }, { value: 'ceremony', label: 'Ceremonies' }]}
+      onOpen={row => { setSelectedId(row.id); setNotes(''); setError(''); }} emptyMessage="No activity requests match your filters." />
+    <Modal open={Boolean(selected)} onClose={() => { if (!busy) setSelectedId(null); }} title={selected?.title || 'Activity request'} description="Review the activity before it becomes available for attendance." size="lg" footer={selected && canReview(selected) ? <><Button variant="danger" disabled={busy || !notes.trim()} onClick={() => review('rejected')}>Reject</Button><Button variant="gold" disabled={busy || selected.startTime <= Date.now()} onClick={() => review('approved')}>{busy ? 'Saving…' : 'Approve'}</Button></> : undefined}>
       {selected && <div className="space-y-4 text-sm">
-        <p>{selected.description || 'No description provided.'}</p>
-        <dl className="grid gap-3 sm:grid-cols-2"><div><dt className="font-bold">Schedule</dt><dd>{formatManilaDateTime(selected.startTime)} – {formatManilaDateTime(selected.endTime)}</dd></div>
-          <div><dt className="font-bold">Recipients</dt><dd>{selected.recipientGroups?.join(', ') || selected.targetValue || selected.participantsType}</dd></div>
-          <div><dt className="font-bold">Late sanction</dt><dd>{selected.sanctionRules?.late.value || 0} {selected.sanctionRules?.late.unit || 'hours'}</dd></div>
-          <div><dt className="font-bold">Absent sanction</dt><dd>{selected.sanctionRules?.absent.value ?? selected.penaltyValue} {selected.sanctionRules?.absent.unit || selected.penaltyUnit}</dd></div>
-          <div><dt className="font-bold">Attendance windows</dt><dd>{selected.attendanceWindows?.map(window => `${formatClockTime(window.timeIn)}–${formatClockTime(window.timeOut)}`).join(', ') || 'Scheduled duration'}</dd></div>
-          <div><dt className="font-bold">Geofence</dt><dd>{selected.geofenceEnabled ? `${selected.location.radius_meters} meters (${selected.location.lat}, ${selected.location.lng})` : 'Disabled'}</dd></div>
-        </dl>
-        {selected.ceremony && <p>Exempt students: {selected.ceremony.exemptStudentIds.length}. Class schedules: {Object.keys(selected.ceremony.classWindows).length}. Volunteer merit: {selected.ceremony.allowVolunteerMerit ? `${selected.ceremony.volunteerMeritHours} hours` : 'Disabled'}.</p>}
-        {selected.reviewNotes && <p>OSSA feedback: {selected.reviewNotes}</p>}
-        {canReview(selected) && <><label className="block font-bold" htmlFor="activity-review-notes">Decision notes (required for rejection)</label><textarea id="activity-review-notes" className="app-control w-full" rows={3} maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} />
+        <ActivityRequestDetails event={selected} />
+        {canReview(selected) && <><label className={approvalLabel} htmlFor="activity-review-notes">Decision notes (required for rejection)</label><textarea id="activity-review-notes" className={approvalControl} rows={3} maxLength={2000} disabled={busy} value={notes} onChange={event => setNotes(event.target.value)} />
           {selected.startTime <= Date.now() && <p className="text-amber-700">The author must reschedule this activity before approval.</p>}
           {error && <p role="alert" className="text-red-600">{error}</p>}
-          <div className="flex gap-3"><Button variant="danger" disabled={busy || !notes.trim()} onClick={() => review('rejected')}>Reject</Button><Button variant="gold" disabled={busy || selected.startTime <= Date.now()} onClick={() => review('approved')}>Approve</Button></div></>}
+        </>}
       </div>}
+        {selected && selected.approvalStatus !== 'approved' && hasPermission(profile.role, 'events.manage') && canManageEventInScope(profile, selected, appData.getSchoolStructure()) && <Button fullWidth={false} variant="secondary" disabled={busy} onClick={() => navigate(selected.organizationId ? `/organizations/${selected.organizationId}/events/${selected.id}/edit` : `/ssg/${selected.kind === 'flag_ceremony' ? 'ceremonies' : 'events'}/${selected.id}/edit`)}>Edit request</Button>}
     </Modal>
-  </Surface>;
+  </>;
 }

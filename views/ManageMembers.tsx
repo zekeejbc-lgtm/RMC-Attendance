@@ -1,3 +1,5 @@
+import RecordPagination from '../components/ui/RecordPagination';
+import { usePagination } from '../components/usePagination';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
@@ -242,25 +244,27 @@ const ManageMembers: React.FC = () => {
     }
   };
 
+  const isSection = currentNode?.type === 'section' || currentNode?.type === 'block';
+  const sectionMembers = currentNode && isSection
+    ? appData.getStudentsBySection(currentNode.name, currentNode.id) as Array<UserProfile & { stats?: { sanction_hours: number } }>
+    : [];
+  const filteredMembers = sectionMembers.filter((member) => {
+    const query = memberSearch.trim().toLowerCase();
+    const matchesQuery = !query || [member.name, member.email, member.student_id, member.username]
+      .some((value) => (value || '').toLowerCase().includes(query));
+    return matchesQuery && (memberRole === 'all' || member.role === memberRole);
+  }).sort((a, b) => a.name.localeCompare(b.name) || a.uid.localeCompare(b.uid));
+  const memberPage = usePagination(filteredMembers, JSON.stringify([currentNode?.id, memberSearch, memberRole]));
+
   if (!currentNode) return <Page><p>Loading directory…</p></Page>;
 
   const childType = getChildType(currentNode.type, currentNode.name);
-  const isSection = currentNode.type === 'section' || currentNode.type === 'block';
   const canManageStructure = hasPermission(profile?.role, 'directory.manage_structure') && hasPermission(profile?.role, 'directory.create_units');
   const canAddMembersManually = hasPermission(profile?.role, 'directory.add_members_manually', appData.getCustomRoles(), appData.getCoreRoles());
   const canChangeDesignation = hasPermission(profile?.role, 'directory.change_member_designation', appData.getCustomRoles(), appData.getCoreRoles());
 
   // Determine if we need to ask for specific types (e.g. Major vs Level)
   const needsTypeSelection = ['program', 'strand'].includes(currentNode.type);
-  const sectionMembers = isSection
-    ? appData.getStudentsBySection(currentNode.name, currentNode.id) as Array<UserProfile & { stats?: { sanction_hours: number } }>
-    : [];
-  const filteredMembers = sectionMembers.filter((member) => {
-    const query = memberSearch.trim().toLowerCase();
-    const matchesQuery = !query || [member.name, member.email, member.student_id, member.username]
-      .some((value) => value.toLowerCase().includes(query));
-    return matchesQuery && (memberRole === 'all' || member.role === memberRole);
-  });
 
   return (
     <Page>
@@ -329,11 +333,11 @@ const ManageMembers: React.FC = () => {
               <>
                 <div className="hidden overflow-x-auto md:block">
                   <table aria-label={`${currentNode.name} member registry`} className="w-full text-left text-sm">
-                    <thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-300">
+                    <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300">
                       <tr><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Student ID</th><th className="p-3">Role</th><th className="p-3 text-right">Mayor</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                      {filteredMembers.map((member) => (
+                      {memberPage.visible.map((member) => (
                         <tr key={member.uid}>
                           <td className="p-3 font-semibold text-brand-900 [overflow-wrap:anywhere] dark:text-white">{member.name}</td>
                           <td className="p-3 text-slate-600 [overflow-wrap:anywhere] dark:text-slate-300">{member.email}</td>
@@ -352,7 +356,7 @@ const ManageMembers: React.FC = () => {
                   </table>
                 </div>
                 <div className="grid gap-3 md:hidden">
-                  {filteredMembers.map((member) => (
+                  {memberPage.visible.map((member) => (
                     <article aria-label={member.name} className="mobile-data-card space-y-3" key={member.uid}>
                       <h3 className="font-bold text-brand-900 [overflow-wrap:anywhere] dark:text-white">{member.name}</h3>
                       <dl className="grid gap-3 text-sm">
@@ -370,6 +374,7 @@ const ManageMembers: React.FC = () => {
                 </div>
               </>
             )}
+            <RecordPagination {...memberPage} label="Member registry pagination" />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

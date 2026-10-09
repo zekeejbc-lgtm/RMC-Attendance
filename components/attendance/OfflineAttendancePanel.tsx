@@ -42,7 +42,15 @@ export default function OfflineAttendancePanel({ owner, eventId, event, data }: 
     return () => window.clearInterval(timer);
   }, [eventId]);
   const unavailableReason = event ? offlineRosterUnavailableReason(event, now) : undefined;
-  const roster = data.rosters.find(item => item.event.id === eventId && Date.now() + item.clockOffset <= item.captureUntil);
+  const roster = data.rosters.filter(item => item.event.id === eventId && now + item.clockOffset <= item.captureUntil)
+    .sort((a, b) => b.preparedAt - a.preparedAt)[0];
+  const rosterTime = now + (roster?.clockOffset || 0);
+  const readinessReason = data.error ? 'Offline storage is unavailable. Resolve the storage error before going offline.'
+    : unavailableReason || (roster ? offlineRosterUnavailableReason(roster.event, rosterTime) : undefined)
+    || (!roster ? 'Download or refresh this event’s roster while online.'
+      : rosterTime < roster.preparedAt ? 'Device time has changed. Reconnect and refresh this roster.'
+      : rosterTime < roster.event.startTime ? 'Roster saved. Offline capture opens when this event starts.'
+      : rosterTime > roster.event.endTime ? 'This event has ended.' : undefined);
   const pending = data.queue.filter(item => item.state === 'pending').length;
   const rejected = data.queue.filter(item => item.state === 'rejected').length;
   const confirmed = data.queue.filter(item => item.state === 'synced').length;
@@ -62,6 +70,12 @@ export default function OfflineAttendancePanel({ owner, eventId, event, data }: 
     {data.online && <p className="text-xs text-slate-500">Authorized event rosters refresh automatically while the app is open. Check that this event is saved before going offline.</p>}
     <p role="status" className="text-sm">{data.online ? 'Online' : 'Offline'} · {pending} pending sync · {rejected} need review · {confirmed} confirmed</p>
     {eventId && <>
+      <div className={`rounded-xl border p-3 text-sm ${readinessReason ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100' : 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100'}`} role="status">
+        <p className="font-semibold">{readinessReason ? 'Offline attendance is not ready' : 'Ready for offline attendance'}</p>
+        <p>{readinessReason || 'This event’s roster is saved on this device. Offline scans remain pending until the server confirms them.'}</p>
+        {roster && <p className="mt-1">Last roster refresh: {formatManilaDateTime(roster.preparedAt)}</p>}
+        <p className="mt-1">{pending} scans pending sync{rejected ? ` · ${rejected} need review` : ''} across your events.</p>
+      </div>
       <p className="text-sm">{roster ? `${roster.students.length} students saved on this device. Prepared ${formatManilaDateTime(roster.preparedAt)}. Capture until ${formatManilaDateTime(roster.captureUntil)}; sync by ${formatManilaDateTime(roster.syncUntil)}.` : 'Download this event’s roster while online before taking offline attendance.'}</p>
       {unavailableReason && <p role="status" className="text-sm text-slate-600">{unavailableReason}</p>}
       <Button variant="secondary" disabled={!owner || !data.online || working || Boolean(unavailableReason)} onClick={() => owner && (!event || !offlineRosterUnavailableReason(event)) && void act(() => prepareOfflineAttendance(owner, eventId))}>{roster ? 'Refresh offline roster' : 'Download offline roster'}</Button>

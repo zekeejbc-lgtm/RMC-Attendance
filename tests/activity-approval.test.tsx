@@ -1,6 +1,6 @@
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ActivityApprovalQueue from '../components/events/ActivityApprovalQueue';
 import { DEFAULT_CORE_ROLES, hasPermission } from '../lib/accessControl';
@@ -9,9 +9,10 @@ import { AppEvent, UserProfile } from '../types';
 
 const state = vi.hoisted(() => ({ role: 'ssg', events: [] as AppEvent[], review: vi.fn() }));
 vi.mock('../components/AuthContext', () => ({ useAuth: () => ({ profile: { uid: state.role, role: state.role, official_data: { assignment_node_id: 'school' }, school_data: {} }, revision: 1 }) }));
-vi.mock('../lib/backend', () => ({ appData: { getVisibleEvents: () => state.events, getSchoolStructure: () => [{ id: 'school', name: 'School', type: 'school' }], reviewEvent: state.review } }));
+vi.mock('../lib/backend', () => ({ appData: { getUserDetail: () => null, getOrganizations: () => [], getEvents: () => state.events, getVisibleEvents: () => state.events, getSchoolStructure: () => [{ id: 'school', name: 'School', type: 'school' }], reviewEvent: state.review } }));
 const event = (): AppEvent => ({ id: 'event', title: 'SSG Assembly', kind: 'attendance', created_by: 'ssg', scopeNodeId: 'school', requiresOssaApproval: true, approvalStatus: 'pending', status: 'pending', startTime: Date.now() + 86400000, endTime: Date.now() + 90000000, participantsType: 'all', target: { all: true }, penaltyValue: 1, penaltyUnit: 'hours', location: { lat: 0, lng: 0, radius_meters: 0 }, timestamp: Date.now() });
 const show = () => render(<MemoryRouter><ActivityApprovalQueue /></MemoryRouter>);
+afterEach(cleanup);
 
 describe('Activity approval workflow', () => {
   beforeEach(() => { state.role = 'ssg'; state.events = [event()]; state.review.mockReset().mockResolvedValue(true); });
@@ -30,13 +31,13 @@ describe('Activity approval workflow', () => {
   });
   it('shows SSG progress without approval controls', () => {
     show();
-    expect(screen.getByText('Pending OSSA review · Inactive')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'View request' }));
+    expect(screen.getByRole('button', { name: /1 pending/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'SSG Assembly' }));
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
   });
   it('lets OSSA review and requires a rejection reason', async () => {
     state.role = 'ossa'; show();
-    fireEvent.click(screen.getByRole('button', { name: 'Review request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SSG Assembly' }));
     expect(screen.getByRole('button', { name: 'Reject' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Decision notes (required for rejection)'), { target: { value: 'Change venue' } });
     fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
@@ -44,11 +45,12 @@ describe('Activity approval workflow', () => {
   });
   it('prevents OSSA from approving its own submission', () => {
     state.role = 'ossa'; state.events[0].created_by = 'ossa'; show();
-    expect(screen.queryByRole('button', { name: 'Review request' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'SSG Assembly' }));
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
   });
   it('shows review errors and keeps the request open', async () => {
     state.role = 'ossa'; state.review.mockRejectedValue(new Error('This request is no longer pending.')); show();
-    fireEvent.click(screen.getByRole('button', { name: 'Review request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SSG Assembly' }));
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('This request is no longer pending.');
   });

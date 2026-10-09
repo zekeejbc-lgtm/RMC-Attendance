@@ -1,3 +1,4 @@
+import { subscribeAttendance } from '../lib/liveAttendance';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserProfile, UserStats } from '../types';
 import { appAuth, appData, refreshData, resetData, subscribeData } from '../lib/backend';
@@ -105,7 +106,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           welcomePending = null;
           toast.success(`Welcome back, ${account.profile.name}! Open the notification bell for your latest updates.`);
         }
-        setState(s => ({ ...s, loading: false, error: null, offlineScanner: false }));
+        // Publish the loaded profile together with readiness so route guards never
+        // mistake an account still being hydrated for an admission applicant.
+        setState(s => ({ ...s, profile: account?.profile.account_status === 'active' ? account.profile : null, stats: account?.stats || null, loading: false, error: null, offlineScanner: false }));
         if (identity) void syncOfflineAttendance(identity).catch(error => {
           if (!disposed) console.warn('Attendance remains on this device until synchronization succeeds.', error instanceof Error ? error.message : 'Sync unavailable.');
         });
@@ -159,6 +162,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (configurationError) failed(new Error(configurationError));
     return () => { disposed = true; idleSession.dispose(); clearInterval(poll); clearInterval(rosterPoll); subscription.unsubscribe(); unsubscribeData(); window.removeEventListener('focus', onFocus); window.removeEventListener('online', onFocus); window.removeEventListener('unhandledrejection', onRejection); window.removeEventListener('rmc_sync_error', onSyncError); };
   }, []);
+  useEffect(() => {
+    if (!state.profile?.uid || state.offlineScanner) return;
+    let disposed = false;
+    let refreshing = false;
+    let pending = false;
+    const refresh = async () => {
+      if (refreshing) { pending = true; return; }
+      refreshing = true;
+      try { await refreshData(); } catch { /* Periodic refresh retries after connection recovery. */ }
+      finally { refreshing = false; if (pending && !disposed) { pending = false; void refresh(); } }
+    };
+    const unsubscribe = subscribeAttendance(state.profile.uid, () => { if (!disposed) void refresh(); });
+    return () => { disposed = true; unsubscribe(); };
+  }, [state.profile?.uid, state.offlineScanner]);
   return <AuthContext.Provider value={{ ...state, markApprovalNoticeSeen: () => setState(s => ({ ...s, approvalNoticeSeen: true })) }}>
     {state.error && <div role="alert" className="border-b border-red-300 bg-red-50 p-3 text-sm text-red-900">{state.error} <button className="underline" onClick={() => window.location.reload()}>Retry connection</button></div>}
     {challenge ? <AuthChallenge recovery={challenge === 'recovery'} onComplete={() => { setChallenge(null); void refreshData(); }} /> : children}

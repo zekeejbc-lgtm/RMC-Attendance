@@ -19,7 +19,9 @@ import { Modal } from '../components/ui/Modal';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { Collapsible } from '../components/ui/Collapsible';
 import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
+import InstallAppSettings from '../components/ui/InstallAppSettings';
 import PasskeySettings from '../components/PasskeySettings';
+import ProfileRequests from '../components/members/ProfileRequests';
 
 const StudentProfile: React.FC = () => {
   const { profile, isMock } = useAuth();
@@ -324,8 +326,10 @@ const StudentProfile: React.FC = () => {
       </Surface>
 
       <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-        Name, {isStudent ? 'student ID and academic assignment' : 'official ID, body and access role'} are verified institutional records. They are visible here but can only be changed by an authorized administrator.
+        Name, {isStudent ? 'student ID and academic assignment' : 'official ID, body and access role'} are verified institutional records. {isStudent ? 'Submit information corrections below for OSSA or admin approval.' : 'They can only be changed by an authorized administrator.'}
       </p>
+
+      <ProfileRequests />
 
       {/* GRID: PERSONAL INFO EDIT & SECURITY TOGGLES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -336,7 +340,7 @@ const StudentProfile: React.FC = () => {
             <h3 className="text-xs font-bold text-brand-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
               <User size={15} className="text-gold-600 dark:text-gold-400" /> Contact Details
             </h3>
-            {!isEditingContacts ? (
+            {!isEditingContacts && !isStudent ? (
               <Button aria-label="Edit contact details" className="!w-auto" onClick={() => setIsEditingContacts(true)} size="sm" variant="secondary">
                 <Pencil size={14} /> Edit
               </Button>
@@ -388,6 +392,7 @@ const StudentProfile: React.FC = () => {
         {/* RIGHT: SECURITY & TOGGLES */}
         <div className="space-y-6">
 
+          <InstallAppSettings />
           <PasskeySettings />
 
           {/* PASSWORD RESET TOGGLE */}

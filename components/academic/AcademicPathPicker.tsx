@@ -10,6 +10,7 @@ interface AcademicPathPickerProps {
   includeArchived?: boolean;
   className?: string;
   allowParentSelection?: boolean;
+  disabled?: boolean;
 }
 
 const visibleNodes = (nodes: SchoolNode[], purpose: AcademicPathPickerProps['purpose'], includeArchived: boolean) =>
@@ -20,7 +21,7 @@ const visibleNodes = (nodes: SchoolNode[], purpose: AcademicPathPickerProps['pur
     return true;
   });
 
-export function AcademicPathPicker({ roots, value, onChange, purpose = 'any', includeArchived = false, className = '', allowParentSelection = false }: AcademicPathPickerProps) {
+export function AcademicPathPicker({ roots, value, onChange, purpose = 'any', includeArchived = false, className = '', allowParentSelection = false, disabled = false }: AcademicPathPickerProps) {
   const levels: Array<{ options: SchoolNode[]; selected?: SchoolNode }> = [];
   let options = visibleNodes(roots, purpose, includeArchived);
   let depth = 0;
@@ -49,6 +50,7 @@ export function AcademicPathPicker({ roots, value, onChange, purpose = 'any', in
           <CustomSelect
             key={`${index}-${selectedPath[index - 1]?.id || 'root'}`}
             label={label}
+            disabled={disabled}
             onChange={(id) => selectAt(index, id as string)}
             options={[...parentOption, ...levelOptions.map((node) => ({
               value: node.id,

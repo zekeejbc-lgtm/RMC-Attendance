@@ -118,13 +118,13 @@ export const Backdrop: React.FC<{ light?: boolean }> = ({ light = false }) => {
 };
 export const Seal: React.FC<{ size?: number }> = ({ size = 64 }) => (
   <Img
-    src={staticFile("assets/academic-seal.jpeg")}
+    src={staticFile("assets/academic-seal-transparent.png")}
     style={{
       width: size,
       height: size,
       borderRadius: "50%",
-      objectFit: "cover",
-      background: "white",
+      objectFit: "contain",
+      background: "transparent",
       border: "2px solid #FFD700",
       padding: 3,
     }}

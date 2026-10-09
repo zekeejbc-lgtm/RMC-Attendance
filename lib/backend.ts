@@ -214,7 +214,8 @@ export async function uploadDocument(file: File, kind: string) {
 }
 export async function documentUrl(path: string) {
   if (!path.startsWith('storage://')) return publicDriveImageUrl(path);
-  const { data, error } = await supabase.storage.from('rmc-documents').createSignedUrl(path.slice(10), 300);
+  const objectPath = path.slice(10).replace(/^rmc-documents\//, '');
+  const { data, error } = await supabase.storage.from('rmc-documents').createSignedUrl(objectPath, 300);
   if (error) throw error; return data.signedUrl;
 }
 

@@ -3,8 +3,8 @@ import path from "node:path";
 const root = path.resolve(import.meta.dirname, "..");
 await fs.mkdir(path.join(root, "public/assets"), { recursive: true });
 await fs.copyFile(
-  path.join(root, "../public/academic-seal.jpeg"),
-  path.join(root, "public/assets/academic-seal.jpeg"),
+  path.join(root, "../public/academic-seal-transparent.png"),
+  path.join(root, "public/assets/academic-seal-transparent.png"),
 );
 for (const [file, url] of [
   [

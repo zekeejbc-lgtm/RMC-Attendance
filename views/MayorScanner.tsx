@@ -2,6 +2,7 @@ import { eventDisplayTitle } from '../lib/eventGroups';
 import { toast } from '../lib/toast';
 import { GeofenceMap } from '../components/events/GeofenceMap';
 import ScannerAvatar from '../components/attendance/ScannerAvatar';
+import AttendanceSchedule from '../components/attendance/AttendanceSchedule';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
@@ -46,6 +47,13 @@ const MayorScanner: React.FC = () => {
   const [events, setEvents] = useState<AppEvent[]>([]);
   const [tab, setTab] = useState<EventGroup>('current');
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!selectedEvent) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [selectedEvent?.id]);
   const [location, setLocation] = useState<GeolocationCoordinates | null>(null);
   const [locationError, setLocationError] = useState('');
   const [locating, setLocating] = useState(false);
@@ -440,16 +448,27 @@ const MayorScanner: React.FC = () => {
       </Surface>
 
       <OfflineAttendancePanel owner={profile?.uid} data={offline} />
-      <Modal open={Boolean(selectedEvent)} onClose={() => setSelectedEvent(null)} title={selectedEvent?.title || 'Event'} description="Confirm that you are within the authorized attendance area." size="xl" footer={<><Button variant="secondary" onClick={() => setSelectedEvent(null)}>Close</Button><Button variant="gold" onClick={enterScanner} disabled={!insideGeofence || groupEvent(selectedEvent!) !== 'current' || (!offline.online && !preparedRoster)}><ScanLine size={17} /> Start scanning</Button></>}>
-        <OfflineAttendancePanel owner={profile?.uid} eventId={selectedEvent?.id} event={selectedEvent || undefined} data={offline} />
-        {selectedEvent && <div className="grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
-          {selectedEvent.geofenceEnabled !== false ? <GeofenceMap value={{ lat: selectedEvent.location.lat, lng: selectedEvent.location.lng, radius: selectedEvent.location.radius_meters }} position={location} /> : <Surface className="grid min-h-48 place-items-center p-6 text-sm text-slate-500">This event does not require a location check.</Surface>}
-          <div className="space-y-4">
-            <div><p className="text-[10px] font-black uppercase tracking-widest text-gold-600">Event details</p><p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{selectedEvent.description || 'Attendance scanning is available to assigned mayors during this event.'}</p></div>
-            <div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900"><p className="text-[10px] font-bold text-slate-400">START</p><p className="mt-1 text-xs font-black">{formatEventTime(selectedEvent.startTime)}</p></div><div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900"><p className="text-[10px] font-bold text-slate-400">ENDS</p><p className="mt-1 text-xs font-black">{formatEventTime(selectedEvent.endTime)}</p></div></div>
-            <div className={`rounded-2xl border p-4 ${insideGeofence ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40'}`}><div className="flex gap-3">{insideGeofence ? <ShieldCheck className="shrink-0 text-emerald-600" /> : <LocateFixed className="shrink-0 text-amber-600" />}<div><p className="text-sm font-black">{selectedEvent.geofenceEnabled === false ? 'Location check not required' : insideGeofence ? 'Inside attendance area' : locating ? 'Finding your location…' : 'Outside or location unavailable'}</p><p className="mt-1 text-xs leading-5 opacity-75">{distance !== null ? `You are approximately ${distance.toLocaleString()} m from the event center.` : locationError || (selectedEvent.geofenceEnabled === false ? 'Continue to the attendance scanner.' : 'Allow precise location to verify your position.')}</p></div></div></div>
-            <div className="flex flex-col gap-2 sm:flex-row"><Button disabled={selectedEvent.geofenceEnabled === false} variant="secondary" className="flex-1" onClick={requestLocation} loading={locating}><LocateFixed size={17} /> Refresh my location</Button></div>
+      <Modal open={Boolean(selectedEvent)} onClose={() => setSelectedEvent(null)} title={selectedEvent ? eventDisplayTitle(selectedEvent, appData.getEvents()) : 'Event'} description="Review the attendance windows and confirm your location before scanning." size="xl" footer={<><Button variant="secondary" className="sm:w-auto sm:min-w-28" onClick={() => setSelectedEvent(null)}>Close</Button><Button variant="gold" className="sm:w-auto sm:min-w-52" onClick={enterScanner} disabled={!insideGeofence || !selectedEvent || groupEvent(selectedEvent, now) !== 'current' || (!offline.online && !preparedRoster)}><ScanLine size={17} /> Start scanning</Button></>}>
+        {selectedEvent && <div className="space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0"><p className="flex items-center gap-1.5 text-sm font-bold text-brand-900 dark:text-white"><MapPin size={16} className="shrink-0 text-gold-600" />{selectedEvent.venue || 'Event location'}</p><p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{formatEventTime(selectedEvent.startTime)} to {formatEventTime(selectedEvent.endTime)}</p></div>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">{offline.online ? 'Online' : 'Offline'} &middot; {preparedRoster ? 'Roster saved' : 'Roster not saved'}</span>
           </div>
+          <div className="grid items-start gap-5 lg:grid-cols-[1fr_1.1fr]">
+            <div className="space-y-4">
+              <AttendanceSchedule event={selectedEvent} now={now} />
+              {selectedEvent.description && <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">{selectedEvent.description}</p>}
+            </div>
+            <section aria-label="Attendance location" className="space-y-3">
+              <div className={`rounded-2xl border p-4 ${insideGeofence ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40'}`}><div className="flex gap-3">{insideGeofence ? <ShieldCheck size={21} className="shrink-0 text-emerald-600" /> : <LocateFixed size={21} className="shrink-0 text-amber-600" />}<div><p className="text-sm font-bold text-brand-900 dark:text-white">{selectedEvent.geofenceEnabled === false ? 'Location check not required' : insideGeofence ? 'Inside attendance area' : locating ? 'Finding your location...' : 'Location verification needed'}</p><p className="mt-1 text-xs leading-5 text-slate-600 dark:text-slate-300">{distance !== null ? `You are ${distance.toLocaleString()} m from the center. Allowed radius: ${selectedEvent.location.radius_meters.toLocaleString()} m.` : locationError || (selectedEvent.geofenceEnabled === false ? 'You can scan without verifying your GPS position.' : 'Allow precise location to verify your position.')}</p></div></div></div>
+              {selectedEvent.geofenceEnabled !== false && <><GeofenceMap value={{ lat: selectedEvent.location.lat, lng: selectedEvent.location.lng, radius: selectedEvent.location.radius_meters }} position={location} /><Button variant="secondary" onClick={requestLocation} loading={locating}><LocateFixed size={16} /> Refresh my location</Button></>}
+            </section>
+          </div>
+          {(!insideGeofence || groupEvent(selectedEvent, now) !== 'current' || (!offline.online && !preparedRoster)) && <p role="status" className="rounded-xl bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600 dark:bg-slate-900 dark:text-slate-300">{groupEvent(selectedEvent, now) === 'scheduled' ? `Scanning will be available when the event opens on ${formatEventTime(selectedEvent.startTime)}.` : groupEvent(selectedEvent, now) === 'archived' ? 'This event has ended. Scanning is no longer available.' : !offline.online && !preparedRoster ? 'Connect to the internet and save the event roster before scanning offline.' : 'Verify that you are inside the attendance area to start scanning.'}</p>}
+          <details className="group rounded-2xl border border-slate-200 dark:border-slate-700">
+            <summary className="cursor-pointer rounded-2xl px-4 py-3 text-sm font-bold text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 dark:text-white">Offline attendance &amp; roster<span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">Download students and manage pending sync</span></summary>
+            <div className="px-3 pb-3"><OfflineAttendancePanel owner={profile?.uid} eventId={selectedEvent.id} event={selectedEvent} data={offline} /></div>
+          </details>
         </div>}
       </Modal>
 

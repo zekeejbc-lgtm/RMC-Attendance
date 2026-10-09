@@ -1,8 +1,9 @@
 import { RoleAssignment } from '../components/admin/RoleAssignment';
 import { hasPermission } from '../lib/accessControl';
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Snowflake, Activity, DollarSign, ShieldCheck, Shield, Users } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { legalLinks } from '../lib/legal';
+import { Snowflake, Activity, DollarSign, ShieldCheck, Shield, Users, Video } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { AdminFreezeView } from '../components/admin/AdminFreezeView';
@@ -10,8 +11,11 @@ import { AdminSystemHealthView } from '../components/admin/AdminSystemHealthView
 import { AdminPaymentReminderView } from '../components/admin/AdminPaymentReminderView';
 import { AdminRBACRoleView } from '../components/admin/AdminRBACRoleView';
 import { AdminAccountView } from '../components/admin/AdminAccountView';
+import LegalPage from './LegalPage';
+import AdminHomepageVideoView from '../components/admin/AdminHomepageVideoView';
+import { LegalKind } from '../lib/legalPages';
 
-type TabId = 'freeze' | 'health' | 'payment' | 'rbac' | 'accounts';
+type TabId = 'freeze' | 'health' | 'payment' | 'rbac' | 'accounts' | 'legal' | 'video';
 
 const subPages: { id: TabId; label: string; icon: React.ElementType; description: string }[] = [
   { id: 'freeze', label: 'Freeze Controls', icon: Snowflake, description: 'Manage institutional and node-level system freezes' },
@@ -19,6 +23,8 @@ const subPages: { id: TabId; label: string; icon: React.ElementType; description
   { id: 'payment', label: 'Payments', icon: DollarSign, description: 'Manage subscription reminders and billing statuses' },
   { id: 'rbac', label: 'RBAC Roles', icon: ShieldCheck, description: 'Configure custom roles and institutional permissions' },
   { id: 'accounts', label: 'Accounts', icon: Users, description: 'Create managed accounts, review profiles, and manage passwords' },
+  { id: 'video', label: 'Homepage Video', icon: Video, description: 'Choose and preview the video shown on the public homepage' },
+  { id: 'legal', label: 'Legal pages', icon: Shield, description: 'Preview and edit the current saved legal pages' },
 ];
 
 const AdminControls: React.FC = () => {
@@ -29,7 +35,7 @@ const AdminControls: React.FC = () => {
   const getInitialTab = (): TabId => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
-    if (tab && ['freeze', 'health', 'payment', 'rbac', 'accounts'].includes(tab)) {
+    if (tab && ['freeze', 'health', 'payment', 'rbac', 'accounts', 'legal', 'video'].includes(tab)) {
       return tab as TabId;
     }
     return 'freeze';
@@ -40,7 +46,7 @@ const AdminControls: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
-    if (tab && ['freeze', 'health', 'payment', 'rbac', 'accounts'].includes(tab) && tab !== activeTab) {
+    if (tab && ['freeze', 'health', 'payment', 'rbac', 'accounts', 'legal', 'video'].includes(tab) && tab !== activeTab) {
       setActiveTab(tab as TabId);
     }
   }, [location.search]);
@@ -51,7 +57,10 @@ const AdminControls: React.FC = () => {
   };
 
   const tabPermissions = { freeze: 'system.freeze', health: 'system.health', payment: 'system.payment_reminders', rbac: 'system.manage_rbac', accounts: 'system.manage_accounts' } as const;
-  const allowedPages = subPages.filter(page => hasPermission(profile?.role, tabPermissions[page.id]));
+  const allowedPages = subPages.filter(page => (page.id === 'legal' || page.id === 'video') ? profile?.role === 'admin' : hasPermission(profile?.role, tabPermissions[page.id]));
+  const requestedPage = new URLSearchParams(location.search).get('page');
+  const legalKinds: LegalKind[] = ['privacy', 'deletion', 'agreement', 'terms'];
+  const legalKind = legalKinds.includes(requestedPage as LegalKind) ? requestedPage as LegalKind : 'privacy';
   const selectedTab = allowedPages.some(page => page.id === activeTab) ? activeTab : allowedPages[0]?.id;
   const activeSubPage = subPages.find((p) => p.id === selectedTab) || subPages[0];
 
@@ -101,12 +110,20 @@ const AdminControls: React.FC = () => {
         </div>
       </Surface>
 
+      {selectedTab === 'legal' && <Surface className="max-w-[96rem] space-y-3 p-6">
+        <h2 className="text-xl font-bold">Legal pages</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-300">Open a saved page to preview it, then choose Edit page to make changes.</p>
+        <nav aria-label="Legal pages" className="flex flex-wrap gap-3">{legalLinks.map((link, index) => <Link key={link.path} to={`/admin/controls?tab=legal&page=${legalKinds[index]}`} aria-current={legalKind === legalKinds[index] ? 'page' : undefined} className={`rounded-xl border px-4 py-2 text-sm font-semibold ${legalKind === legalKinds[index] ? 'border-brand-900 bg-brand-900 text-white' : 'border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800'}`}>{link.title}</Link>)}</nav>
+        <LegalPage key={legalKind} kind={legalKind} adminPreview />
+      </Surface>}
+
       <div className="max-w-[96rem] animate-in fade-in">
         {selectedTab === 'freeze' && <AdminFreezeView actorName={profile?.name} />}
         {selectedTab === 'health' && <AdminSystemHealthView />}
         {selectedTab === 'payment' && <AdminPaymentReminderView actorName={profile?.name} />}
         {selectedTab === 'rbac' && <div className="space-y-6"><RoleAssignment /><AdminRBACRoleView actorName={profile?.name} /></div>}
         {selectedTab === 'accounts' && <AdminAccountView />}
+        {selectedTab === 'video' && <AdminHomepageVideoView />}
       </div>
     </Page>
   );

@@ -7,7 +7,7 @@ const PublicFooter: React.FC = () => (
     <div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-2">
       <div className="space-y-3">
         <Link to="/" className="inline-flex items-center gap-3 font-bold text-brand-900 dark:text-white">
-          <img src={`${import.meta.env.BASE_URL}academic-seal.jpeg`} alt="" className="h-9 w-9 rounded-full object-cover" />
+          <img src={`${import.meta.env.BASE_URL}academic-seal-transparent.png`} alt="" className="h-9 w-9 rounded-full object-contain p-0.5" />
           IARS · Attendance & Records System
         </Link>
         <p className="max-w-md text-sm leading-relaxed">Your place for school attendance, event schedules, and student records.</p>

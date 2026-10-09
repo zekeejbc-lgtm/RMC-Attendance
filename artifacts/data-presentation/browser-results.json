@@ -1,0 +1,13 @@
+{
+  "checks": [
+    "attendance at 1440px",
+    "attendance at 375px",
+    "sanctions at 1440px",
+    "sanctions at 375px",
+    "personnel at 1440px",
+    "personnel at 375px",
+    "general-event at 1440px",
+    "general-event at 375px"
+  ],
+  "errors": []
+}

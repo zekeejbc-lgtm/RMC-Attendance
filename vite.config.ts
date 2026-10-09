@@ -37,7 +37,7 @@ export default defineConfig(({ mode }) => {
       }, VitePWA({
         registerType: 'prompt',
         injectRegister: false,
-        includeAssets: ['academic-seal.jpeg', 'avatar-placeholder.svg', 'icons/*.png'],
+        includeAssets: ['academic-seal-transparent.png', 'avatar-placeholder.svg', 'icons/*.png'],
         manifest: {
           id: '/', name: 'Institution Attendance and Records System', short_name: 'IARS',
           description: 'School attendance, student records, events, and organizations.',

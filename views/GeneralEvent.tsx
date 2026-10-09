@@ -1,3 +1,4 @@
+import DetailFields from '../components/ui/DetailFields';
 import { useSmartBack } from '../components/NavigationMemory';
 import { formatManilaTime, formatClockTime } from '../lib/dateTime';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -65,11 +66,20 @@ export default function GeneralEvent({ student = false }: { student?: boolean })
     {selectedRow && <Modal open onClose={() => setSelected(null)} title={selectedRow.event.title} description={dateLabel(selectedRow.day)} size="lg" footer={canManage && selectedRow.event.status !== 'done' ? <Button onClick={() => navigate(`${base}/${selectedRow.event.id}/edit`)}>Edit activity</Button> : undefined}>
       <div className="space-y-6 text-sm">
         {selectedRow.event.bannerUrl && <EventBanner src={selectedRow.event.bannerUrl} alt={`${selectedRow.event.title} banner`} />}
-        <p className="font-bold">{occurrenceProgress(selectedRow, now).label}</p>
-        <p className="whitespace-pre-wrap">{selectedRow.event.description || 'No additional instructions.'}</p>
-        <section className="space-y-2"><h3 className="font-bold">Attendance windows · Philippine time</h3>{selectedRow.event.attendanceWindows?.map((window, index) => <p key={window.id}>{window.label || `Window ${index + 1}`}: {formatClockTime(window.timeIn)} - {formatClockTime(window.timeOut)}. Late after {window.lateAfterMinutes} minutes.</p>)}<p>Recipients: {selectedRow.event.recipientGroups?.join(', ') || selectedRow.event.targetValue || 'Assigned attendees'}</p></section>
+        <span className="inline-flex rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-900 dark:bg-brand-900/40 dark:text-brand-200">{occurrenceProgress(selectedRow, now).label}</span>
+        <section className="space-y-2"><h3 className="font-bold text-brand-900 dark:text-white">Activity overview</h3><p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-4 leading-6 dark:bg-slate-900/60">{selectedRow.event.description || 'No additional instructions.'}</p></section>
+        <section className="space-y-3"><h3 className="font-bold text-brand-900 dark:text-white">Attendance windows · Philippine time</h3><p className="text-xs text-slate-500">{dateLabel(selectedRow.day)} · UTC+8</p>
+          {selectedRow.event.attendanceWindows?.length ? <div className="space-y-3">{[...selectedRow.event.attendanceWindows].sort((a, b) => a.timeIn.localeCompare(b.timeIn)).map((window, index) => <div key={window.id} className="space-y-3 rounded-2xl border border-slate-200 p-4 dark:border-slate-700"><h4 className="font-semibold">{window.label || `Window ${index + 1}`}</h4><DetailFields fields={[
+            { label: 'Opens', value: formatClockTime(window.timeIn) }, { label: 'Closes', value: formatClockTime(window.timeOut) },
+            { label: 'Late after', value: `${window.lateAfterMinutes} minutes` },
+          ]} /></div>)}</div> : <DetailFields fields={[{ label: 'Starts', value: formatManilaTime(selectedRow.start) }, { label: 'Ends', value: formatManilaTime(selectedRow.end) }]} />}
+          <DetailFields fields={[{ label: 'Recipients', value: selectedRow.event.recipientGroups?.join(', ') || selectedRow.event.targetValue || 'Assigned attendees' }]} />
+        </section>
         <EventLocationDetails event={selectedRow.event} />
-        <section><h3 className="font-bold">Attendance rules</h3><p>Late: {selectedRow.event.sanctionRules?.late.value || 0} {selectedRow.event.sanctionRules?.late.unit || 'minutes'}</p><p>Absent: {selectedRow.event.sanctionRules?.absent.value ?? selectedRow.event.penaltyValue} {selectedRow.event.sanctionRules?.absent.unit || selectedRow.event.penaltyUnit}</p></section>
+        <section className="space-y-3"><h3 className="font-bold text-brand-900 dark:text-white">Attendance rules</h3><DetailFields fields={[
+          { label: 'Late', value: `${selectedRow.event.sanctionRules?.late.value || 0} ${selectedRow.event.sanctionRules?.late.unit || 'minutes'}` },
+          { label: 'Absent', value: `${selectedRow.event.sanctionRules?.absent.value ?? selectedRow.event.penaltyValue} ${selectedRow.event.sanctionRules?.absent.unit || selectedRow.event.penaltyUnit}` },
+        ]} /></section>
       </div>
     </Modal>}
   </Page>;

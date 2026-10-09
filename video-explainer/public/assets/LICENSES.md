@@ -1,5 +1,7 @@
 # Asset provenance
 
+- `academic-seal-transparent.png`: copied from the application's transparent seal, created from the existing user-provided seal using built-in imagegen for background removal. The generation prompt is in `../../../artifacts/attendance-report/seal-edit-prompt.txt`.
+
 - `academic-seal.jpeg`: copied without modification from the application's `public/academic-seal.jpeg`. Used as the existing user-provided product branding. No new ownership or institutional endorsement claim is made.
 - `Outfit.ttf`: official Google Fonts `ofl/outfit/Outfit[wght].ttf`; SIL Open Font License, included in `Outfit-OFL.txt`.
 - `Nunito.ttf`: official Google Fonts `ofl/nunito/Nunito[wght].ttf`; SIL Open Font License, included in `Nunito-OFL.txt`.

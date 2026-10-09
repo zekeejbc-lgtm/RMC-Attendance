@@ -181,11 +181,19 @@ vi.mock('../lib/backend', () => ({
 
 vi.mock('../lib/supabase', () => ({
   configurationError: null,
+  verifyPassword: vi.fn(async () => true),
   supabase: { auth: { mfa: {
     listFactors: vi.fn(async () => ({ data: { all: [], totp: [] }, error: null })),
     enroll: vi.fn(async () => ({ data: { id: 'factor-test', totp: { qr_code: 'data:image/svg+xml,<svg/>', secret: 'TEST-ONLY-SECRET', uri: 'otpauth://totp/Test?secret=JBSWY3DPEHPK3PXP' } }, error: null })),
     unenroll: vi.fn(async () => ({ error: null })), challengeAndVerify: vi.fn(async () => ({ error: null })),
   } } },
+}));
+
+vi.mock('../lib/profileRequests', async importOriginal => ({
+  ...await importOriginal<any>(),
+  loadProfileRequests: vi.fn(async () => []),
+  submitProfileRequest: vi.fn(async () => undefined),
+  reviewProfileRequest: vi.fn(async () => undefined),
 }));
 
 vi.mock('html5-qrcode', () => ({
@@ -463,10 +471,10 @@ describe('student route UI behavior', () => {
     renderRoute(<StudentQR />);
 
     expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /student qr passport/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /my digital id/i })).toBeInTheDocument();
     expect(await screen.findByRole('img', { name: /student qr code/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download card as png/i })).toBeInTheDocument();
-    expect(screen.getByText(/expires/i)).toBeInTheDocument();
+    expect(screen.getByText(/refreshes automatically every 45 seconds/i)).toBeInTheDocument();
   });
 
   it('renders accessible record filters and equivalent mobile and desktop ledgers', async () => {
@@ -493,9 +501,12 @@ describe('student route UI behavior', () => {
 
     expect(screen.getByRole('main')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /save contact details/i })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /edit contact details/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /request information change/i })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: /request information change/i }));
     expect(screen.getByRole('textbox', { name: /mobile contact/i })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: /parent \/ guardian name/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^guardian name$/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /close dialog/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.getByRole('button', { name: /enable two-factor authentication/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /change password/i }).parentElement).toHaveClass(
       'flex-col', 'lg:flex-row',
@@ -506,7 +517,9 @@ describe('student route UI behavior', () => {
     expect(currentPassword).toHaveAttribute('type', 'password');
     await user.click(screen.getByRole('button', { name: /show current password/i }));
     expect(currentPassword).toHaveAttribute('type', 'text');
-    const newPassword = screen.getByLabelText(/^new password$/i);
+    await user.type(currentPassword, 'Current-password-test');
+    await user.click(screen.getByRole('button', { name: /^continue$/i }));
+    const newPassword = await screen.findByLabelText(/^new password$/i);
     const confirmPassword = screen.getByLabelText(/confirm new password/i);
     await user.click(screen.getByRole('button', { name: /show new password/i }));
     await user.click(screen.getByRole('button', { name: /show password confirmation/i }));
@@ -535,7 +548,7 @@ describe('student route UI behavior', () => {
     expect(enrollmentTrigger).toHaveFocus();
   });
 
-  it('shows contact edit actions only while editing and saves only changed fields', async () => {
+  it('routes student contact changes through an approval request', async () => {
     const user = userEvent.setup();
     routeState.auth = {
       isMock: true,
@@ -545,16 +558,18 @@ describe('student route UI behavior', () => {
     };
     renderRoute(<StudentProfile />);
 
-    expect(screen.getByRole('button', { name: /edit contact details/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /edit contact details/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /save contact details/i })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /edit contact details/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /request information change/i })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: /request information change/i }));
     const phone = screen.getByRole('textbox', { name: /mobile contact/i });
     await user.clear(phone);
     await user.type(phone, '0999 111 2222');
-    await user.click(screen.getByRole('button', { name: /save contact details/i }));
+    await user.type(screen.getByLabelText('Reason for request'), 'Please correct my mobile contact number.');
+    await user.click(screen.getByRole('button', { name: /submit request/i }));
 
-    expect(staffState.updateContactDetails).toHaveBeenCalledWith(studentProfile.uid, { phone: '0999 111 2222' });
-    expect(screen.getByRole('button', { name: /edit contact details/i })).toBeInTheDocument();
+    expect(staffState.updateContactDetails).not.toHaveBeenCalled();
+    expect((await import('../lib/profileRequests')).submitProfileRequest).toHaveBeenCalledWith('edit', { phone: '0999 111 2222' }, 'Please correct my mobile contact number.');
   });
 
   it('keeps event details and excuse filing as named, stacked modal workflows', async () => {

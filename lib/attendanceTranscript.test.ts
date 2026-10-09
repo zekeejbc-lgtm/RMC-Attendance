@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createAttendanceTranscript, type AttendanceTranscript } from './attendanceTranscript';
 
-const logo = new Uint8Array(readFileSync('public/academic-seal.jpeg'));
+const logo = new Uint8Array(readFileSync('public/academic-seal-transparent.png'));
 const generatedAt = new Date('2026-10-08T04:09:00Z');
 const sample: AttendanceTranscript = {
   schoolName: 'RIZAL MEMORIAL COLLEGES, INC., TAGUM CAMPUS',
