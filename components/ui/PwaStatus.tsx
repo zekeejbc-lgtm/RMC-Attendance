@@ -16,9 +16,34 @@ export default function PwaStatus() {
   const [installing, setInstalling] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState('');
+  const [registration, setRegistration] = useState<ServiceWorkerRegistration>();
   const { needRefresh: [needRefresh, setNeedRefresh], updateServiceWorker } = useRegisterSW({
+    onRegisteredSW: (_url, registeredWorker) => setRegistration(registeredWorker),
     onRegisterError: () => console.warn('Offline setup was unavailable. It will be retried on the next visit.'),
   });
+  useEffect(() => {
+    if (!registration) return;
+    let checking = false;
+    const checkForUpdate = async () => {
+      if (checking || !navigator.onLine || document.visibilityState !== 'visible' || registration.installing) return;
+      checking = true;
+      try { await registration.update(); }
+      catch { /* A failed background check is retried on the next trigger. */ }
+      finally { checking = false; }
+    };
+    const check = () => { void checkForUpdate(); };
+    check();
+    const interval = window.setInterval(check, 5 * 60 * 1000);
+    window.addEventListener('focus', check);
+    window.addEventListener('online', check);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', check);
+      window.removeEventListener('online', check);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [registration]);
   useEffect(() => {
     const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);

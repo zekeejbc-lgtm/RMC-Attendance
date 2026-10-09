@@ -1,5 +1,3 @@
-import { getProfileSchoolName } from '../../lib/academicDirectory';
-import { useSmartBack } from '../NavigationMemory';
 import { formatManilaDate } from '../../lib/dateTime';
 import ProfileAvatar from './ProfileAvatar';
 import type { AppPermission } from '../../types';
@@ -7,7 +5,7 @@ import { appData } from '../../lib/backend';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Award, BarChart3, Building2, Calendar, CalendarPlus, ChevronDown, ChevronRight, FileText,
+  Award, BarChart3, Building2, Calendar, CalendarPlus, ChevronDown, ChevronRight, FileText,
   LayoutDashboard, Menu, PanelLeftClose, QrCode,
   ScanLine, ShieldCheck, Sliders, User, X,
 } from 'lucide-react';
@@ -22,9 +20,7 @@ const mobileDrawerId = 'mobile-main-navigation';
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile, isMock } = useAuth();
-  const schoolName = getProfileSchoolName(profile, appData.getSchoolStructure());
   const navigate = useNavigate();
-  const back = useSmartBack();
   const location = useLocation();
   const [isDirectoryOpen, setIsDirectoryOpen] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -443,7 +439,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <FreezeBanner />
       {['ossa', 'ossa_staff'].includes(role) && appData.getPaymentInfo().reminders.slice(0, 1).map(reminder => <div key={reminder.id} role="status" className="border-b border-amber-200 bg-amber-50 p-4 text-amber-950"><strong>{reminder.subject}</strong><p className="mt-1 whitespace-pre-line text-sm">{reminder.message}</p><p className="mt-1 text-xs">Payment due: {formatManilaDate(appData.getPaymentInfo().dueDate)}</p></div>)}
 
-      <main className="min-w-0 flex-1 overflow-x-hidden"><div className="mx-4 mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">School / branch</p><p className="mt-1 text-sm font-semibold leading-relaxed text-brand-900 [overflow-wrap:anywhere] dark:text-slate-100">{schoolName}</p></div><button type="button" onClick={() => back()} className="mx-4 mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><ArrowLeft size={16} />Back</button>{profile?.role !== 'admin' && appData.isUserScopeFrozen(profile) ? <div role="alert" className="m-6 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900"><h1 className="text-xl font-bold">Access temporarily frozen</h1><p className="mt-2">Contact your school administration to restore access.</p></div> : children}</main>
+      <main className="min-w-0 flex-1 overflow-x-hidden">{profile?.role !== 'admin' && appData.isUserScopeFrozen(profile) ? <div role="alert" className="m-6 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900"><h1 className="text-xl font-bold">Access temporarily frozen</h1><p className="mt-2">Contact your school administration to restore access.</p></div> : children}</main>
     </div>
   );
 };

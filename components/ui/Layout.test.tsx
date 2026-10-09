@@ -55,7 +55,6 @@ vi.mock('../AuthContext', () => ({
       role: layoutAuth.role,
       student_id: '2024-0001',
       photo_url: '',
-      school_data: { academic_assignment: { terminalGroupId: 'section' } },
     },
     isMock: true,
   }),
@@ -66,7 +65,6 @@ vi.mock('../../lib/backend', () => ({
   appAuth: { signOut: authMocks.mockSignOut },
   documentUrl: vi.fn(async (path: string) => path),
   appData: {
-    getSchoolStructure: () => [{ id: 'branch', name: 'Rizal Memorial Colleges, Inc., Tagum Campus', type: 'education_unit', children: [{ id: 'section', name: 'Section A', type: 'section' }] }],
     getPaymentInfo: () => ({ reminders: [] }),
     getSystemFreezeStatus: () => ({ isFrozen: false, reason: '' }),
     isUserScopeFrozen: () => false,
@@ -80,14 +78,6 @@ afterEach(() => {
   restoreMatchMedia = undefined;
   vi.clearAllMocks();
   layoutAuth.role = 'student';
-});
-
-it('shows the full school / branch name throughout the account without truncating it', () => {
-  render(<ThemeProvider><MemoryRouter><Layout><p>Account content</p></Layout></MemoryRouter></ThemeProvider>);
-  const branch = screen.getByText('Rizal Memorial Colleges, Inc., Tagum Campus');
-  expect(branch).toHaveClass('[overflow-wrap:anywhere]');
-  expect(branch).not.toHaveClass('truncate');
-  expect(screen.getByText('School / branch')).toBeInTheDocument();
 });
 
 it('opens and closes the mobile navigation drawer accessibly', async () => {
