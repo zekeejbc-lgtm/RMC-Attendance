@@ -1482,14 +1482,12 @@ describe('staff route UI behavior', () => {
     const user = userEvent.setup();
     useOSSA();
     seedStaffDirectory();
-    renderRoute(<OSSADashboard section="analytics" />);
+    renderRoute(<OSSADashboard section="sanctions" />);
 
     expect(screen.getByRole('main')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /sanction analytics/i, level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /student sanctions & analytics/i, level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /sanction status chart/i })).toHaveClass('h-64', 'sm:h-72');
     expect(screen.getByRole('region', { name: /department sanction hours chart/i })).toHaveClass('h-64', 'sm:h-72');
-    cleanup();
-    renderRoute(<OSSADashboard section="sanctions" />);
     expect(screen.getByRole('searchbox', { name: /search student sanctions/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /filter by department/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^all \(/i })).toHaveAttribute('aria-pressed', 'true');

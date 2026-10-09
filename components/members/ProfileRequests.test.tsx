@@ -4,7 +4,7 @@ import ProfileRequests from './ProfileRequests';
 const state = vi.hoisted(() => ({ profile: { uid: 'student', role: 'student', name: 'Jane', student_id: '2026-00001A', phone: '0917', guardian: { name: 'Guardian', contact: '0918' } }, requester: null as any, lookup: vi.fn(), load: vi.fn(), submit: vi.fn(), review: vi.fn() }));
 vi.mock('../AuthContext', () => ({ useAuth: () => ({ profile: state.profile }) }));
 vi.mock('../../lib/profileRequests', async importOriginal => ({ ...await importOriginal<any>(), loadProfileRequests: state.load, submitProfileRequest: state.submit, reviewProfileRequest: state.review }));
-vi.mock('../../lib/backend', () => ({ refreshData: vi.fn(), documentUrl: vi.fn(async (src: string) => src), appData: { getUserDetail: (uid: string) => { state.lookup(uid); return state.requester ? { profile: state.requester } : null; } } }));
+vi.mock('../../lib/backend', () => ({ refreshData: vi.fn(), documentUrl: vi.fn(async (src: string) => src), appData: { getSchoolStructure: () => [{ id: 'campus', name: 'Main Campus', type: 'campus', children: [{ id: 'program', name: 'Psychology', type: 'program', children: [{ id: 'year', name: '2nd Year', type: 'year_level', children: [{ id: 'class-a', name: 'Class A', type: 'section', children: [] }, { id: 'class-b', name: 'Class B', type: 'section', children: [] }, { id: 'archived', name: 'Archived class', type: 'section', metadata: { archived: true }, children: [] }] }] }] }], getUserDetail: (uid: string) => { state.lookup(uid); return state.requester ? { profile: state.requester } : null; } } }));
 vi.mock('../../lib/toast', () => ({ toast: { success: vi.fn() } }));
 const pending = { id: 'request', student_id: 'student', student_name: 'Jane', student_number: '26-0001-001', kind: 'edit', changes: { phone: '0999' }, original: { phone: '0917' }, reason: 'Correct my phone number', status: 'pending', created_at: '2026-10-09T01:00:00Z', review_note: '' };
 it('limits detail history to one student and provides no review actions', async () => {
@@ -47,6 +47,7 @@ it('blocks duplicate pending requests', async () => {
  state.load.mockResolvedValue([pending]); render(<ProfileRequests />);
  await screen.findByText(/You have a pending request/);
  expect(screen.getByRole('button', { name: 'Request information change' })).toBeDisabled();
+ expect(screen.getByRole('button', { name: 'Request transfer' })).toBeDisabled();
 });
 it.each(['approved', 'rejected'])('requires a review note before %s', async decision => {
  state.profile.role = 'ossa'; state.load.mockResolvedValue([pending]); render(<ProfileRequests review />);
@@ -101,7 +102,10 @@ it('approves one field, keeps the modal open, and allows rejection of the other 
  expect(screen.getByRole('button', {name: 'Approve all pending (1)'})).toBeEnabled();
  fireEvent.change(screen.getByLabelText('Decision note (sent to student)'), {target: {value: 'Guardian correction unverified'}});
  fireEvent.click(screen.getByRole('button', {name: 'Reject Guardian name'}));
- await screen.findByText('Partially approved');
+ await within(screen.getByRole('dialog')).findByText('Partially approved');
+ const statistics = within(screen.getByLabelText('Request statistics'));
+ expect(statistics.getByText('Partially approved').parentElement).toHaveTextContent('1');
+ expect(statistics.getByText('Pending').parentElement).toHaveTextContent('0');
  expect(state.review).toHaveBeenLastCalledWith('request','rejected','Guardian correction unverified',['guardianName']);
  expect(screen.queryByRole('button', {name: /all pending/})).not.toBeInTheDocument();
 });
@@ -138,4 +142,46 @@ it('keeps requester identity visible when their current profile is unavailable',
  expect(card.getByText('Jane')).toBeVisible();
  expect(card.getByText('Student ID: 26-0001-001')).toBeVisible();
  expect(card.getByRole('img')).toHaveAttribute('src', '/avatar-placeholder.svg');
+});
+
+
+it('submits a transfer destination for review without directly changing the student', async () => {
+ render(<ProfileRequests />);
+ await waitFor(() => expect(screen.getByRole('button', {name: 'Request transfer'})).toBeEnabled());
+ fireEvent.click(screen.getByRole('button', {name: 'Request transfer'}));
+ const dialog = within(screen.getByRole('dialog'));
+ expect(dialog.getByRole('button', {name: 'Submit request'})).toBeDisabled();
+ const choose = async (label: RegExp, option: string) => {
+  fireEvent.click(dialog.getByRole('button', {name: label}));
+  fireEvent.click(await screen.findByRole('option', {name: option}));
+ };
+ fireEvent.change(dialog.getByLabelText('Reason for request'), {target: {value: 'My enrollment belongs in Class B'}});
+ await choose(/Campus/, 'Main Campus');
+ await choose(/Degree Program/, 'Psychology');
+ await choose(/Year Level/, '2nd Year');
+ expect(dialog.getByRole('button', {name: 'Submit request'})).toBeDisabled();
+ fireEvent.click(dialog.getByRole('button', {name: /Section/}));
+ expect(screen.queryByRole('option', {name: 'Archived class'})).not.toBeInTheDocument();
+ fireEvent.click(await screen.findByRole('option', {name: 'Class B'}));
+ expect(dialog.getByRole('button', {name: 'Submit request'})).toBeEnabled();
+ // Changing an ancestor clears the previously chosen class.
+ await choose(/Year Level/, '2nd Year');
+ expect(dialog.getByRole('button', {name: 'Submit request'})).toBeDisabled();
+ await choose(/Section/, 'Class B');
+ fireEvent.click(dialog.getByRole('button', {name: 'Submit request'}));
+ await waitFor(() => expect(state.submit).toHaveBeenCalledWith('transfer', {node_id: 'class-b'}, 'My enrollment belongs in Class B'));
+ expect(state.review).not.toHaveBeenCalled();
+});
+
+it('shows current and requested classes and reviews a transfer in the request queue', async () => {
+ state.profile.role = 'ossa';
+ state.load.mockResolvedValue([{...pending, kind: 'transfer', changes: {node_id: 'class-b'}, original: {node_id: 'class-a'}}]);
+ render(<ProfileRequests review />);
+ fireEvent.click(await screen.findByRole('button', {name: /Transfer academic assignment.*Jane/}));
+ const dialog = within(screen.getByRole('dialog'));
+ expect(dialog.getByText('Main Campus / Psychology / 2nd Year / Class A')).toBeVisible();
+ expect(dialog.getByText('Main Campus / Psychology / 2nd Year / Class B')).toBeVisible();
+ fireEvent.change(dialog.getByLabelText('Decision note (sent to student)'), {target: {value: 'Verified enrollment'}});
+ fireEvent.click(dialog.getByRole('button', {name: 'Approve Academic assignment'}));
+ await waitFor(() => expect(state.review).toHaveBeenCalledWith('request', 'approved', 'Verified enrollment', ['node_id']));
 });

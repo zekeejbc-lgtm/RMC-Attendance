@@ -217,6 +217,7 @@ const App: React.FC = () => {
               <OSSADashboard />
             </ProtectedRoute>
           } />
+          <Route path="/ossa/dashboard/analytics" element={<Navigate to={ossaSectionPath('sanctions')} replace />} />
           {ossaSections.map(section => <Route key={section.id} path={ossaSectionPath(section.id)} element={
             <ProtectedRoute permission={section.permission}>
               <OSSADashboard section={section.id} />

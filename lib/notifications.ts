@@ -9,7 +9,13 @@ export async function loadNotifications(uid: string): Promise<InboxNotice[]> {
     const { data, error } = await supabase.from('rmc_notifications').select('id,user_id,title,detail,path,created_at,read_at')
       .eq('user_id', uid).order('created_at', { ascending: false }).order('id').range(offset, offset + 999);
     if (error) throw error;
-    rows.push(...data);
+    // Some stored notices contain a UTF-8 em dash decoded as Windows-1252.
+    // Repair that known sequence for both the inbox and notification toasts.
+    rows.push(...data.map(row => ({
+      ...row,
+      title: row.title.replace(/\u00e2\u20ac\u201d/g, '\u2014'),
+      detail: row.detail.replace(/\u00e2\u20ac\u201d/g, '\u2014'),
+    })));
     if (data.length < 1000) return rows;
   }
 }

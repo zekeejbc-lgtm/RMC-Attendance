@@ -18,6 +18,17 @@ const mount = (element: React.ReactNode) => render(<MemoryRouter>{element}</Memo
 beforeEach(() => { state.events = []; state.organizations = []; state.sanctions = []; state.scope = true; state.role = 'ossa'; vi.clearAllMocks(); state.reviewEvent.mockResolvedValue(undefined); state.organizationCommand.mockResolvedValue(undefined); state.reviewExcuse.mockResolvedValue(undefined); });
 afterEach(cleanup);
 
+it('keeps activity statistics across statuses while searching the pending queue', () => {
+  state.events = [event('pending'), { ...event('approved'), approvalStatus: 'approved' }, { ...event('rejected'), approvalStatus: 'rejected' }];
+  mount(<ActivityApprovalQueue />);
+  const statistics = within(screen.getByLabelText('Request statistics'));
+  expect(statistics.getByText('Total requests').parentElement).toHaveTextContent('3');
+  for (const status of ['Pending', 'Approved', 'Rejected']) expect(statistics.getByText(status).parentElement).toHaveTextContent('1');
+  fireEvent.change(screen.getByLabelText('Search requests'), { target: { value: 'no matching activity' } });
+  expect(screen.getByText('No activity requests match your filters.')).toBeVisible();
+  expect(statistics.getByText('Total requests').parentElement).toHaveTextContent('3');
+});
+
 it('paginates brief activity titles and puts schedule and decision controls in the modal', async () => {
   state.events = Array.from({ length: 12 }, (_, i) => event(String(i)));
   mount(<ActivityApprovalQueue />);

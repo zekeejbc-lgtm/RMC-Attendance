@@ -12,7 +12,7 @@ import { downloadCsv } from '../lib/export';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ossaSections, ossaSectionPath, type OSSASection } from '../lib/ossaHub';
-import { CheckCircle2, ChevronRight, Clock, Download, FileCheck2, MinusCircle, PlusCircle, RotateCcw, School, ShieldAlert, ShieldCheck, Users, X, ArrowLeft, ArrowUpRight, BarChart3, Building2, CalendarCheck, PencilLine } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Clock, Download, FileCheck2, MinusCircle, PlusCircle, RotateCcw, School, ShieldAlert, ShieldCheck, Users, X, ArrowLeft, ArrowUpRight, Building2, CalendarCheck, PencilLine } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -36,6 +36,7 @@ import CustomSelect from '../components/ui/CustomSelect';
 import SearchInput from '../components/ui/SearchInput';
 import { useAuth } from '../components/AuthContext';
 import { hasPermission } from '../lib/accessControl';
+import { loadProfileRequests } from '../lib/profileRequests';
 
 interface StudentWithStats extends UserProfile {
   stats: UserStats;
@@ -58,6 +59,30 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
   const [adjustReason, setAdjustReason] = useState('');
   const [adjustSuccess, setAdjustSuccess] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingInformationCount, setPendingInformationCount] = useState<number | null>(null);
+  const [pendingActivityCount, setPendingActivityCount] = useState(0);
+  const [pendingOrganizationCount, setPendingOrganizationCount] = useState(0);
+  const canReviewInformation = hasPermission(profile?.role, 'ossa.manage_cases');
+
+  useEffect(() => {
+    setPendingInformationCount(null);
+    if (section !== 'overview' || !profile || !canReviewInformation || refreshing) return;
+    let active = true;
+    let latestRequest = 0;
+    const load = async () => {
+      const request = ++latestRequest;
+      try {
+        const requests = await loadProfileRequests();
+        if (active && request === latestRequest) setPendingInformationCount(requests.filter(row => row.status === 'pending').length);
+      } catch (error) {
+        if (active && request === latestRequest) { setPendingInformationCount(null); toast.error(error); }
+      }
+    };
+    void load();
+    window.addEventListener('rmc_data_update', load);
+    const timer = window.setInterval(load, 30000);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('rmc_data_update', load); };
+  }, [section, profile?.uid, canReviewInformation, refreshing]);
 
   useEffect(() => {
     setSelectedStudent(null); setStudentDetails(null); setAdjustMode(null);
@@ -66,6 +91,16 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
   const loadData = () => {
     setStudents((profile && typeof appData.getVisibleStudents === 'function' ? appData.getVisibleStudents(profile.uid) : appData.getAllStudents()) as StudentWithStats[]);
     setExcuseApps(profile && typeof appData.getVisibleExcuseApplications === 'function' ? appData.getVisibleExcuseApplications(profile.uid) : appData.getExcuseApplications());
+    if (section === 'overview' && profile) {
+      const events = typeof appData.getVisibleEvents === 'function' ? appData.getVisibleEvents(profile.uid) : appData.getEvents();
+      setPendingActivityCount(events.filter(event => event.requiresOssaApproval && !event.cancellationStatus && event.status !== 'done' && (event.approvalStatus || 'pending') === 'pending').length);
+      const organizations = appData.getOrganizations().filter(org => org.can_review || org.can_manage || profile.role === 'admin');
+      const organizationIds = new Set(organizations.map(org => org.id));
+      setPendingOrganizationCount(
+        appData.getEvents().filter(event => organizationIds.has(event.organizationId) && !event.cancellationStatus && event.approvalStatus === 'pending').length
+        + appData.getOrganizationSanctions().filter(request => organizationIds.has(request.organization_id) && request.status === 'pending').length,
+      );
+    }
 
     if (selectedStudent) {
       const updatedDetail = appData.getUserDetail(selectedStudent.uid);
@@ -78,7 +113,7 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
     loadData();
     window.addEventListener('rmc_data_update', loadData);
     return () => window.removeEventListener('rmc_data_update', loadData);
-  }, [profile?.uid, selectedStudent?.uid]);
+  }, [profile?.uid, selectedStudent?.uid, section]);
 
   const handleRefresh = async () => {
     if (refreshing) return;
@@ -93,6 +128,13 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
   const clearedStudents = students.filter((student) => (student.stats?.sanction_hours || 0) === 0);
   const totalSanctionHours = students.reduce((total, student) => total + (student.stats?.sanction_hours || 0), 0);
   const pendingExcuseCount = excuseApps.filter((application) => application.status === 'pending').length;
+  const workspaceCounts = {
+    activities: pendingActivityCount,
+    requests: pendingInformationCount,
+    excuses: pendingExcuseCount,
+    sanctions: studentsWithSanctions.length,
+    organizations: pendingOrganizationCount,
+  };
   const departments = Array.from(new Set(students.map((student) => student.school_data?.department).filter(Boolean) as string[]));
 
   const filteredStudents = students.filter((student) => {
@@ -167,13 +209,12 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
 
   const availableSections = ossaSections.filter(item => hasPermission(profile?.role, item.permission));
   const currentSection = ossaSections.find(item => item.id === section);
-  const sectionIcons = { activities: CalendarCheck, requests: PencilLine, sanctions: ShieldAlert, excuses: FileCheck2, analytics: BarChart3, organizations: Building2 };
+  const sectionIcons = { activities: CalendarCheck, requests: PencilLine, sanctions: ShieldAlert, excuses: FileCheck2, organizations: Building2 };
   const sectionTones = {
     activities: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
     requests: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
     sanctions: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
     excuses: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
-    analytics: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300',
     organizations: 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
   };
 
@@ -200,11 +241,13 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
       {section === 'overview' && <nav aria-label="OSSA workspaces" className="space-y-6">
         {[
           { title: 'Review & approvals', description: 'Decide on submitted requests and supporting documents.', ids: ['activities', 'requests', 'excuses'] },
-          { title: 'Records & oversight', description: 'Manage student cases, reports, and organization requests.', ids: ['sanctions', 'analytics', 'organizations'] },
+          { title: 'Records & oversight', description: 'Manage student cases, reports, and organization requests.', ids: ['sanctions', 'organizations'] },
         ].map(group => { const items = availableSections.filter(item => group.ids.includes(item.id)); if (!items.length) return null; return <section key={group.title} className="space-y-3">
           <div><h2 className="text-base font-bold text-brand-900 dark:text-white">{group.title}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{group.description}</p></div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{items.map(item => { const Icon = sectionIcons[item.id]; return <Link key={item.id} to={ossaSectionPath(item.id)} className="group flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-gold-500 hover:shadow-md motion-reduce:transform-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-500 dark:border-slate-700 dark:bg-slate-800">
-          <div className="mb-4 flex items-center justify-between gap-3"><span className={`flex h-11 w-11 items-center justify-center rounded-xl ${sectionTones[item.id]}`}><Icon size={22} /></span><ArrowUpRight size={18} className="text-slate-300 transition group-hover:text-gold-600 dark:text-slate-600" /></div>
+          <div className="mb-4 flex items-center justify-between gap-3"><span className={`relative flex h-11 w-11 items-center justify-center rounded-xl ${sectionTones[item.id]}`}><Icon size={22} />
+            {(workspaceCounts[item.id] ?? 0) > 0 && <span aria-label={`${workspaceCounts[item.id]} ${item.id === 'sanctions' ? 'students with active sanctions' : 'pending requests'}`} className="absolute -right-2 -top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-bold leading-none text-white ring-2 ring-white dark:ring-slate-800">{workspaceCounts[item.id]}</span>}
+          </span><ArrowUpRight size={18} className="text-slate-300 transition group-hover:text-gold-600 dark:text-slate-600" /></div>
           <h3 className="text-lg font-bold text-brand-900 dark:text-white">{item.title}</h3>
           <p className="mt-2 flex-1 text-sm text-slate-500 dark:text-slate-300">{item.description}</p>
           <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-brand-800 dark:text-gold-400">Open workspace <ChevronRight size={16} /></span>
@@ -219,10 +262,17 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
         <MetricCard detail="Medical / absence letters" icon={<FileCheck2 size={20} />} label="Excuse Applications" value={pendingExcuseCount} />
       </div>}
 
+      {section === 'sanctions' && <div aria-label="Sanction statistics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard detail="Within assigned scope" icon={<Users size={20} />} label="Total students" value={totalStudents} />
+        <MetricCard detail={`${totalStudents > 0 ? Math.round((studentsWithSanctions.length / totalStudents) * 100) : 0}% of students`} icon={<ShieldAlert size={20} />} label="With sanctions" value={studentsWithSanctions.length} />
+        <MetricCard detail="No outstanding hours" icon={<CheckCircle2 size={20} />} label="Cleared students" value={clearedStudents.length} />
+        <MetricCard detail="Outstanding sanction balance" icon={<Clock size={20} />} label="Sanction hours" value={totalSanctionHours} />
+      </div>}
+
       {section === 'activities' && <ActivityApprovalQueue />}
       {section === 'requests' && <ProfileRequests review />}
       {section === 'organizations' && <OrganizationApprovalQueue />}
-      {section === 'analytics' && <Surface aria-labelledby="ossa-analytics-heading" className="p-4 sm:p-6">
+      {section === 'sanctions' && <Surface aria-labelledby="ossa-analytics-heading" className="p-4 sm:p-6">
         <h2 id="ossa-analytics-heading" className="text-lg font-bold text-brand-900 dark:text-white">Sanction Analytics</h2>
         <div className="mt-4 grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="min-w-0"><h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Student Status</h3><div aria-label="Sanction status chart" className="h-64 min-h-64 min-w-0 w-full sm:h-72 sm:min-h-72" role="region"><ResponsiveContainer height="100%" initialDimension={{ width: 1, height: 256 }} minHeight={256} minWidth={0} width="100%"><PieChart><Pie data={sanctionStatusData} dataKey="value" innerRadius={50} outerRadius={88} paddingAngle={3}>{sanctionStatusData.map((entry) => <Cell fill={entry.color} key={entry.name} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer></div></div>

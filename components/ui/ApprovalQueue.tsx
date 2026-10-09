@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { ChevronDown, ChevronRight, FileCheck2 } from 'lucide-react';
 import { Collapsible } from './Collapsible';
 import { Surface } from './Page';
+import ApprovalStatistics from './ApprovalStatistics';
 import CustomSelect from './CustomSelect';
 import RecordPagination from './RecordPagination';
 import { usePagination } from '../usePagination';
@@ -31,7 +32,9 @@ export default function ApprovalQueue<T extends ApprovalRow>({ title, descriptio
   const filtered = rows.filter(row => (status === 'all' || row.status === status) && (type === 'all' || row.type === type)
     && `${row.title} ${row.searchText || ''}`.toLowerCase().includes(search.trim().toLowerCase()));
   const pagination = usePagination(filtered, `${search}:${status}:${type}`);
-  return <Surface aria-label={title} className="space-y-4 p-4 sm:p-5">
+  return <>
+    <ApprovalStatistics rows={rows} />
+    <Surface aria-label={title} className="space-y-4 p-4 sm:p-5">
     {collapsible ? <h2><button type="button" aria-expanded={open} aria-controls={`${inputId}-panel`} onClick={() => setOpen(value => !value)} className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl text-left text-lg font-bold text-brand-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-400 dark:text-white"><span>{title}<span className="ml-3 inline-flex rounded-full bg-amber-100 px-2.5 py-1 align-middle text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">{rows.filter(row => row.status === 'pending').length} pending</span></span><ChevronDown size={20} className="app-disclosure-chevron shrink-0" /></button></h2> : <h2 className="text-lg font-bold text-brand-900 dark:text-white">{title}</h2>}
     <Collapsible id={`${inputId}-panel`} open={!collapsible || open} innerClassName="space-y-4">
     <p className={approvalMuted}>{description}</p>
@@ -50,5 +53,6 @@ export default function ApprovalQueue<T extends ApprovalRow>({ title, descriptio
       <RecordPagination {...pagination} customPageSize label={`${title} pagination`} />
     </div>
     </Collapsible>
-  </Surface>;
+  </Surface>
+  </>;
 }
