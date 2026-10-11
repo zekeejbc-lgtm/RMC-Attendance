@@ -1,3 +1,4 @@
+import { errorMessage } from '../../lib/errors';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, Database, Zap, RefreshCw, FileText, Users, AlertTriangle, Info } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -35,7 +36,7 @@ export const AdminSystemHealthView: React.FC = () => {
   const readCached = useCallback(() => { setMetrics(appData.getSystemHealthMetrics()); setAuditLogs(appData.getAccountAuditLogs()); setNow(Date.now()); }, []);
   const readShared = useCallback(async () => {
     try { const rows = await loadSharedDiagnostics(); if (mounted.current) { setShared(rows); setLoadError(''); setSharedLoaded(true); } }
-    catch (error) { if (mounted.current) setLoadError((error as Error).message); }
+    catch (error) { if (mounted.current) setLoadError(errorMessage((error as Error))); }
   }, []);
   const refreshHealth = useCallback(async () => {
     if (busy.current) return;

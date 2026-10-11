@@ -141,7 +141,7 @@ it('shows errors without closing the excuse panel and validates waived hours', a
   expect(screen.getByRole('button', { name: 'Approve & waive hours' })).toBeDisabled();
   fireEvent.change(screen.getByLabelText('Sanction hours to waive upon approval'), { target: { value: '3' } });
   fireEvent.click(screen.getByRole('button', { name: 'Approve & waive hours' }));
-  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Unable to save decision'));
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('SYS-001'));
   expect(changed).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Approve & waive hours' }));
   await waitFor(() => expect(changed).toHaveBeenCalledOnce());

@@ -1,3 +1,5 @@
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from './ui/ErrorNotice';
 import React, { useState } from 'react';
 import { Modal } from './ui/Modal';
 import Button from './ui/Button';
@@ -20,7 +22,7 @@ export function SensitiveActionModal({ action, targetName, description, onClose,
     if (!valid || busy) return;
     setBusy(true); setError('');
     try { await onConfirm({ password, code, typedAction, typedName, reason: reason.trim() }); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : (caught as { message?: string })?.message || 'The action could not be completed.'); }
+    catch (caught) { setError(errorMessage(caught)); }
     finally { setPassword(''); setCode(''); setBusy(false); }
   };
   const label = action === 'ARCHIVE' ? 'Archive' : 'Delete';
@@ -32,7 +34,7 @@ export function SensitiveActionModal({ action, targetName, description, onClose,
       <label className="block text-sm font-semibold">Type {action}<input className="input-field mt-1" autoComplete="off" value={typedAction} onChange={e => setTypedAction(e.target.value)} disabled={busy} required /></label>
       <label className="block text-sm font-semibold">Type the exact name: {targetName}<input className="input-field mt-1" autoComplete="off" value={typedName} onChange={e => setTypedName(e.target.value)} disabled={busy} required /></label>
       <label className="block text-sm font-semibold">Reason<textarea className="input-field mt-1" rows={3} minLength={3} maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} disabled={busy} required /></label>
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorNotice error={error} operation="Sensitive Action Modal"></ErrorNotice>}
       <div className="flex justify-end gap-3"><Button type="button" variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" variant={action === 'DELETE' ? 'danger' : 'gold'} disabled={!valid || busy}>{busy ? 'Verifying…' : `Confirm ${label}`}</Button></div>
     </form>
   </Modal>;

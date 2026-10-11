@@ -1,3 +1,4 @@
+import ErrorNotice from '../ui/ErrorNotice';
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { ExcuseApplication } from '../../types';
@@ -54,7 +55,7 @@ export default function ExcuseApprovalQueue({ applications, onChanged }: { appli
           <div><label className={approvalLabel} htmlFor="ossa-waive-hours">Sanction hours to waive upon approval</label><input id="ossa-waive-hours" type="number" min="0" max="50" step="any" value={hours} onChange={event => setHours(event.target.value)} className={approvalControl} disabled={busy} />{!validHours && <p className="mt-1 text-xs text-red-600 dark:text-red-400">Enter hours between 0 and 50.</p>}</div>
           <div><label className={approvalLabel} htmlFor="ossa-excuse-note">Decision notes (required for rejection)</label><textarea id="ossa-excuse-note" rows={3} maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} className={approvalControl} disabled={busy} /></div>
         </> : <DetailFields fields={[{ label: 'Decision notes', value: selected.review_notes || 'No notes provided.' }, { label: 'Hours waived', value: selected.waived_hours || 0 }, { label: 'Reviewed', value: selected.reviewed_at ? formatManilaDateTime(selected.reviewed_at) : 'Not recorded' }, { label: 'Reviewed by', value: selected.reviewed_by || 'OSSA' }]} />}
-        {error && <p role="alert" className="text-red-600 dark:text-red-400">{error}</p>}
+        {error && <ErrorNotice error={error} operation="Excuse Approval Queue"></ErrorNotice>}
       </div>}
     </Modal>
   </>;

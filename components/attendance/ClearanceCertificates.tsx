@@ -1,22 +1,27 @@
+import ErrorNotice from '../ui/ErrorNotice';
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'react-qr-code';
 import { Award, Download, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../AuthContext';
+import { subscribeData } from '../../lib/backend';
 import Button from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Surface } from '../ui/Page';
 import { formatManilaDate, formatManilaDateTime } from '../../lib/dateTime';
 import { toast } from '../../lib/toast';
+import { errorMessage } from '../../lib/errors';
 import {
  clearanceVerificationUrl, createClearanceSchedule, issueClearanceCertificate, loadClearanceSchedules,
  releaseClearanceSchedule, type ClearanceCertificate, type ClearanceSchedule,
 } from '../../lib/clearanceCertificates';
 
 const control = 'mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
-const failure = (error: unknown) => error instanceof Error ? error.message : 'Could not load clearance certificates. Please retry.';
+const failure = errorMessage;
 
 export default function ClearanceCertificates({ manage = false }: { manage?: boolean }) {
- const { profile, revision } = useAuth();
+ const { profile } = useAuth();
+ const [revision, setRevision] = useState(0);
+ useEffect(() => subscribeData(() => setRevision(value => value + 1)), []);
  const [rows, setRows] = useState<ClearanceSchedule[]>([]), [error, setError] = useState('');
  const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
  const [title, setTitle] = useState(''), [start, setStart] = useState(''), [end, setEnd] = useState('');
@@ -26,9 +31,9 @@ export default function ClearanceCertificates({ manage = false }: { manage?: boo
  const qr = useRef<HTMLDivElement>(null);
  const [reload, setReload] = useState(0);
  const canManage = manage && ['ossa', 'ossa_staff'].includes(profile?.role || '');
- useEffect(() => { setSelected(null); setRows([]); }, [profile?.uid]);
+ useEffect(() => { setSelected(null); setReleaseTarget(null); setRows([]); setLoading(true); }, [profile?.uid, manage]);
  useEffect(() => {
-  let current = true; setLoading(true); setError('');
+  let current = true; setError('');
   if (manage && !canManage) { setLoading(false); return; }
   loadClearanceSchedules(manage).then(data => { if (current) setRows(data); })
    .catch(err => { if (current) setError(failure(err)); }).finally(() => { if (current) setLoading(false); });
@@ -83,7 +88,7 @@ export default function ClearanceCertificates({ manage = false }: { manage?: boo
    <h2 className="text-lg font-bold text-brand-900 dark:text-white">Clearance certificates</h2>
    <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{manage ? 'Schedule sanction clearing and authorize certificate release for your assigned academic scope.' : 'A verifiable A4 landscape certificate, released by OSSA after you clear your sanctions during a scheduled period.'}</p>
   </div></div><Button variant="secondary" iconOnly aria-label="Refresh certificates" disabled={busy || loading} onClick={() => setReload(v => v + 1)}><RefreshCw size={16} /></Button></div>
-  {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">{error}</p>}
+  {error && <ErrorNotice error={error} operation="Clearance Certificates"></ErrorNotice>}
   {loading && <p role="status" className="text-sm">Checking clearance schedules…</p>}
   {manage && <form onSubmit={create} className="space-y-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-900">
    <h3 className="font-semibold">New clearing schedule</h3>
@@ -112,7 +117,7 @@ export default function ClearanceCertificates({ manage = false }: { manage?: boo
     <p className="break-all text-xs text-slate-500 dark:text-slate-400">{selected.certificate.reference} · Issued {formatManilaDate(selected.certificate.issued_at)}</p>
     {preview ? <iframe title="A4 landscape clearance certificate preview" src={preview} className="h-[55vh] w-full rounded-xl border border-slate-200 bg-white" /> : <p role="status">Preparing your certificate preview…</p>}
     <p className="text-sm leading-6">The verification QR shows only your name, school, clearing period, reference, dates, and current certificate validity.</p>
-    {error && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{error}</p>}
+    {error && <ErrorNotice error={error} operation="Clearance Certificates"></ErrorNotice>}
     <Button onClick={download} disabled={busy}><Download size={16} /> Download A4 landscape PDF</Button>
    </div>}
   </Modal>

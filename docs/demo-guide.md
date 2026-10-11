@@ -4,7 +4,7 @@ Prepared from the current application source on October 9, 2026.
 
 Use the quoted paragraphs as your speaking script and the bullets as your demonstration checklist. Routes below are hash routes: `/student/qr` means `/#/student/qr` on your app's address.
 
-This guide describes the implemented screens. Available actions depend on saved role permissions, academic assignments, organization membership, account status, and deployed backend configuration. OSSA and OSAS both appear in the interface; they refer to the student affairs office in this guide.
+This guide describes the implemented screens. Available actions depend on saved role permissions, academic assignments, organization membership, account status, and deployed backend configuration. OSSA and OSAS both appear in the interface; they refer to the Office of the Students Services and Affairs in this guide.
 
 ## 1. Opening script
 
@@ -171,6 +171,7 @@ Available to any role with **View Calendar**. **View Scoped Calendar** adds sche
 - Exports a personal PDF transcript.
 - Displays the clearance message when the student qualifies.
 - Opens **Clearance certificates**: shows scheduled clearing periods and eligibility, waits for OSSA release, then requests, previews, and downloads a verifiable A4 landscape PDF with a school seal, issue date, reference, and verification QR.
+- Certificates use the student's highest academic unit as the school name, Old English headings, and the office name **Office of the Students Services and Affairs**.
 - Reports missing or incorrect institutional event, ceremony, service, or merit attendance through **Attendance corrections**, with requested times, an explanation, optional evidence, and decision history.
 
 > “Students can trace individual attendance entries and see why their balance changed. Rendered time, cleared sanctions, and earned merit are shown separately.”
@@ -674,6 +675,7 @@ Organization event creation does not offer the institutional cleaning/service ac
 
 ## 16. Presenter accuracy notes
 
+- Error notices show a code, a plain-language message, and who can help: amber for user actions, blue for school staff, red for confirmed developer faults, and grey for causes support must investigate. Unknown failures include a reference; check the latest records before repeating a change whose result is uncertain. See [all error codes and exact messages](error-codes.md).
 - Demonstrate saved permissions and deployed behavior, not just the default role names in this guide.
 - Some existing source components are not connected to the current routes. For example, the separate `ManageMembers` screen contains bulk member CSV import, but `App.tsx` does not route to it. Do not promise bulk account/member import as a current hierarchy feature. The routed Student Transfers CSV/Excel workflow is available.
 - Camera scanning, GPS, Google sign-in, passkeys, uploads, app installation, and offline sync depend on browser permissions and deployment setup. Verify the features you intend to demonstrate beforehand.
@@ -682,6 +684,7 @@ Organization event creation does not offer the institutional cleaning/service ac
 
 ### Source references
 
+- Error catalog and responsibility labels: [`lib/errors.ts`](../lib/errors.ts), [`lib/errorCatalog.json`](../lib/errorCatalog.json), and [`docs/error-codes.md`](error-codes.md).
 - Role defaults and permissions: [`lib/accessControl.ts`](../lib/accessControl.ts).
 - Routes and access gates: [`App.tsx`](../App.tsx).
 - Navigation labels: [`components/ui/Layout.tsx`](../components/ui/Layout.tsx).

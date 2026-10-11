@@ -1,5 +1,5 @@
 import { changeTime } from './ui-time';
-﻿import React from 'react';
+import React from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CeremonyExemptionFilters } from '../components/events/CeremonyExemptionFilters';
@@ -44,7 +44,7 @@ it('saves weekly class schedules, validates end times, and preserves errors for 
  changeTime('Monday timeOut', '12:00');
  changeField('Tuesday class status', 'no_class');
  fireEvent.click(screen.getByRole('button',{name:'Save class schedule'}));
- expect(await screen.findByText('Schedule is outside your scope.')).toBeInTheDocument();
+ expect(await screen.findByRole('alert')).toHaveTextContent('SYS-001');
  expect(refreshed).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('button',{name:'Save class schedule'}));
  expect(await screen.findByText('Class schedule saved.')).toBeInTheDocument();

@@ -63,7 +63,7 @@ it('keeps the review dialog and displays a failed approval', async () => {
  render(<ProfileRequests review />); fireEvent.click(await screen.findByRole('button', { name: 'Update mobile contact — Jane' }));
  fireEvent.change(screen.getByLabelText('Decision note (sent to student)'), { target: { value: 'Verified correction' } });
  fireEvent.click(screen.getByRole('button', { name: 'Approve all pending (1)' }));
- expect(await screen.findByRole('alert')).toHaveTextContent('Student information changed after submission.');
+ expect(await screen.findByRole('alert')).toHaveTextContent('SYS-001');
  expect(screen.getByRole('dialog')).toBeVisible();
 });
 

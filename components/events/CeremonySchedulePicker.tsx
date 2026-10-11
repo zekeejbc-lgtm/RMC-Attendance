@@ -1,3 +1,4 @@
+import ErrorNotice from '../ui/ErrorNotice';
 import { useState } from 'react';
 import { canScheduleCeremony, defaultCeremonyRange, ceremonyMonthRange, dateStamp, validDate, predictCeremonyDates } from '../../lib/ceremonySchedule';
 import Button from '../ui/Button';
@@ -38,6 +39,6 @@ export function CeremonySchedulePicker({ start, end, dates, onChange, standardWe
     <CeremonyCalendar month={month} onMonthChange={setMonth} dates={dates} onChange={onChange} />
     <p className="font-semibold">{dates.length} selected dates</p>
     <ul className="flex flex-wrap gap-2">{dates.map(day => <li key={day} className="rounded-lg border p-2 text-sm">{day}{!canScheduleCeremony(day) && <span className="ml-2 text-amber-700 dark:text-amber-300">Preview only</span>}<button type="button" aria-label={`Remove ${day}`} className="ml-2 min-h-10 px-2 underline" onClick={() => onChange(dates.filter(d => d !== day))}>Remove</button></li>)}</ul>
-    {dates.some(d => !canScheduleCeremony(d)) && <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">Remove preview-only dates before saving. Past dates cannot be scheduled.</p>}
+    {dates.some(d => !canScheduleCeremony(d)) && <ErrorNotice error="Remove preview-only dates before saving. Past dates cannot be scheduled." />}
   </Surface>;
 }

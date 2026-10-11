@@ -12,6 +12,7 @@
     "configure:passkeys": "powershell -NoProfile -File scripts/configure-supabase-passkeys.ps1 -Apply",
     "test:passkeys:browser": "node scripts/browser-passkeys-check.mjs",
     "audit:browser": "node scripts/browser-ui-audit.mjs",
+    "test:skeletons:browser": "node scripts/browser-skeletons-check.mjs",
     "test:calendar:browser": "node scripts/browser-calendar-check.mjs",
     "test:calendar:reschedule:browser": "node scripts/browser-calendar-reschedule-check.mjs",
     "test": "vitest run",

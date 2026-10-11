@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { refreshData } from './backend';
 import { toast } from './toast';
+import { errorMessage } from './errors';
 import type { UserProfile } from '../types';
 
 export const requestFields = {
@@ -56,5 +57,5 @@ export function profileRequestTitle(row: ProfileRequest) {
   return `${row.kind === 'deletion' ? 'Delete' : 'Update'} ${subject.toLowerCase()} — ${row.student_name}`;
 }
 export function requestError(error: unknown) {
-  return error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to save the request. Please try again.';
+  return errorMessage(error);
 }

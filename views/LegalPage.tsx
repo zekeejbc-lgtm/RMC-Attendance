@@ -1,3 +1,5 @@
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from '../components/ui/ErrorNotice';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ShieldCheck, Pencil } from 'lucide-react';
@@ -36,7 +38,7 @@ const LegalPage: React.FC<{ kind: LegalKind; adminPreview?: boolean }> = ({ kind
       const value = await saveLegalPage(kind, draft, saved.updated_at);
       setSaved(value); setEditing(false); setNotice('Saved. This is now the current public page.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save. Your edits are still here; try again.');
+      setError(errorMessage(err));
     } finally { setSaving(false); }
   };
   useEffect(() => {
@@ -54,7 +56,7 @@ const LegalPage: React.FC<{ kind: LegalKind; adminPreview?: boolean }> = ({ kind
         {!editing && <button type="button" disabled={loading || !saved} onClick={() => { setNotice(''); setEditing(true); }} className="inline-flex items-center gap-2 rounded-xl bg-brand-900 px-4 py-2 font-semibold text-white disabled:opacity-50"><Pencil size={16} /> Edit page</button>}
       </div>}
       {loading && <p role="status" className="mb-4 text-sm">Loading saved page...</p>}
-      {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-red-800 dark:bg-red-950 dark:text-red-200">{error}</p>}
+      {error && <ErrorNotice error={error} operation="Legal Page"></ErrorNotice>}
       {notice && <p role="status" className="mb-4 rounded-xl bg-emerald-50 p-4 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{notice}</p>}
       {editing && isAdmin ? <LegalPageEditor key={kind} content={page} saving={saving} onSave={handleSave} onCancel={() => { setEditing(false); setError(''); }} /> : <>
       <div className="mb-10 space-y-4">

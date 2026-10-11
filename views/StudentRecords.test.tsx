@@ -8,7 +8,7 @@ const state = vi.hoisted(() => ({ extra: [] as any[] }));
 vi.mock('../components/AuthContext', () => ({ useAuth: () => ({ profile: { uid: 'student-1' }, revision: 1, stats: {} }) }));
 vi.mock('../lib/backend', () => {
   const event = { id: 'event-1', title: 'Intramurals', kind: 'attendance', startTime: Date.parse('2026-10-02T16:00:00Z'), endTime: Date.parse('2026-10-03T09:00:00Z'), venue: 'RMC Gym', attendanceWindows: [{ id: 'morning', label: 'Morning session' }] };
-  return { appData: {
+  return { subscribeData: () => () => {}, appData: {
     getAttendanceRecords: () => [{ id: 'record-1', event, slot: '2026-10-03:morning', status: 'present', time_in: Date.parse('2026-10-02T16:08:02Z'), time_out: Date.parse('2026-10-03T04:00:00Z'), scanned_by_name: 'Regal Admin', rendered_hours: 2 }, ...state.extra],
     getEvents: () => [event],
     getUserDetail: () => ({ sanction_logs: [{ id: 'sanction-1', reason: 'Late attendance', change: 1, timestamp: Date.parse('2026-10-02T16:08:02Z'), performed_by: 'Regal Admin' }] }),
@@ -24,8 +24,8 @@ it('loads the selected class student records and balance instead of the signed-i
   expect(attendance).toHaveBeenCalledWith('selected-student');
   expect(attendance).not.toHaveBeenCalledWith('student-1');
   expect(details).toHaveBeenCalledWith('selected-student');
-  expect(screen.getByText('7 Hours')).toBeInTheDocument();
-  expect(screen.getByText('3.00 Hours')).toBeInTheDocument();
+  expect(screen.getByText('7 hours')).toBeInTheDocument();
+  expect(screen.getByText('3 hours')).toBeInTheDocument();
   expect(screen.queryByRole('main')).not.toBeInTheDocument();
   attendance.mockRestore(); details.mockRestore();
 });
@@ -53,7 +53,7 @@ it('opens attendance details from the desktop title and sanction details from it
   fireEvent.click(screen.getByRole('button', { name: 'View sanction details: Late attendance' }));
   const dialog = screen.getByRole('dialog', { name: 'Sanction details' });
   expect(within(dialog).getByText('10/3/2026, 12:08:02 AM')).toBeInTheDocument();
-  expect(within(dialog).getByText('+1 hours')).toBeInTheDocument();
+  expect(within(dialog).getByText('+1 hour')).toBeInTheDocument();
 });
 
 it('sorts newest first, paginates both layouts and resets the page when searching', () => {

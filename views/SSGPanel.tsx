@@ -1,3 +1,5 @@
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from '../components/ui/ErrorNotice';
 import { hierarchyPathForRole } from '../lib/workspaceRoutes';
 import RecordPagination from '../components/ui/RecordPagination';
 import { usePagination } from '../components/usePagination';
@@ -25,8 +27,11 @@ import { PresetPickerModal } from '../components/academic/PresetPickerModal';
 import { profileMatchesDirectorySection, getAcademicNodeLabel, findNodePath } from '../lib/academicDirectory';
 import { createEventAudienceTarget, serializeAcademicAssignment } from '../lib/academicDirectory';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
+import { EventRecipientPicker } from '../components/events/EventRecipientPicker';
+import { recipientGroupLabel } from '../lib/eventAudience';
 import { NodeOfficerManager, NodeOfficerSummary } from '../components/academic/NodeOfficerManager';
 import { hasPermission, roleLabels } from '../lib/accessControl';
+import { toast } from '../lib/toast';
 import { Users, X, Shield, Plus, UserCheck, ChevronRight, School, BookOpen, ShieldAlert, Mail, Phone, User as UserIcon, Minus, LayoutGrid, Trash2, Home, Lock, CalendarPlus, MapPin, Target, Users2, AlertTriangle, Crosshair, Map, ChevronDown, FileText, Fingerprint, Building2, CalendarDays, Pencil, Archive, WandSparkles, Eye, EyeOff } from 'lucide-react';
 
 const memberFieldClass = 'mt-1.5 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/20 dark:border-slate-600 dark:bg-slate-900 dark:text-white';
@@ -69,7 +74,9 @@ const SSGPanel: React.FC = () => {
   
   // Specific Asset Input State
   const [assetInput, setAssetInput] = useState('');
-  const [audienceMode, setAudienceMode] = useState<'all' | 'directory_node' | 'specific'>('all');
+  const [audienceMode, setAudienceMode] = useState<'all' | 'directory_node' | 'specific' | 'group_list'>('all');
+  const [recipientGroups, setRecipientGroups] = useState<string[]>([]);
+  const [pendingRecipient, setPendingRecipient] = useState(false);
   const [eventAudiencePath, setEventAudiencePath] = useState<SchoolNode[]>([]);
 
   const [eventData, setEventData] = useState({
@@ -88,7 +95,8 @@ const SSGPanel: React.FC = () => {
     isLocating: false
   });
 
-  const isPresident = profile?.role === 'ssg' || profile?.role === 'admin' || profile?.role === 'ossa';
+  const canManageSanctions = hasPermission(profile?.role, 'directory.manage_student_sanctions');
+  const canChangeDesignation = hasPermission(profile?.role, 'directory.change_member_designation');
   const canManageStructure = hasPermission(profile?.role, 'directory.manage_structure');
   const canCreateUnits = canManageStructure && hasPermission(profile?.role, 'directory.create_units');
   const canDeleteStructure = hasPermission(profile?.role, 'directory.delete_structure');
@@ -144,28 +152,34 @@ const SSGPanel: React.FC = () => {
       setSelectedApplicant(null);
       refresh();
     } catch (caught) {
-      setAdmissionError(caught instanceof Error ? caught.message : 'The application decision could not be saved.');
+      setAdmissionError(errorMessage(caught));
     }
   };
 
   // Fix: Implemented missing handleAdjustSanctionHours function for student detail modal
   const handleAdjustSanctionHours = async (uid: string, delta: number) => {
+    if (!canManageSanctions) return;
     await appData.adjustSanctionHours(uid, delta, `Administrative Adjustment: ${profile?.name}`);
     refresh();
   };
 
   const handleAssignRole = async (uid: string, role: 'student' | 'mayor') => {
-    if (role === 'mayor' && currentNode) await appData.assignSectionMayor(uid, currentNode.id, currentNode.name);
-    else await appData.assignRole(uid, role);
-    const freshUser = appData.getUserDetail(uid);
-    if (freshUser) setSelectedStudent({ ...freshUser.profile, stats: freshUser.stats });
-    refresh();
+    if (!canChangeDesignation) return;
+    try {
+      if (role === 'mayor' && currentNode) await appData.assignSectionMayor(uid, currentNode.id, currentNode.name);
+      else await appData.assignRole(uid, role, currentNode?.id);
+      const freshUser = appData.getUserDetail(uid);
+      if (freshUser) setSelectedStudent({ ...freshUser.profile, stats: freshUser.stats });
+      refresh();
+    } catch (error) { toast.error(error); }
   };
 
   const confirmAdjustment = async () => {
-    if (!selectedStudent || !pendingAdjustment) return;
-    await handleAdjustSanctionHours(selectedStudent.uid, pendingAdjustment.delta);
-    setPendingAdjustment(null);
+    if (!canManageSanctions || !selectedStudent || !pendingAdjustment) return;
+    try {
+      await handleAdjustSanctionHours(selectedStudent.uid, pendingAdjustment.delta);
+      setPendingAdjustment(null);
+    } catch (error) { toast.error(error); }
   };
 
   useEffect(() => {
@@ -207,10 +221,11 @@ const SSGPanel: React.FC = () => {
 
   const handleCreateEvent = async () => {
     const directoryAudience = audienceMode === 'directory_node' ? createEventAudienceTarget(eventAudiencePath) : null;
-    const participantsType: AppEvent['participantsType'] = audienceMode === 'specific' ? 'specific' : directoryAudience?.participantsType || 'all';
-    const finalTargetValue = audienceMode === 'specific' ? 'Specific people' : directoryAudience?.targetValue || 'All Students';
+    const participantsType: AppEvent['participantsType'] = ['specific', 'group_list'].includes(audienceMode) ? 'specific' : directoryAudience?.participantsType || 'all';
+    const finalTargetValue = audienceMode === 'group_list' ? recipientGroups.map(group => recipientGroupLabel(group, structure)).join(', ') : audienceMode === 'specific' ? 'Specific people' : directoryAudience?.targetValue || 'All Students';
     const audienceTarget: AppEvent['audienceTarget'] = audienceMode === 'specific'
       ? { mode: 'specific_people', specificUserIds: eventData.specificPeople }
+      : audienceMode === 'group_list' ? { mode: 'group_list', groups: recipientGroups, snapshotLabel: finalTargetValue }
       : directoryAudience?.audienceTarget || { mode: 'all' };
 
     await appData.createEvent({
@@ -233,6 +248,8 @@ const SSGPanel: React.FC = () => {
 
     setShowEventModal(false);
     setAudienceMode('all');
+    setRecipientGroups([]);
+    setPendingRecipient(false);
     setEventAudiencePath([]);
     setEventData({ 
       title: '', description: '', startTime: '', endTime: '', radius: 100, penaltyValue: 1, penaltyUnit: 'hours',
@@ -276,7 +293,7 @@ const SSGPanel: React.FC = () => {
   const restoreNode = async (node: SchoolNode) => {
     setRestoreError(''); setRestoringId(node.id);
     try { await appData.restoreSchoolNode(node.id); refresh(); }
-    catch (error) { setRestoreError(error instanceof Error ? error.message : 'Unable to restore this unit.'); }
+    catch (error) { setRestoreError(errorMessage(error)); }
     finally { setRestoringId(''); }
   };
 
@@ -317,7 +334,7 @@ const SSGPanel: React.FC = () => {
       setShowMemberModal(false);
       refresh();
     } catch (caught) {
-      setMemberError(caught instanceof Error ? caught.message : 'The member could not be created.');
+      setMemberError(errorMessage(caught));
     }
   };
 
@@ -382,7 +399,7 @@ const SSGPanel: React.FC = () => {
               {canCreateUnits && currentNode && ['campus', 'school'].includes(currentNode.type) && <button onClick={() => setShowPresetModal(true)} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-50 px-3 text-xs font-bold text-brand-900 hover:bg-gold-50 dark:bg-brand-900/40 dark:text-brand-200"><WandSparkles size={15} /> Add template</button>}
             </div>
 
-            {restoreError && <p role="alert" className="text-sm text-red-600">{restoreError}</p>}
+            {restoreError && <ErrorNotice error={restoreError} operation="SSGPanel"></ErrorNotice>}
             {path.some(node => node.metadata?.archived) && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">You are viewing an archived hierarchy. Restore its archived parent units to make it available for enrollment again.</p>}
             {profile && (profile.role === 'admin' || organizationUnit) && <HierarchyOrganizations key={organizationUnit?.id || 'school-wide'} unit={organizationUnit} profile={profile} onChanged={refresh} />}
             {isAtSection && currentNode && (profile?.role === 'admin' || profile?.role === 'ossa') && <ClassScheduleEditor key={`schedule-${currentNode.id}`} node={currentNode} onSaved={refresh} />}
@@ -566,7 +583,7 @@ const SSGPanel: React.FC = () => {
             variant="gold"
             className="sm:w-auto"
             onClick={handleCreateEvent}
-            disabled={!eventData.title || !Number.isFinite(parseManilaDateTime(eventData.startTime)) || !Number.isFinite(parseManilaDateTime(eventData.endTime)) || parseManilaDateTime(eventData.endTime) <= parseManilaDateTime(eventData.startTime) || (audienceMode === 'directory_node' && eventAudiencePath.length === 0) || (audienceMode === 'specific' && eventData.specificPeople.length === 0)}
+            disabled={!eventData.title || !Number.isFinite(parseManilaDateTime(eventData.startTime)) || !Number.isFinite(parseManilaDateTime(eventData.endTime)) || parseManilaDateTime(eventData.endTime) <= parseManilaDateTime(eventData.startTime) || (audienceMode === 'directory_node' && eventAudiencePath.length === 0) || (audienceMode === 'specific' && eventData.specificPeople.length === 0) || (audienceMode === 'group_list' && (!recipientGroups.length || pendingRecipient))}
           >
             Deploy
           </Button>
@@ -646,7 +663,8 @@ const SSGPanel: React.FC = () => {
                        <Users2 size={16} className="text-gold-500" /> Target Population Thread
                     </h4>
                     <div className="space-y-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-8">
-                       <CustomSelect label="Audience type" options={[{ value: 'all', label: 'All institution members' }, { value: 'directory_node', label: 'Academic directory group' }, { value: 'specific', label: 'Specific people or IDs' }]} value={audienceMode} onChange={(value) => { setAudienceMode(value as typeof audienceMode); setEventAudiencePath([]); }} />
+                       <CustomSelect label="Audience type" options={[{ value: 'all', label: 'All institution members' }, { value: 'directory_node', label: 'Academic directory group' }, { value: 'specific', label: 'Specific people or IDs' }, { value: 'group_list', label: 'Roles or recipient groups' }]} value={audienceMode} onChange={(value) => { setAudienceMode(value as typeof audienceMode); setEventAudiencePath([]); }} />
+                       {audienceMode === 'group_list' && <EventRecipientPicker roots={structure} selected={recipientGroups} onChange={setRecipientGroups} onPendingChange={setPendingRecipient} />}
                        {audienceMode === 'directory_node' && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50"><p className="mb-3 text-sm font-bold text-brand-900 dark:text-white">Choose any academic unit</p><AcademicPathPicker roots={structure} value={eventAudiencePath.map((node) => node.id)} onChange={setEventAudiencePath} purpose="events" /></div>}
 
                        {/* SPECIFIC ASSET UIDs (MANUAL) */}
@@ -718,7 +736,7 @@ const SSGPanel: React.FC = () => {
           <label className="text-sm font-semibold">Email<input className={`app-control ${memberFieldClass}`} onChange={(event) => setMemberData({ ...memberData, email: event.target.value })} required type="email" value={memberData.email} /></label>
           <label className="text-sm font-semibold">Username<input className={`app-control ${memberFieldClass}`} onChange={(event) => setMemberData({ ...memberData, username: event.target.value })} required value={memberData.username} /></label>
           <label className="text-sm font-semibold sm:col-span-2">Temporary password<div className="relative"><input className={`app-control ${`${memberFieldClass} pr-11`}`} minLength={8} onChange={(event) => setMemberData({ ...memberData, password: event.target.value })} required type={showMemberPassword ? 'text' : 'password'} value={memberData.password} /><button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => setShowMemberPassword((visible) => !visible)} aria-label={showMemberPassword ? 'Hide temporary password' : 'Show temporary password'} aria-pressed={showMemberPassword} className="absolute inset-y-0 right-1 flex w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700">{showMemberPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
-          {memberError ? <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 sm:col-span-2 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200" role="alert">{memberError}</p> : null}
+          {memberError ? <ErrorNotice error={memberError} operation="SSGPanel"></ErrorNotice> : null}
         </div>
       </Modal>
 
@@ -765,7 +783,7 @@ const SSGPanel: React.FC = () => {
                      <p className="text-3xl font-black text-red-600 dark:text-red-400">{selectedStudent.stats.sanction_hours}</p>
                   </div>
                </div>
-               {canManageMembers && <div className="space-y-4">
+               {canManageSanctions && <div className="space-y-4">
                   <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
                     <ShieldAlert size={12} /> Hour Modification
                   </h4>
@@ -773,12 +791,12 @@ const SSGPanel: React.FC = () => {
                      <button aria-label="Add one sanction hour" onClick={() => setPendingAdjustment({ delta: 1, action: 'add hour' })} className="py-4 bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-red-200 dark:hover:bg-red-900 transition-all flex items-center justify-center gap-1.5 shadow-sm">
                         <Plus size={16} /> Add
                      </button>
-                     <button aria-label="Clear one sanction hour" disabled={!isPresident} onClick={() => setPendingAdjustment({ delta: -1, action: 'clear hour' })} className={`py-4 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-sm ${isPresident ? 'bg-green-50 dark:bg-green-950/80 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900 border border-green-200 dark:border-green-800' : 'bg-slate-50 dark:bg-slate-900 text-slate-300 dark:text-slate-600 opacity-40 cursor-not-allowed'}`}>
-                        {isPresident ? <Minus size={16} /> : <Lock size={12} />} Clear
+                     <button aria-label="Clear one sanction hour" onClick={() => setPendingAdjustment({ delta: -1, action: 'clear hour' })} className="py-4 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-sm bg-green-50 dark:bg-green-950/80 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900 border border-green-200 dark:border-green-800">
+                        <Minus size={16} /> Clear
                      </button>
                   </div>
                </div>}
-               {canManageMembers && <div className="space-y-4">
+               {canChangeDesignation && <div className="space-y-4">
                   <h4 className="text-[8px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
                     <UserIcon size={12} /> Designation Control
                   </h4>
@@ -832,7 +850,7 @@ const SSGPanel: React.FC = () => {
               <input type="checkbox" checked={clarificationFields.includes(value)} onChange={event => setClarificationFields(current => event.target.checked ? [...current, value] : current.filter(field => field !== value))} /> {label}
             </label>)}
           </fieldset>}
-          {admissionError && <p role="alert" className="text-sm text-red-600">{admissionError}</p>}
+          {admissionError && <ErrorNotice error={admissionError} operation="SSGPanel"></ErrorNotice>}
         </div>}
       </Modal>
 

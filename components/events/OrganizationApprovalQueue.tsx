@@ -1,3 +1,4 @@
+import ErrorNotice from '../ui/ErrorNotice';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { appData } from '../../lib/backend';
@@ -69,7 +70,7 @@ export default function OrganizationApprovalQueue() {
         </>}
         {canReview && <div><label className={approvalLabel} htmlFor="organization-review-notes">Decision notes (required for rejection)</label><textarea id="organization-review-notes" rows={3} maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)} disabled={busy} className={approvalControl} /></div>}
         {canReview && expiredEvent && <p className="text-amber-700 dark:text-amber-300">The organization must reschedule this event before it can be reviewed.</p>}
-        {error && <p role="alert" className="text-red-600 dark:text-red-400">{error}</p>}
+        {error && <ErrorNotice error={error} operation="Organization Approval Queue"></ErrorNotice>}
       </div>}
     </Modal>
   </>;

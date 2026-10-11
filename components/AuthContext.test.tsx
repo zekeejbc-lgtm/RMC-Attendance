@@ -18,6 +18,7 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { appAuth, appData, resetData } from '../lib/backend';
 import { toast } from '../lib/toast';
 import { IDLE_STORAGE_PREFIX, IDLE_TIMEOUT_MS } from '../lib/idleSession';
+import { refreshData } from '../lib/backend';
 
 function deferred() {
   let resolve!: (value: any) => void;
@@ -56,6 +57,31 @@ beforeEach(() => {
   api.refreshProfiles.mockResolvedValue(undefined);
 });
 afterEach(() => { cleanup(); resetData(); vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear(); });
+
+it('keeps the workspace and input mounted while background data updates arrive', async () => {
+  api.rpc.mockResolvedValue({ data: structuredClone(snapshot), error: null });
+  render(<AuthProvider><Probe /><input aria-label="Unsaved note" defaultValue="Keep my draft" /></AuthProvider>);
+  emit('student');
+  await screen.findByText('Student');
+  await waitFor(() => expect(screen.getByText('Workspace ready')).toBeVisible());
+  const input = screen.getByRole('textbox', { name: 'Unsaved note' });
+  const originalProfile = appAuth.getCurrentUser()?.profile;
+  const pending = deferred();
+  api.rpc.mockReturnValueOnce(pending.promise);
+  let refresh!: Promise<boolean>;
+  act(() => { refresh = refreshData(); });
+  expect(screen.getByText('Workspace ready')).toBeVisible();
+  expect(screen.getByText('Assembly')).toBeVisible();
+  await act(async () => {
+    pending.resolve({ data: { ...structuredClone(snapshot), events: [...snapshot.events, { id: 'new', title: 'New activity' }] }, error: null });
+    await refresh;
+  });
+  expect(screen.getByText('Assembly,New activity')).toBeVisible();
+  expect(appAuth.getCurrentUser()?.profile).toBe(originalProfile);
+  expect(screen.getByRole('textbox', { name: 'Unsaved note' })).toBe(input);
+  expect(input).toHaveValue('Keep my draft');
+  expect(screen.queryByText('Loading workspace')).not.toBeInTheDocument();
+});
 
 it('closes the workspace and clears scanner access on idle logout even if the server is unreachable', async () => {
   vi.useFakeTimers();

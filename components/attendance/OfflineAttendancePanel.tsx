@@ -5,6 +5,8 @@ import { formatManilaDateTime } from '../../lib/dateTime';
 import type { AppEvent } from '../../types';
 import { offlineRosterUnavailableReason } from '../../lib/offlineRosterEligibility';
 import { offlineQueue, offlineRosters, prepareOfflineAttendance, subscribeOfflineAttendance, syncOfflineAttendance, retryOfflineAttendance, removeSyncedAttendance, type OfflineRoster, type QueuedAttendance } from '../../lib/offlineAttendance';
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 
 export function useOfflineAttendance(owner?: string) {
   const [rosters, setRosters] = useState<OfflineRoster[]>([]);
@@ -21,7 +23,7 @@ export function useOfflineAttendance(owner?: string) {
       try {
         const [nextRosters, nextQueue] = await Promise.all([kind === 'scan' ? Promise.resolve(null) : offlineRosters(owner), offlineQueue(owner)]);
         if (!disposed && version === request) { if (nextRosters) setRosters(nextRosters); setQueue(nextQueue); setError(''); }
-      } catch (failure) { if (!disposed) setError(failure instanceof Error ? failure.message : 'Offline storage is unavailable.'); }
+      } catch (failure) { if (!disposed) setError(errorMessage(failure)); }
     };
     const connection = () => { setOnline(navigator.onLine); void refresh(); };
     const unsubscribe = subscribeOfflineAttendance(kind => void refresh(kind));
@@ -56,7 +58,7 @@ export default function OfflineAttendancePanel({ owner, eventId, event, data }: 
   const confirmed = data.queue.filter(item => item.state === 'synced').length;
   const act = async (operation: () => Promise<unknown>) => {
     setWorking(true); setError('');
-    try { await operation(); } catch (failure) { setError(failure instanceof Error ? failure.message : 'Unable to complete this action.'); }
+    try { await operation(); } catch (failure) { setError(errorMessage(failure)); }
     finally { setWorking(false); }
   };
   const exportReview = () => {
@@ -86,12 +88,12 @@ export default function OfflineAttendancePanel({ owner, eventId, event, data }: 
       <Button variant="secondary" disabled={working} onClick={exportReview}>Export sync review</Button>
       {confirmed > 0 && <Button variant="secondary" disabled={!owner || working} onClick={() => owner && void act(() => removeSyncedAttendance(owner))}>Clear confirmed from device</Button>}
     </div>}
-    {(error || data.error) && <p role="alert" className="text-sm text-red-700">{error || data.error}</p>}
+    {(error || data.error) && <ErrorNotice error={error || data.error} operation="Offline attendance" />}
     {data.queue.some(item => item.state !== 'synced') && <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">
       {data.queue.filter(item => item.state !== 'synced').slice(-50).map(row => <li key={row.submission.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
         <p className="font-semibold">{row.studentName} · {row.studentId} · {row.submission.direction === 'in' ? 'Scan in' : 'Scan out'}</p>
         <p>{row.eventTitle} · {formatManilaDateTime(row.submission.capturedAt)}</p>
-        <p>{row.state === 'rejected' ? 'Needs review' : 'Saved on this device — pending server confirmation'}{row.error ? `: ${row.error}` : ''}</p>
+        <p>{row.state === 'rejected' ? 'Needs review' : 'Saved on this device — pending server confirmation'}</p>{row.error && <ErrorNotice error={row.error} operation="Sync attendance" />}
         {row.state === 'rejected' && <Button size="sm" variant="secondary" disabled={!data.online || working} onClick={() => owner && void act(() => retryOfflineAttendance(owner, row.submission.id))}>Retry after resolving issue</Button>}
       </li>)}
     </ul>}

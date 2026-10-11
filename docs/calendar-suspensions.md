@@ -34,3 +34,14 @@ Configure built-in or custom roles under **System Controls → RBAC Roles → Ev
 Permissions are enforced on routes, navigation and database RPCs, including revocation from Admin. A custom role or Student role can receive delegated management; without school-wide permission, the saved academic assignment remains the boundary. Unassigned scoped delegates cannot apply closures. Existing permissions still control creating and editing the underlying activities. Calendar viewing alone does not grant activity editing. Entries open a full calendar detail dialog for every role, including the overall schedule and selected session, instructions, venue/perimeter, parent event and organization context, attendance windows, and applicable sanction, service, merit, and excuse rules. General containers do not show attendance requirements. Scoped overlap indicators show competing activity times, rather than asserting that each attendee must attend both activities.
 
 Saved closures still cannot be edited or withdrawn. Granting calendar permissions does not change that limitation. Database grant/revocation verification: `supabase/tests/calendar_rbac.sql`.
+
+
+## Informational schedules
+
+In My Calendar, use **Add schedule** to publish dates, details, an optional venue, and recipients. The Recipients section combines **Recipients in** (a school unit) with **Recipient type** (all students, mayors only, or SSG officers only). Both filters apply together: College + Mayors only informs only college mayors. Changing the unit keeps the selected recipient type. There is no separate school-unit setting or Add recipient step. These entries are labelled **No attendance required** and generate inbox notifications. They do not create events, attendance requirements, sanctions, or credits, and they do not suspend other activities. They appear in the daily agenda, the Informational schedules filter, PDF exports, and ICS exports (as transparent entries).
+
+Admin, SSG, and OSSA receive the Manage Informational Schedules permission by default. Existing roles that manage events or calendar closures receive it during migration. Role administrators can grant it to custom roles. Holiday and suspension managers can also manage informational schedules. Scoped managers must choose a unit and recipients within their assigned scope; admin and roles with schoolwide calendar permission can choose the whole school.
+
+Use View schedule to edit an upcoming entry or cancel an entry that has not ended. Saving an edit notifies the previous and current recipients; cancelling notifies the current recipients. Cancelled schedules stay visible for reference and are omitted from ICS exports.
+
+Apply the informational_calendar_schedules migration before deploying the frontend. Database regression coverage is in supabase/tests/informational_calendar_schedules.sql and rolls back its fixtures.

@@ -64,6 +64,22 @@
 .app-toast[data-kind='error'] > svg { color: var(--color-danger); }
 .app-toast-label { display: block; font-weight: 800; color: var(--color-text); }
 .app-toast-code { margin-left: 0.375rem; font-size: 0.6875rem; font-weight: 600; color: var(--color-text-muted); }
+.error-notice { display: block; padding: 0.75rem; margin-block: 0.5rem; border: 2px solid var(--error-outline, #64748b); border-radius: 0.75rem; color: var(--color-text); background: var(--color-surface); overflow-wrap: anywhere; }
+.error-notice[data-owner='user'], .app-toast[data-kind='error'][data-owner='user'] { --error-outline: #b45309; }
+.error-notice[data-owner='school'], .app-toast[data-kind='error'][data-owner='school'] { --error-outline: #2563eb; }
+.error-notice[data-owner='developer'], .app-toast[data-kind='error'][data-owner='developer'] { --error-outline: #dc2626; }
+.error-notice[data-owner='unknown'], .app-toast[data-kind='error'][data-owner='unknown'] { --error-outline: #64748b; }
+.app-toast[data-kind='error'] { border: 2px solid var(--error-outline, #64748b); }
+.app-toast[data-kind='error'] > svg { color: var(--error-outline); }
+.error-notice-label, .error-notice-operation, .error-notice-message, .error-notice-code { display: block; }
+.error-notice-label { color: var(--error-outline); font-size: 0.75rem; font-weight: 800; margin-bottom: 0.25rem; }
+.error-notice-operation { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; }
+.error-notice-message { font-size: 0.875rem; line-height: 1.5; }
+.error-notice-code { font-size: 0.75rem; margin-top: 0.375rem; color: var(--color-text-muted); user-select: all; }
+.dark .error-notice[data-owner='user'], .dark .app-toast[data-owner='user'] { --error-outline: #fbbf24; }
+.dark .error-notice[data-owner='school'], .dark .app-toast[data-owner='school'] { --error-outline: #60a5fa; }
+.dark .error-notice[data-owner='developer'], .dark .app-toast[data-owner='developer'] { --error-outline: #f87171; }
+.dark .error-notice[data-owner='unknown'], .dark .app-toast[data-owner='unknown'] { --error-outline: #94a3b8; }
 .app-toast-spinner { animation: toastSpin 1s linear infinite; }
 @keyframes toastSpin { to { transform: rotate(360deg); } }
 
@@ -256,7 +272,9 @@ a {
     radial-gradient(circle, rgb(var(--palette-brand-200) / 0.08) 0.7px, transparent 0.9px);
 }
 
-.app-skeleton { display: block; max-width: 100%; min-height: 0.5rem; overflow: hidden; background: linear-gradient(105deg, color-mix(in srgb, var(--color-border) 72%, transparent) 20%, color-mix(in srgb, var(--color-surface) 92%, white) 42%, color-mix(in srgb, var(--color-border) 72%, transparent) 64%); background-size: 220% 100%; animation: shimmer 1.7s ease-in-out infinite; }
+@layer components {
+  .app-skeleton { display: block; max-width: 100%; min-height: 0.5rem; overflow: hidden; background: linear-gradient(105deg, color-mix(in srgb, var(--color-border) 72%, transparent) 20%, color-mix(in srgb, var(--color-surface) 92%, white) 42%, color-mix(in srgb, var(--color-border) 72%, transparent) 64%); background-size: 220% 100%; animation: shimmer 1.7s ease-in-out infinite; }
+}
 .app-loading-shell { min-height: 100dvh; width: 100%; overflow: hidden; background: var(--neutral-bg); color: var(--neutral-dark); }
 .app-loading-layout { display: flex; width: min(100%, 42rem); margin: 0 auto; gap: 0.875rem; padding: var(--space-page); }
 .app-skeleton-card { min-width: 0; display: grid; gap: 0.75rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-surface); background: var(--surface-card); padding: 1rem; box-shadow: var(--shadow-surface); }

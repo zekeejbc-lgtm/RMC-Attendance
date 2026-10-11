@@ -74,7 +74,7 @@ export function createCalendarPdf(month: string, items: CalendarItem[], closures
   `${stamp(item.starts_at)}\nTo ${stamp(item.ends_at)}`,
   `${item.general ? 'GENERAL EVENT\n' : item.parent_event_id ? 'Specific activity: ' : ''}${item.title}${item.general ? '\nGroups the specific activities below' : `\n${item.label}`}`,
   item.venue || 'No venue specified',
-  item.cancelled ? 'Cancelled' : item.suspended ? 'Attendance suspended' : item.general ? 'General event - no attendance' : conflicts.has(item.id) ? 'Schedule conflict' : 'Scheduled',
+  item.cancelled ? 'Cancelled' : item.kind === 'informational' ? 'Informational - no attendance required' : item.suspended ? 'Attendance suspended' : item.general ? 'General event - no attendance' : conflicts.has(item.id) ? 'Schedule conflict' : 'Scheduled',
  ];
  for (const group of calendarAgendaGroups(sorted)) {
   if (group.parent) { parentRows.add(rows.length); rows.push(activityRow(group.parent)); }

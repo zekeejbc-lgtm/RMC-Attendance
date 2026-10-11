@@ -1,3 +1,4 @@
+import { formatHourDuration } from '../../lib/duration';
 import React from 'react';
 import { appData } from '../../lib/backend';
 import { formatManilaDateTime } from '../../lib/dateTime';
@@ -16,9 +17,9 @@ export default function ActivityCredits({ records, uid, onOpen }: { records: Cre
   const title = (record: CreditRecord) => record.event ? eventDisplayTitle(record.event, appData.getEvents()) : 'Archived activity';
   const session = (record: CreditRecord) => record.event ? attendanceWindowTitle(record.event, record.slot) || 'Default session' : 'Archived session';
   const fields = (record: CreditRecord) => [
-    { label: 'Rendered hours', value: Number(record.rendered_hours || 0).toFixed(2) },
-    { label: 'Sanctions cleared', value: Number(record.deducted_hours || 0).toFixed(2) },
-    { label: 'Merit earned', value: Number(record.merit_earned_hours || 0).toFixed(2) },
+    { label: 'Rendered hours', value: formatHourDuration(record.rendered_hours || 0) },
+    { label: 'Sanctions cleared', value: formatHourDuration(record.deducted_hours || 0) },
+    { label: 'Merit earned', value: formatHourDuration(record.merit_earned_hours || 0) },
   ];
   const status = (record: CreditRecord) => !record.time_out ? 'Awaiting scan-out' : record.completion_pending ? 'Pending completion' : 'Completed';
   const badge = (record: CreditRecord) => <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${!record.time_out || record.completion_pending ? 'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'}`}>{status(record)}</span>;

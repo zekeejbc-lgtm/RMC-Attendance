@@ -1,3 +1,5 @@
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from '../components/ui/ErrorNotice';
 import { getDigitalIdRole, renderDigitalId } from '../lib/digitalId';
 import { getProfileSchoolName } from '../lib/academicDirectory';
 import { toast } from '../lib/toast';
@@ -8,6 +10,7 @@ import { useAuth } from '../components/AuthContext';
 import { ShieldCheck, Info, Download, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
+import { Skeleton } from '../components/ui/Skeleton';
 
 const StudentQR: React.FC = () => {
   const { profile } = useAuth();
@@ -28,13 +31,13 @@ const StudentQR: React.FC = () => {
       try {
         const result = await appData.issueQr();
         if (active) { setQrToken(result.token); setExpiresAt(result.expiresAt); setQrError(''); }
-      } catch (error) { if (active) { setQrToken(''); setQrError(error instanceof Error ? error.message : 'QR unavailable.'); } }
+      } catch (error) { if (active) { setQrToken(''); setQrError(errorMessage(error)); } }
     };
     const loadPrintQr = async () => {
       try {
         const result = await appData.getPrintQr();
         if (active) { setPrintQrToken(result.token); setPrintQrError(''); }
-      } catch (error) { if (active) { setPrintQrToken(''); setPrintQrError(error instanceof Error ? error.message : 'Printed QR unavailable.'); } }
+      } catch (error) { if (active) { setPrintQrToken(''); setPrintQrError(errorMessage(error)); } }
     };
     void renewLiveQr();
     void loadPrintQr();
@@ -53,7 +56,7 @@ const StudentQR: React.FC = () => {
       setPrintQrError('');
       toast.success('Printed QR replaced. Download a new card.');
     } catch (error) {
-      setPrintQrError(error instanceof Error ? error.message : 'Printed QR unavailable.');
+      setPrintQrError(errorMessage(error));
       toast.error(error);
     } finally {
       setRefreshingPrintQr(false);
@@ -141,7 +144,7 @@ const StudentQR: React.FC = () => {
               fgColor="#0E1B42"
               level="H"
               className="h-auto w-full"
-            /> : <p role="status">{qrError || 'Generating live QR...'}</p>}
+            /> : qrError ? <ErrorNotice error={qrError} operation="Open live QR" /> : <div role="status" aria-label="Generating live QR" aria-busy="true"><Skeleton className="aspect-square w-full" /></div>}
           </div>
 
           {/* The printed card uses a separate persistent QR token. Keep its SVG out of the live preview. */}
@@ -192,7 +195,7 @@ const StudentQR: React.FC = () => {
                 <span>{refreshingPrintQr ? 'Replacing...' : 'Replace QR'}</span>
               </Button>
             </div>
-            {printQrError ? <p className="mt-2 text-[10px] font-medium text-red-700 dark:text-red-300">{printQrError}</p> : null}
+            {printQrError ? <ErrorNotice error={printQrError} operation="Student QR"></ErrorNotice> : null}
           </div>
 
           {/* Live QR status */}

@@ -1,3 +1,6 @@
+import { selectUploadFile, uploadFileBytes, uploadFileText } from '../../lib/fileUploads';
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 import { useEffect, useState } from 'react';
 import { SchoolNode } from '../../types';
 import { appData } from '../../lib/backend';
@@ -6,7 +9,6 @@ import { findNodePath } from '../../lib/academicDirectory';
 import { AcademicPathPicker } from '../academic/AcademicPathPicker';
 import { ArrowRight, CheckCircle2, Download, FileSpreadsheet, Info, Search, Upload, Users } from 'lucide-react';
 import Button from '../ui/Button';
-import CustomSelect from '../ui/CustomSelect';
 import { assignmentLabel, csvText, downloadTransferFile, exportTransferWorkbook, parseTransferCsv, readTransferWorkbook, sortedTransferStudents, StudentTransfer, TransferStudent, SIMPLE_TRANSFER_COLUMNS, transferClassChoices, transferDestinations, simpleTransferExportRows, validateTransferRecords } from '../../lib/studentTransfers';
 
 export default function StudentTransferWorkspace({ nodes, initialNodeId }: { nodes: SchoolNode[]; initialNodeId?: string }) {
@@ -17,16 +19,17 @@ export default function StudentTransferWorkspace({ nodes, initialNodeId }: { nod
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
   const [sourcePath, setSourcePath] = useState<SchoolNode[]>(() => initialNodeId ? findNodePath(nodes, initialNodeId) || [] : []);
-  const [destination, setDestination] = useState('');
+  const [destinationPath, setDestinationPath] = useState<SchoolNode[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<StudentTransfer[]>([]);
   const [page, setPage] = useState(0);
   const [method, setMethod] = useState<'manual' | 'spreadsheet'>('manual');
   const [fileName, setFileName] = useState('');
-  const destinations = transferDestinations(nodes).sort((a, b) => assignmentLabel(nodes, a.id).localeCompare(assignmentLabel(nodes, b.id), undefined, { numeric: true }));
+  const destinations = transferDestinations(nodes);
+  const destination = destinations.find(node => node.id === destinationPath.at(-1)?.id)?.id || '';
   useEffect(() => {
     let active = true;
-    appData.getTransferRoster().then(data => { if (active) setStudents(data); }).catch(e => { if (active) setError(e.message || 'Could not load students.'); }).finally(() => { if (active) setLoading(false); });
+    appData.getTransferRoster().then(data => { if (active) setStudents(data); }).catch(e => { if (active) setError(errorMessage(e)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
   const sourceNodeId = sourcePath.at(-1)?.id;
@@ -34,7 +37,7 @@ export default function StudentTransferWorkspace({ nodes, initialNodeId }: { nod
   const displayed = filtered.slice(page * 50, (page + 1) * 50);
   const perform = async (task: () => Promise<void>) => {
     setBusy(true); setError(''); setMessage('');
-    try { await task(); } catch (e) { setError(e instanceof Error ? e.message : 'The operation failed.'); } finally { setBusy(false); }
+    try { await task(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   };
   const toggle = (uid: string) => setSelected(previous => { const next = new Set(previous); next.has(uid) ? next.delete(uid) : next.add(uid); return next; });
   const prepare = () => {
@@ -42,7 +45,7 @@ export default function StudentTransferWorkspace({ nodes, initialNodeId }: { nod
     try {
       const rows = students.filter(s => selected.has(s.uid)).map(s => [s.student_id, s.node_id, destination]);
       setPreview(validateTransferRecords([['student_id', 'source_node_id', 'destination_node_id'], ...rows], students, nodes));
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setError(errorMessage((e as Error))); }
   };
   const apply = () => perform(async () => {
     const count = await appData.transferStudents(preview);
@@ -58,7 +61,7 @@ export default function StudentTransferWorkspace({ nodes, initialNodeId }: { nod
     <div className="flex flex-wrap gap-2" aria-label="Transfer workflow">
       {['Choose students', 'Review changes', 'Apply transfers'].map((label, index) => <div key={label} className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${index === (preview.length ? 1 : 0) ? 'bg-brand-900 text-white dark:bg-brand-700' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}><span className="flex h-5 w-5 items-center justify-center rounded-full border border-current">{index + 1}</span>{label}</div>)}
     </div>
-    {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">{error}</div>}
+    {error && <ErrorNotice error={error} operation="Student Transfer Workspace"></ErrorNotice>}
     {message && <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"><CheckCircle2 size={18} />{message}</div>}
     <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
       <Surface className="min-w-0 overflow-hidden">
@@ -72,11 +75,11 @@ export default function StudentTransferWorkspace({ nodes, initialNodeId }: { nod
             <fieldset disabled={busy || loading} className="space-y-4"><legend className="mb-2 text-sm font-bold">1. Download your template</legend><p className={muted}>The easy workbook has student names, current classes, and a yellow column with a dropdown for the new class.</p><Button fullWidth={false} onClick={() => perform(() => exportTransferWorkbook(students, nodes))}><Download size={16} />Download easy template</Button><div className="flex flex-wrap gap-2"><Button fullWidth={false} size="sm" variant="secondary" onClick={() => downloadTransferFile(csvText([[...SIMPLE_TRANSFER_COLUMNS], ...simpleTransferExportRows(students, nodes)]), 'student-transfers.csv', 'text/csv;charset=utf-8')}>Export students CSV</Button><Button fullWidth={false} size="sm" variant="secondary" onClick={() => downloadTransferFile(csvText([['Move to class'], ...transferClassChoices(nodes).map(choice => [choice.label])]), 'assignment-legend.csv', 'text/csv;charset=utf-8')}>Export class names CSV</Button></div></fieldset>
             <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/50"><h3 className="text-sm font-bold">2. Choose the new class</h3><p className={`mt-2 ${muted}`}>In the Students tab, choose a class from the dropdown in the yellow <strong>Move to class</strong> column. Leave it blank for students who are staying. To move a whole section, choose a class once, then copy that cell into the other students' yellow cells. Keep the other columns unchanged.</p><p className={`mt-2 ${muted}`}>Using CSV, or a spreadsheet app without dropdowns? Copy the class name from Assignment Legend or the class names CSV.</p></div>
             <fieldset disabled={busy || loading}><legend className="mb-3 text-sm font-bold">3. Import and review</legend><label className="block rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-5 dark:border-slate-600 dark:bg-slate-900/40"><span className="flex items-center gap-2 text-sm font-semibold"><Upload size={18} />Import CSV or workbook</span><span className={`mt-2 block ${muted}`}>Choose a .csv or .xlsx file, up to 10 MB. Uploading opens a preview for your review.</span><input aria-label="Import student transfers" type="file" accept=".csv,.xlsx" className="mt-4 block w-full min-w-0 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-brand-900 file:px-4 file:py-2 file:font-semibold file:text-white" onChange={event => {
-              const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
+              const file = selectUploadFile(event.currentTarget, 10 * 1024 * 1024); if (!file) return;
               setPreview([]); setFileName(file.name);
               void perform(async () => {
                 if (file.size > 10 * 1024 * 1024) throw new Error('Choose a file of 10 MB or smaller.');
-                const changes = file.name.toLowerCase().endsWith('.xlsx') ? validateTransferRecords(await readTransferWorkbook(await file.arrayBuffer()), students, nodes) : parseTransferCsv(await file.text(), students, nodes);
+                const changes = file.name.toLowerCase().endsWith('.xlsx') ? validateTransferRecords(await readTransferWorkbook(await uploadFileBytes(file)), students, nodes) : parseTransferCsv(await uploadFileText(file), students, nodes);
                 setPreview(changes);
               });
             }} /></label>{fileName && <p className={`mt-2 break-all ${muted}`}>Selected file: {fileName}</p>}</fieldset>
@@ -94,12 +97,18 @@ export default function StudentTransferWorkspace({ nodes, initialNodeId }: { nod
               <div className="divide-y divide-slate-200 sm:hidden dark:divide-slate-700">{displayed.map(s => <label key={s.uid} className={`flex cursor-pointer items-start gap-3 p-5 ${selected.has(s.uid) ? 'bg-brand-50 dark:bg-brand-900/30' : ''}`}><input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-brand-900" disabled={busy} aria-label={`Select ${s.name} (${s.student_id})`} checked={selected.has(s.uid)} onChange={() => toggle(s.uid)} /><span className="min-w-0"><span className="block text-sm font-semibold">{s.name}</span><span className="mt-1 block font-mono text-xs text-slate-500">{s.student_id}</span><span className="mt-2 block text-xs leading-5 text-slate-600 dark:text-slate-300">{assignmentLabel(nodes, s.node_id)}</span></span></label>)}{!filtered.length && <p className="p-6 text-center text-sm text-slate-500">No students match these filters.</p>}</div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 dark:border-slate-700"><span className="text-xs text-slate-500">Page {page + 1} of {Math.max(1, Math.ceil(filtered.length / 50))}</span><div className="flex gap-2"><Button fullWidth={false} size="sm" variant="secondary" disabled={!page || busy} onClick={() => setPage(p => p - 1)}>Previous</Button><Button fullWidth={false} size="sm" variant="secondary" disabled={(page + 1) * 50 >= filtered.length || busy} onClick={() => setPage(p => p + 1)}>Next</Button></div></div>
             </>}
-            <fieldset disabled={busy || loading} className="space-y-4 border-t border-slate-200 bg-slate-50/70 p-5 sm:p-6 dark:border-slate-700 dark:bg-slate-900/40"><CustomSelect disabled={busy || loading} searchable label="Destination class (higher or lower year)" value={destination} onChange={value => setDestination(String(value))} options={[{ value: '', label: 'Choose destination' }, ...destinations.map(n => ({ value: n.id, label: assignmentLabel(nodes, n.id) }))]} /><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-500">Selections stay selected when you change filters.</p><Button fullWidth={false} disabled={busy || loading || !destination || !selected.size} onClick={prepare}>Review selected students ({selected.size})<ArrowRight size={16} /></Button></div></fieldset>
+            <fieldset aria-label="Destination class" disabled={busy || loading} className="space-y-4 border-t border-slate-200 bg-slate-50/70 p-5 sm:p-6 dark:border-slate-700 dark:bg-slate-900/40">
+              <h3 className="text-sm font-semibold">Destination class (higher or lower year)</h3>
+              <p className="text-xs leading-5 text-slate-500">Choose a campus, then continue through its academic units to a specific block or section. Select a class before reviewing the transfer.</p>
+              <AcademicPathPicker roots={nodes} value={destinationPath.map(node => node.id)} disabled={busy || loading} onChange={setDestinationPath} />
+              {!destinations.length && <p role="status" className={muted}>No active destination classes are available in your scope.</p>}
+              <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-500">Selections stay selected when you change filters.</p><Button fullWidth={false} disabled={busy || loading || !destination || !selected.size} onClick={prepare}>Review selected students ({selected.size})<ArrowRight size={16} /></Button></div>
+            </fieldset>
           </>}
         </>}
       </Surface>
       <aside className="space-y-4" aria-label="Transfer instructions">
-        <Surface className="p-5"><h2 className={`flex items-center gap-2 ${cardTitle}`}><Info size={19} className="text-gold-600" />How to transfer</h2><ol className="mt-4 space-y-4">{(method === 'manual' ? [['Select students', 'Choose a campus, then follow its units down to a class, just like enrollment. Choose All of to include a whole unit. Tick the students you want to move.'], ['Choose a destination', 'Pick the new class. Choose a higher year to move up, or a lower year to move down.'], ['Review and apply', 'Review the list and class assignments. Press Apply transfers to save the changes.']] : [['Download the easy template', 'Open Students in the workbook. The yellow column is the only column you need to edit.'], ['Choose new classes', 'Use the Move to class dropdown. Leave blank to keep the current class, or copy the same choice down for a whole section.'], ['Import, review, and apply', 'Upload your edited file, check every change in the preview, then apply the batch.']]).map(([title, text], index) => <li key={title} className="flex gap-3"><span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-800 dark:bg-brand-900 dark:text-brand-200">{index + 1}</span><div><h3 className="text-sm font-semibold">{title}</h3><p className={`mt-1 ${muted}`}>{text}</p></div></li>)}</ol></Surface>
+        <Surface className="p-5"><h2 className={`flex items-center gap-2 ${cardTitle}`}><Info size={19} className="text-gold-600" />How to transfer</h2><ol className="mt-4 space-y-4">{(method === 'manual' ? [['Select students', 'Choose a campus, then follow its units down to a class, just like enrollment. Choose All of to include a whole unit. Tick the students you want to move.'], ['Choose a destination', 'Choose a campus, then follow its academic units to a specific block or section, just like enrollment. Choose a higher year to move up, or a lower year to move down.'], ['Review and apply', 'Review the list and class assignments. Press Apply transfers to save the changes.']] : [['Download the easy template', 'Open Students in the workbook. The yellow column is the only column you need to edit.'], ['Choose new classes', 'Use the Move to class dropdown. Leave blank to keep the current class, or copy the same choice down for a whole section.'], ['Import, review, and apply', 'Upload your edited file, check every change in the preview, then apply the batch.']]).map(([title, text], index) => <li key={title} className="flex gap-3"><span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-800 dark:bg-brand-900 dark:text-brand-200">{index + 1}</span><div><h3 className="text-sm font-semibold">{title}</h3><p className={`mt-1 ${muted}`}>{text}</p></div></li>)}</ol></Surface>
         <Surface className="p-5"><h2 className="text-sm font-bold">Before you apply</h2><ul className={`mt-3 list-disc space-y-2 pl-4 ${muted}`}><li>Attendance records and balances stay with each student.</li><li>Transferred mayors become students. Appoint a mayor separately in the new class.</li><li>Transfer up to 1,000 students per batch within your assigned scope.</li><li>Students already in the destination class are skipped.</li></ul></Surface>
       </aside>
     </div>

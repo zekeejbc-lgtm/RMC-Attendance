@@ -1,10 +1,12 @@
 import { subscribeAttendance } from '../lib/liveAttendance';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { UserProfile, UserStats } from '../types';
 import { appAuth, appData, refreshData, resetData, subscribeData } from '../lib/backend';
 import { supabase, configurationError } from '../lib/supabase';
 import { AuthChallenge } from './AuthChallenge';
 import { toast } from '../lib/toast';
+import ErrorNotice from './ui/ErrorNotice';
+import { errorMessage } from '../lib/errors';
 import { clearOfflineRosters, refreshCachedRosterProfiles, restoreActiveOfflineScanner, restoreOfflineScanner, syncOfflineAttendance } from '../lib/offlineAttendance';
 import { refreshAutomaticRosters } from '../lib/autoRosterSync';
 import { hasPermission } from '../lib/accessControl';
@@ -18,6 +20,7 @@ interface AuthContextType {
 }
 const AuthContext = createContext<AuthContextType>({ user: null, profile: null, stats: null, loading: true, isMock: false });
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const retrySync = useRef<(() => Promise<void>) | null>(null);
   const [challenge, setChallenge] = useState<'mfa' | 'recovery' | null>(null);
   const [state, setState] = useState<AuthContextType>({ user: null, profile: null, stats: null, loading: true, isMock: false, error: configurationError, revision: 0 });
   useEffect(() => {
@@ -81,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState(s => ({ ...s, user: { uid: roster.actorUid }, profile: roster.actor as UserProfile, stats: null, loading: false, error: null, offlineScanner: true }));
       } catch (error) { failed(error); }
     };
-    const failed = (error: unknown) => { if (!disposed) setState(s => ({ ...s, loading: false, error: error instanceof Error ? error.message : 'Unable to connect to Supabase.' })); };
+    const failed = (error: unknown) => { if (!disposed) setState(s => ({ ...s, loading: false, error: errorMessage(error) })); };
     const sync = async () => {
       if (disposed || identity === undefined) return;
       if (!navigator.onLine) {
@@ -129,8 +132,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       catch (error) { if (version === identityVersion) { pollFailures++; failed(error); } }
       finally { syncing = false; schedulePoll(); if (syncAgain && !disposed) { syncAgain = false; void sync(); } }
     };
-    const unsubscribeData = subscribeData(() => {
-      if (disposed) return;
+    retrySync.current = sync;
+    const unsubscribeData = subscribeData(changed => {
+      if (disposed || !changed) return;
       const account = appAuth.getCurrentUser();
       setState(s => ({ ...s, profile: account && (account.profile.account_status === 'active' || appData.isUserScopeFrozen(account.profile)) ? account.profile : null, stats: account?.stats || null, revision: (s.revision || 0) + 1 }));
     });
@@ -196,7 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => { disposed = true; unsubscribe(); };
   }, [state.profile?.uid, state.offlineScanner, scopeFrozen]);
   return <AuthContext.Provider value={{ ...state, markApprovalNoticeSeen: () => setState(s => ({ ...s, approvalNoticeSeen: true })) }}>
-    {state.error && <div role="alert" className="border-b border-red-300 bg-red-50 p-3 text-sm text-red-900">{state.error} <button className="underline" onClick={() => window.location.reload()}>Retry connection</button></div>}
+    {state.error && <ErrorNotice error={state.error} operation="Load your account"><button className="underline" onClick={() => void retrySync.current?.()}>Retry connection</button></ErrorNotice>}
     {challenge ? <AuthChallenge recovery={challenge === 'recovery'} onComplete={() => { setChallenge(null); void refreshData(); }} /> : children}
   </AuthContext.Provider>;
 };

@@ -130,7 +130,7 @@ it('explains preview failure and lets the officer retry before downloading', asy
   fireEvent.click(screen.getByRole('option', { name: 'Campus' }));
   fireEvent.click(screen.getByRole('button', { name: /education unit.*all of campus/i }));
   fireEvent.click(screen.getByRole('option', { name: 'Senior High School' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('School logo could not be loaded.');
+  expect(await screen.findByRole('alert')).toHaveTextContent('SYS-001');
   expect(screen.getByRole('button', { name: 'Generate PDF report' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry preview' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Generate PDF report' })).toBeEnabled());

@@ -5,6 +5,7 @@ export type AccountStatus = 'pending' | 'active' | 'suspended' | 'inactive' | 'g
 export type AppPermission =
   | 'calendar.view'
   | 'calendar.view_scope'
+  | 'calendar.manage_schedules'
   | 'calendar.manage_closures'
   | 'calendar.manage_schoolwide'
   | 'system.manage_accounts'

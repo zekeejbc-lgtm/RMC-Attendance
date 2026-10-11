@@ -1,3 +1,4 @@
+import ErrorNotice from './ui/ErrorNotice';
 import { useEffect, useRef, useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import Button from './ui/Button';
@@ -27,7 +28,7 @@ export default function PasskeySignIn({ onSuccess, disabled = false }: { onSucce
     <Button type="button" variant="secondary" className="w-full" disabled={disabled || busy || Boolean(unavailable)} onClick={() => void signIn()}>
       <KeyRound size={18} /> {busy ? 'Waiting for your passkey…' : 'Sign in with passkey'}
     </Button>
-    {error && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{error}</p>}
+    {error && <ErrorNotice error={error} operation="Passkey Sign In"></ErrorNotice>}
     <p className="text-xs text-slate-500 dark:text-slate-400">{unavailable || 'Use a passkey you added in My Profile. Your device may ask for your face, fingerprint, PIN, or security key.'}</p>
   </div>;
 }

@@ -52,7 +52,7 @@ describe('Managed accounts table', () => {
   it('keeps unavailable activity distinct from accounts that never signed in', () => {
     const refresh = vi.fn();
     setup({ access: {}, accessError: 'Connection failed.', onRefresh: refresh });
-    expect(screen.getByRole('alert')).toHaveTextContent('Connection failed.');
+    expect(screen.getByRole('alert')).toHaveTextContent('SYS-001');
     change('Sign-in activity', 'never');
     expect(screen.getByRole('status')).toHaveTextContent('0 of 0');
     change('Sign-in activity', 'unknown');

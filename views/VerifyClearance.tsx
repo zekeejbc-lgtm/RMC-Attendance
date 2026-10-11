@@ -1,3 +1,6 @@
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from '../components/ui/ErrorNotice';
+import { LinesSkeleton } from '../components/ui/PageLoading';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ShieldCheck, ShieldX } from 'lucide-react';
@@ -11,7 +14,7 @@ export default function VerifyClearance() {
  const [retry, setRetry] = useState(0);
  useEffect(() => {
   let current = true; setResult(null); setError('');
-  verifyClearanceCertificate(token).then(data => { if (current) setResult(data); }).catch(err => { if (current) setError(err.message); });
+  verifyClearanceCertificate(token).then(data => { if (current) setResult(data); }).catch(err => { if (current) setError(errorMessage(err)); });
   return () => { current = false; };
  }, [token, retry]);
  const valid = result?.found && result.valid;
@@ -19,8 +22,8 @@ export default function VerifyClearance() {
   <section className="mx-auto max-w-xl space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-10">
    <p className="text-xs font-bold uppercase tracking-widest text-gold-700 dark:text-gold-400">IARS · Certificate verification</p>
    <h1 className="text-2xl font-bold">Clearance verification</h1>
-   {!result && !error && <p role="status">Checking the official certificate record…</p>}
-   {error && <div role="alert" className="space-y-3"><p>{error}</p><Button onClick={() => setRetry(v => v + 1)}>Retry verification</Button></div>}
+   {!result && !error && <div role="status" aria-label="Checking the official certificate record" aria-busy="true"><LinesSkeleton count={6} /></div>}
+   {error && <div role="alert" className="space-y-3"><ErrorNotice error={error} operation="Verify Clearance"></ErrorNotice><Button onClick={() => setRetry(v => v + 1)}>Retry verification</Button></div>}
    {result && <><div className={`flex items-center gap-3 rounded-xl p-4 ${valid ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200' : 'bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-200'}`}>
     {valid ? <ShieldCheck aria-hidden="true" /> : <ShieldX aria-hidden="true" />}<p className="font-bold">{valid ? 'Valid clearance certificate' : result.found ? 'Certificate is no longer valid' : 'Certificate not found'}</p>
    </div>{result.found && <dl className="space-y-4">{[

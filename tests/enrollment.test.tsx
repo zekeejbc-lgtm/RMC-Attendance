@@ -155,7 +155,7 @@ it('retains the uploaded photo after a failed signup and reuses it on retry', as
   api.submit.mockRejectedValueOnce({ message: 'Connection interrupted' });
   await reachPhoto();
   fireEvent.click(screen.getByRole('button', { name: 'Register' }));
-  await screen.findByText('Connection interrupted');
+  await screen.findByText(/NET-001/);
   expect(api.remove).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Register' }));
   await screen.findByText('Registration Submitted!');
@@ -168,7 +168,7 @@ it('rejects invalid details before uploading and allows a corrected retry', asyn
   await reachPhoto();
   api.validate.mockRejectedValueOnce(new Error('Enrollment is frozen for this section.'));
   fireEvent.click(screen.getByRole('button', { name: 'Register' }));
-  await screen.findByText('Enrollment is frozen for this section.');
+  await screen.findByText(/FREEZE-001/);
   expect(api.upload).not.toHaveBeenCalled();
   expect(api.submit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Register' }));

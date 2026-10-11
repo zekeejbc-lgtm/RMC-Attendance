@@ -1,3 +1,4 @@
+import ErrorNotice from '../ui/ErrorNotice';
 import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, ChevronDown, Download, FileText } from 'lucide-react';
 import Button from '../ui/Button';
@@ -5,6 +6,7 @@ import { calendarICS, type CalendarItem, type CalendarClosure } from '../../lib/
 import { useAuth } from '../AuthContext';
 import { appData } from '../../lib/backend';
 import { findNodePath, getProfileSchoolName } from '../../lib/academicDirectory';
+import { errorMessage } from '../../lib/errors';
 
 export default function CalendarExport({ month, items, closures, filter, disabled }: {
  month: string; items: CalendarItem[]; closures: CalendarClosure[]; filter: string; disabled: boolean;
@@ -49,7 +51,7 @@ export default function CalendarExport({ month, items, closures, filter, disable
     setTimeout(() => URL.revokeObjectURL(url), 1000);
    }
    setOpen(false);
-  } catch { setError('Could not export the calendar. Please try again.'); }
+  } catch (error) { setError(errorMessage(error)); }
   finally { setBusy(false); }
  };
  return <div ref={container} className="relative w-full sm:w-auto">
@@ -57,7 +59,7 @@ export default function CalendarExport({ month, items, closures, filter, disable
   {open && <div id="calendar-export-options" className="absolute right-0 z-30 mt-2 w-full rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900 sm:w-80" aria-label="Calendar export formats">
    <button type="button" disabled={busy} onClick={() => void exportFile('pdf')} className="flex w-full gap-3 rounded-xl p-3 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500 dark:hover:bg-slate-800"><FileText size={20} className="mt-0.5 shrink-0 text-brand-500 dark:text-brand-300"/><span><span className="block text-sm font-semibold">Download PDF</span><span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">Monthly calendar and detailed agenda for printing or sharing.</span></span></button>
    <button type="button" disabled={busy || !items.some(item => !item.suspended && !item.cancelled)} onClick={() => void exportFile('ics')} className="flex w-full gap-3 rounded-xl p-3 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500 disabled:opacity-50 dark:hover:bg-slate-800"><CalendarDays size={20} className="mt-0.5 shrink-0 text-brand-500 dark:text-brand-300"/><span><span className="block text-sm font-semibold">Download ICS (iCalendar)</span><span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">Import this schedule into Google Calendar, Outlook, or Apple Calendar.</span></span></button>
-   {error && <p role="alert" className="px-3 py-2 text-xs text-red-600 dark:text-red-300">{error}</p>}
+   {error && <ErrorNotice error={error} operation="Calendar Export"></ErrorNotice>}
   </div>}
  </div>;
 }

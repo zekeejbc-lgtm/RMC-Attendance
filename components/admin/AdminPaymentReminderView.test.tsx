@@ -43,7 +43,7 @@ it('keeps failed edits open with the entered values and allows retry', async () 
   fireEvent.click(screen.getByRole('button', { name: /Edit Billing/i }));
   fireEvent.change(screen.getByLabelText('Outstanding balance (PHP)'), { target: { value: '3500' } });
   fireEvent.submit(document.getElementById('status-form')!);
-  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Connection lost'));
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('NET-001'));
   expect(screen.getByLabelText('Outstanding balance (PHP)')).toHaveValue(3500);
   fireEvent.submit(document.getElementById('status-form')!);
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Billing details saved'));

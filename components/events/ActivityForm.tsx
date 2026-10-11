@@ -1,3 +1,5 @@
+import { selectUploadFile } from '../../lib/fileUploads';
+import ErrorNotice from '../ui/ErrorNotice';
 import { useSmartBack } from '../NavigationMemory';
 import { DEFAULT_EXCUSE_WINDOW_DAYS, MAX_EXCUSE_WINDOW_DAYS } from '../../lib/excusePolicy';
 import { TimeInput } from '../ui/TimeInput';
@@ -5,6 +7,7 @@ import { formatClockTime } from '../../lib/dateTime';
 import EventBanner from './EventBanner';
 import ScheduleClosureNotice from './ScheduleClosureNotice';
 import { createDriveImage, fileAsDataUrl } from '../../lib/googleDrive';
+import { errorMessage } from '../../lib/errors';
 import React, { useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Archive, ArrowLeft, CalendarRange, CircleOff, Clock3, Crosshair, MapPin, Plus, Save as SaveIcon, Trash2, Users2, XCircle } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -81,11 +84,13 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerPreview, setBannerPreview] = useState(editingEvent?.bannerUrl || '');
   const [bannerError, setBannerError] = useState('');
+  const [readingBanner, setReadingBanner] = useState(false);
   const bannerInput = useRef<HTMLInputElement>(null);
   const bannerSelection = useRef(0);
   const selectBanner = async (file?: File) => {
     if (!file) return;
     const selection = ++bannerSelection.current;
+    setReadingBanner(false);
     setBannerError('');
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
       setBannerError('Choose a JPG, PNG, or WebP banner of 5 MB or smaller.');
@@ -93,10 +98,12 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
       return;
     }
     try {
+      setReadingBanner(true);
       const preview = await fileAsDataUrl(file);
       if (selection !== bannerSelection.current) return;
       setBannerFile(file); setBannerPreview(preview);
     } catch { if (selection === bannerSelection.current) setBannerError('Unable to read this banner. Choose another image.'); }
+    finally { if (selection === bannerSelection.current) setReadingBanner(false); }
   };
   const [title, setTitle] = useState(editingEvent?.title || '');
   const [description, setDescription] = useState(editingEvent?.description || '');
@@ -162,7 +169,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
   const geofenceValid = isGeneralEvent || !geofenceEnabled || (Number.isFinite(location.lat) && Math.abs(location.lat) <= 90
     && Number.isFinite(location.lng) && Math.abs(location.lng) <= 180
     && Number.isFinite(location.radius) && location.radius >= 10 && location.radius <= 5000);
-  const formValid = Boolean(profile && !loading && managementScopeValid && !pendingRecipient && hasAssignedScope && eventInScope && recipientsInScope && (!eventId || (editingEvent && editingEvent.status !== 'done'))
+  const formValid = Boolean(profile && !loading && !readingBanner && managementScopeValid && !pendingRecipient && hasAssignedScope && eventInScope && recipientsInScope && (!eventId || (editingEvent && editingEvent.status !== 'done'))
     && (!editingEvent || (editingEvent.kind === 'flag_ceremony') === isCeremony)
     && title.trim() && description.trim() && (isCeremony && !isEditing || datesValid) && (isGeneralEvent || windowsValid && !windowsOverlap)
     && !hasRecordedAttendance && numbersValid && geofenceValid && recipientGroups.length > 0 && ceremonyValid);
@@ -241,7 +248,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
       else if (editingEvent) await appData.updateEvent(editingEvent.id, payload);
       else if (isCeremony) await appData.createCeremonies(payload, ceremonyDates);
       else await appData.createEvent(payload);
-    } catch (error) { setSaveError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to save event.'); return; }
+    } catch (error) { setSaveError(errorMessage(error)); return; }
     finally { setSaving(false); }
 
     navigate(returnPath, { replace: true });
@@ -277,14 +284,14 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
       {editingEvent?.kind === 'service' && eventInScope && editingEvent.status !== 'done' && <Surface className="space-y-3 p-4">
         <h2 className="font-bold">Extend service duration</h2><p className="text-sm">Add future days with the same attendance windows. Existing attendance and credits are preserved.</p>
         <label className="app-field-label block">New service end date<input type="date" className="input-field mt-2" min={endDate} value={extensionDate} onChange={e => setExtensionDate(e.target.value)} /></label>
-        <Button type="button" variant="secondary" disabled={extending || !extensionDate || extensionDate <= (editingEvent.endDate || datePart(editingEvent.endTime))} onClick={async () => { setExtending(true); setSaveError(''); try { await appData.extendService(editingEvent.id, extensionDate); navigate(returnPath, { replace: true }); } catch (error) { setSaveError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to extend service.'); } finally { setExtending(false); } }}>Extend service days</Button>
+        <Button type="button" variant="secondary" disabled={extending || !extensionDate || extensionDate <= (editingEvent.endDate || datePart(editingEvent.endTime))} onClick={async () => { setExtending(true); setSaveError(''); try { await appData.extendService(editingEvent.id, extensionDate); navigate(returnPath, { replace: true }); } catch (error) { setSaveError(errorMessage(error)); } finally { setExtending(false); } }}>Extend service days</Button>
       </Surface>}
       <form aria-label={isCeremony ? isEditing ? 'Edit ceremony' : 'Schedule ceremony' : isEditing ? 'Edit attendance event' : 'Schedule attendance event'} className="space-y-6" onSubmit={scheduleEvent}>
-        {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
-        {phaseError && <p role="alert" className="text-sm text-red-600">{phaseError}</p>}
-        {!eventInScope && <p role="alert" className="text-sm text-red-600">You can manage events only within your current assigned unit.</p>}
-        {eventId && !editingEvent && <p role="alert" className="text-sm text-red-600">This event was not found or you do not have access to it.</p>}
-        {(!phasedCreation || phase === 3) && !geofenceValid && <p role="alert" className="text-sm text-red-600">Enter valid coordinates and a radius between 10 and 5000 meters.</p>}
+        {saveError && <ErrorNotice error={saveError} operation="Activity Form"></ErrorNotice>}
+        {phaseError && <ErrorNotice error={phaseError} operation="Activity Form"></ErrorNotice>}
+        {!eventInScope && <ErrorNotice error="You can manage events only within your current assigned unit." />}
+        {eventId && !editingEvent && <ErrorNotice error="This event was not found or you do not have access to it." />}
+        {(!phasedCreation || phase === 3) && !geofenceValid && <ErrorNotice error="Enter valid coordinates and a radius between 10 and 5000 meters." />}
         <fieldset hidden={phasedCreation && phase !== 0} disabled={saving || (phasedCreation && phase !== 0)} className="min-w-0 space-y-6">
         <Surface className="space-y-4 p-4 sm:p-6">
           <h2 className="text-lg font-bold text-brand-900 dark:text-white">{isCeremony ? 'Flag ceremony schedule' : 'Activity and service schedule'}</h2>
@@ -308,9 +315,10 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
           {!isCeremony && <div className="space-y-3">
             <label htmlFor="event-banner" className="app-field-label">Event banner (optional)</label>
             <p id="event-banner-help" className="text-sm text-slate-500">Recommended size: <strong>1600 x 600 pixels</strong> (8:3). JPG, PNG, or WebP, up to 5 MB. Other sizes are cropped to fit.</p>
-            <input ref={bannerInput} id="event-banner" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="event-banner-help" className="input-field w-full min-w-0 text-sm" onChange={event => { void selectBanner(event.target.files?.[0]); }} />
-            {bannerError && <p role="alert" className="text-sm text-red-600">{bannerError}</p>}
-            {bannerPreview && <><EventBanner src={bannerPreview} alt="Event banner preview" /><Button type="button" variant="secondary" onClick={() => { bannerSelection.current++; setBannerFile(null); setBannerUrl(''); setBannerPreview(''); setBannerError(''); if (bannerInput.current) bannerInput.current.value = ''; }}>Remove banner</Button></>}
+            <input ref={bannerInput} id="event-banner" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="event-banner-help" className="input-field w-full min-w-0 text-sm" onChange={event => { void selectBanner(selectUploadFile(event.currentTarget)); }} />
+            {bannerError && <ErrorNotice error={bannerError} operation="Activity Form"></ErrorNotice>}
+            {readingBanner && <p role="status" className="text-sm text-slate-500">Checking banner…</p>}
+            {bannerPreview && <><EventBanner src={bannerPreview} alt="Event banner preview" /><Button type="button" variant="secondary" onClick={() => { bannerSelection.current++; setReadingBanner(false); setBannerFile(null); setBannerUrl(''); setBannerPreview(''); setBannerError(''); if (bannerInput.current) bannerInput.current.value = ''; }}>Remove banner</Button></>}
           </div>}
         </Surface>
         </fieldset>
@@ -323,14 +331,14 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
             <div className="space-y-2"><label htmlFor="event-end-date" className="app-field-label">End Date</label><input id="event-end-date" required={!isCeremony || isEditing} min={startDate || undefined} type="date" className="input-field min-h-12 text-sm" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></div>
           </div>
           {(kind === 'service' || isGeneralEvent) && <label className="app-field-label block">Duration in days<input type="number" min="1" max="366" className="input-field mt-2" disabled={!startDate || hasRecordedAttendance} value={datesValid ? Math.round((dateStamp(endDate)-dateStamp(startDate))/86400000)+1 : ''} onChange={e => { const days=Number(e.target.value); if (startDate && Number.isInteger(days) && days>=1 && days<=366) setEndDate(new Date(dateStamp(startDate)+(days-1)*86400000).toISOString().slice(0,10)); }} /><span className="mt-2 block text-sm font-normal normal-case">{isGeneralEvent ? 'Specific events must fit within this date range.' : 'Attendance windows repeat each day in this date range.'}</span></label>}
-          {startDate && endDate && !datesValid && <p role="alert" className="text-sm font-semibold text-red-600 dark:text-red-300">End date must be on or after the start date and within the selected general event.</p>}
+          {startDate && endDate && !datesValid && <ErrorNotice error="End date must be on or after the start date and within the selected general event." />}
         </Surface>
 
         {isCeremony && !isEditing && <CeremonySchedulePicker start={startDate} end={endDate} dates={ceremonyDates} onChange={setCeremonyDates} standardWeekday={ceremony.useStandardSchedule ? ceremony.flagKind === 'retreat' ? 5 : 1 : undefined} />}
         {!isGeneralEvent && <Surface className="space-y-5 p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><Clock3 size={20} className="text-gold-500" /> Attendance windows</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Add each time-in/time-out session and its late threshold.</p></div><Button type="button" variant="secondary" onClick={() => setAttendanceWindows((windows) => [...windows, newWindow(windows.length + 1)])}><Plus size={17} /> Add Attendance Window</Button></div>
-          {windowsOverlap && <p role="alert" className="text-sm font-semibold text-red-600 dark:text-red-300">Attendance windows must not overlap.</p>}
-          {attendanceWindows.some((window) => window.timeIn && window.timeOut && window.timeOut <= window.timeIn) && <p role="alert" className="text-sm font-semibold text-red-600 dark:text-red-300">Each time out must be later than its time in.</p>}
+          {windowsOverlap && <ErrorNotice error="Attendance windows must not overlap." />}
+          {attendanceWindows.some((window) => window.timeIn && window.timeOut && window.timeOut <= window.timeIn) && <ErrorNotice error="Each time out must be later than its time in." />}
           <div className="space-y-4">
             {attendanceWindows.map((window, index) => <fieldset key={window.id} className="min-w-0 rounded-2xl border border-slate-200 p-4 dark:border-slate-700"><legend className="px-2 text-sm font-bold text-brand-900 dark:text-white">Window {index + 1}</legend><label className="app-field-label mb-4 block">Window title {index + 1}<input className="input-field mt-2" value={window.label || ''} onChange={event => updateWindow(window.id, { label: event.target.value })} placeholder={`Window ${index + 1}`} /></label><div className="grid grid-cols-1 gap-4 sm:grid-cols-3"><div className="space-y-2"><label htmlFor={`time-in-${window.id}`} className="app-field-label">Time In {index + 1}</label><TimeInput aria-label={`Time In ${index + 1}`} id={`time-in-${window.id}`} required type="time" className="input-field min-h-12 text-sm" value={window.timeIn} onChange={(event) => updateWindow(window.id, { timeIn: event.target.value })} /></div><div className="space-y-2"><label htmlFor={`time-out-${window.id}`} className="app-field-label">Time Out {index + 1}</label><TimeInput aria-label={`Time Out ${index + 1}`} id={`time-out-${window.id}`} required type="time" className="input-field min-h-12 text-sm" value={window.timeOut} onChange={(event) => updateWindow(window.id, { timeOut: event.target.value })} /></div><div className="space-y-2"><label htmlFor={`late-after-${window.id}`} className="app-field-label">Late After Minutes {index + 1}</label><input id={`late-after-${window.id}`} type="number" min="0" className="input-field min-h-12 text-sm" value={window.lateAfterMinutes} onChange={(event) => updateWindow(window.id, { lateAfterMinutes: Number(event.target.value) })} /></div></div>{attendanceWindows.length > 1 && <button type="button" aria-label={`Remove attendance window ${index + 1}`} onClick={() => setAttendanceWindows((windows) => windows.filter((item) => item.id !== window.id))} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-xs font-bold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"><Trash2 size={15} /> Remove window</button>}</fieldset>)}
           </div>
@@ -345,12 +353,12 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
           {organization ? <p className="text-sm">Current approved members of <strong>{organization.name}</strong> are eligible. Membership and unit eligibility are checked when attendance is recorded.</p> : <EventRecipientPicker onChange={setSelectedGroups} onPendingChange={setPendingRecipient} roots={recipientRoots} selected={selectedGroups} />}
           {!organization && profile?.role !== 'admin' && (hasAssignedScope
             ? <p className="text-sm text-slate-600 dark:text-slate-300">You can create and manage events only within <strong>{recipientRoots[0].name}</strong> and its sub-units. All recipient choices, including “All Students”, are limited to this assignment.</p>
-            : <p role="alert" className="text-sm text-red-600">An assigned school unit is required to create events. Contact your administrator.</p>)}
-          {!recipientsInScope && <p role="alert" className="text-sm text-red-600">Remove recipients outside your assigned unit before saving.</p>}
+            : <ErrorNotice error="An assigned school unit is required to create events. Contact your administrator." />)}
+          {!recipientsInScope && <ErrorNotice error="Remove recipients outside your assigned unit before saving." />}
         </Surface>
 
         {isCeremony && <CeremonyAttendanceSettings value={ceremony} onChange={setCeremony} roots={recipientRoots} students={ceremonyStudents} defaultWindows={attendanceWindows} dates={isEditing ? [startDate] : ceremonyDates} editing={isEditing} canFilter={profile?.role === 'admin' || profile?.role === 'ossa'} />}
-        {isCeremony && !ceremonyValid && <p role="alert" className="text-sm text-amber-700">Choose allowed ceremony dates, valid class windows, and positive volunteer merit hours (up to 24).</p>}
+        {isCeremony && !ceremonyValid && <ErrorNotice error="Choose allowed ceremony dates, valid class windows, and positive volunteer merit hours (up to 24)." />}
         </fieldset>
         <fieldset hidden={phasedCreation && phase !== 3} disabled={saving || (phasedCreation && phase !== 3)} className="min-w-0 space-y-6">
         {!isGeneralEvent && !['service', 'merit'].includes(kind || '') && <Surface className="space-y-3 p-4 sm:p-6">
@@ -358,7 +366,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
           <label htmlFor="excuse-window-days" className="app-field-label block">Days to submit after the activity ends</label>
           <input id="excuse-window-days" type="number" min="0" max={MAX_EXCUSE_WINDOW_DAYS} step="1" required className="input-field" value={Number.isNaN(excuseWindowDays) ? '' : excuseWindowDays} onChange={event => setExcuseWindowDays(event.target.value === '' ? NaN : Number(event.target.value))} />
           <p className="text-sm text-slate-500 dark:text-slate-400">Choose 0?30 days. Students may submit in advance once the activity is approved. Zero closes submissions when the activity ends. For repeated ceremonies, each date has its own deadline. A supporting document and OSSA approval are required.</p>
-          {!excusePolicyValid && <p role="alert" className="text-sm text-red-600">Enter a whole number from 0 to 30 days.</p>}
+          {!excusePolicyValid && <ErrorNotice error="Enter a whole number from 0 to 30 days." />}
         </Surface>}
         {isGeneralEvent ? <Surface className="p-5 text-sm">Locations, attendance windows and sanctions are configured on each specific event after you save this general event.</Surface> : <Surface className="space-y-5 p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="flex items-center gap-2 text-lg font-bold text-brand-900 dark:text-white"><MapPin size={20} className="text-gold-500" /> Geofencing</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Require scans to occur inside a defined event perimeter.</p></div><button type="button" role="switch" aria-checked={geofenceEnabled} aria-label="Enable geofencing" onClick={() => setGeofenceEnabled((enabled) => !enabled)} className={`relative h-8 w-14 shrink-0 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500 focus-visible:ring-offset-2 ${geofenceEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}><span aria-hidden="true" className={`absolute left-0 top-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${geofenceEnabled ? 'translate-x-7' : 'translate-x-1'}`} /></button></div>
@@ -408,7 +416,7 @@ const ActivityForm: React.FC<{ purpose: 'event' | 'ceremony'; organization?: Org
             {kind === 'service' && <div><dt className="font-bold">Excess service hours</dt><dd className="mt-1">{serviceOverflow === 'merit' ? 'Save as earned merit' : 'Not credited'}</dd></div>}
             {isCeremony && <div><dt className="font-bold">Ceremony attendance settings</dt><dd className="mt-1">{ceremony.exemptStudentIds.length} general exemptions · {Object.keys(ceremony.classWindows).length} class schedule overrides · {Object.values(ceremony.exemptStudentIdsByDate || {}).reduce((total, ids) => total + ids.length, 0)} date-specific exemptions. Volunteer merit: {ceremony.allowVolunteerMerit ? `${ceremony.volunteerMeritHours} hours` : 'Disabled'}.</dd></div>}
           </dl>
-          {!formValid && <p role="alert" className="text-sm text-red-600">The form is not ready to save. Go back to check the configuration and your assigned unit.</p>}
+          {!formValid && <ErrorNotice error="The form is not ready to save. Go back to check the configuration and your assigned unit." />}
         </Surface>}
 
         <div className="sticky bottom-3 z-10 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:p-4 lg:flex-row lg:items-center lg:justify-between">

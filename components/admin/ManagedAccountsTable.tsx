@@ -1,6 +1,7 @@
+import ErrorNotice from '../ui/ErrorNotice';
 import { formatManilaDateTime } from '../../lib/dateTime';
 import { SelectField } from '../ui/SelectField';
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Eye, RefreshCw } from 'lucide-react';
 import ProfileAvatar from '../ui/ProfileAvatar';
 import { UserProfile } from '../../types';
@@ -81,7 +82,7 @@ export default function ManagedAccountsTable({ accounts, access, loading, access
         {hasFilters && <Button variant="secondary" className="sm:w-auto" onClick={clearFilters}>Clear filters</Button>}
       </div>
       <p className="text-xs text-slate-500 dark:text-slate-400">Combine search words in any order, such as “OSAS Santos”.</p>
-      {accessError && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{accessError} Use Refresh access status to retry.</p>}
+      {accessError && <ErrorNotice error={accessError} operation="Managed Accounts Table">Use Refresh access status to retry.</ErrorNotice>}
     </div>
     <div ref={scrollRef} role="region" aria-label="Scrollable accounts table" tabIndex={0} className="max-h-[420px] overflow-auto overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-500" style={{ scrollbarGutter: 'stable' }}>
       <table className="w-full min-w-[900px] border-separate border-spacing-0 text-left text-sm">

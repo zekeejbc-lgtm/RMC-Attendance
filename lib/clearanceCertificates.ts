@@ -18,7 +18,7 @@ export type ClearanceVerification = {
 async function command<T>(operation: string, payload = {}): Promise<T> {
  requireConfiguration();
  const { data, error } = await supabase.rpc('rmc_clearance', { operation, payload });
- if (error) throw new Error(error.message);
+ if (error) throw error;
  return data as T;
 }
 export const loadClearanceSchedules = (manage = false) => command<ClearanceSchedule[]>(manage ? 'manage' : 'list');

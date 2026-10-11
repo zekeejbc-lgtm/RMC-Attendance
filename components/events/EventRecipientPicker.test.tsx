@@ -5,6 +5,22 @@ import { SchoolNode } from '../../types';
 import { EventRecipientPicker } from './EventRecipientPicker';
 
 afterEach(cleanup);
+it('offers non-admin roles and combines staff with the student audience', () => {
+  const changed = vi.fn(); render(<Harness changed={changed} initial={['All Students']} />);
+  fireEvent.click(screen.getByRole('button', { name: /^Recipient type/ }));
+  expect(screen.getByRole('option', { name: 'All OSSA Administrators' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'All OSSA Staff' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: /Admin.*System|System.*Admin/i })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('option', { name: 'All OSSA Staff' }));
+  fireEvent.click(screen.getByRole('button', { name: /add recipient/i }));
+  expect(changed).toHaveBeenLastCalledWith(['All Students', 'role:ossa_staff']);
+  expect(screen.getByRole('status')).toHaveTextContent('All OSSA Staff');
+  expect(screen.getByRole('button', { name: /add recipient/i })).toBeDisabled();
+  choose(/^Recipient type/, 'All Students');
+  fireEvent.click(screen.getByRole('button', { name: 'Remove All Students' }));
+  fireEvent.click(screen.getByRole('button', { name: /add recipient/i }));
+  expect(changed).toHaveBeenLastCalledWith(['role:ossa_staff', 'All Students']);
+});
 const roots: SchoolNode[] = [
   { id: 'general', name: 'General', type: 'education_unit', children: [
     { id: 'computing', name: 'Computing', type: 'college', children: [{ id: 'it', name: 'IT', type: 'program' }] },

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import ErrorNotice from './ui/ErrorNotice';
 import { loadLegalPage } from '../lib/legalPageStore';
 import { LegalContent } from '../lib/legalPages';
 
@@ -40,10 +41,9 @@ export default function EnrollmentPrivacyAgreement({ accepted, onChange }: {
   return <div className="space-y-4">
     <h2 className="text-lg font-bold text-brand-900 dark:text-white">Data privacy agreement</h2>
     <p id="privacy-reading-instructions" className="text-sm text-slate-600 dark:text-slate-300">Read the agreement below from top to bottom. Scroll inside the panel to unlock the agreement checkbox, then agree before entering your enrollment details.</p>
-    {error ? <div role="alert" className="space-y-2 text-sm text-red-700 dark:text-red-300">
-      <p>Unable to load the agreement. Please retry before continuing.</p>
+    {error ? <ErrorNotice error="Unable to load the agreement. Please retry before continuing." operation="Load privacy agreement">
       <button type="button" className="font-bold underline" onClick={() => setAttempt(current => current + 1)}>Retry loading agreement</button>
-    </div> : !page ? <p role="status" className="text-sm">Loading data privacy agreement...</p> : <>
+    </ErrorNotice> : !page ? <p role="status" className="text-sm">Loading data privacy agreement...</p> : <>
       <div className="flex justify-between gap-3 text-sm font-semibold"><span>Reading progress</span><span>{progress}%</span></div>
       <div role="progressbar" aria-label="Agreement reading progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
         <div className="h-full rounded-full bg-gold-500 transition-all" style={{ width: `${progress}%` }} />

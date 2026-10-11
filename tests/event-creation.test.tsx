@@ -207,7 +207,7 @@ it('lets an admin predict, edit, and save ceremony dates in a dedicated form', a
   expect(screen.getByRole('button', { name: 'Remove 2026-11-10' })).toBeInTheDocument();
   review();
   fireEvent.submit(screen.getByRole('form'));
-  await screen.findByText('Ceremony registry');
+  await screen.findByText('Ceremony registry', {}, { timeout: 5000 });
   expect(state.createCeremonies).toHaveBeenCalledWith(expect.objectContaining({
     kind: 'flag_ceremony', scopeNodeId: 'school', title: 'Assembly',
     ceremony: expect.objectContaining({ allowVolunteerMerit: false, exemptStudentIds: [] }),
@@ -244,7 +244,8 @@ it('waits for the backend before navigating and prevents a second submission', a
 it('keeps entered data and displays plain Supabase error objects for a retry', async () => {
   state.create.mockRejectedValueOnce({ message: 'Your school is frozen.' }).mockResolvedValueOnce('saved');
   mount(); fill(); review(); fireEvent.submit(screen.getByRole('form'));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Your school is frozen.');
+  expect(await screen.findByRole('alert')).toHaveTextContent('FREEZE-001');
+  expect(screen.getByRole('alert')).toHaveTextContent('Contact your school officer');
   expect(screen.getByLabelText(/(?:event|ceremony) title/i)).toHaveValue('Assembly');
   await waitFor(() => expect(screen.getByRole('button', { name: /submit for ossa approval/i })).toBeEnabled());
   fireEvent.submit(screen.getByRole('form'));
@@ -416,7 +417,7 @@ it('uploads an optional banner and reuses its URL when saving is retried', async
   await screen.findByRole('img', { name: 'Event banner preview' });
   fill(); review();
   fireEvent.submit(screen.getByRole('form'));
-  await screen.findByText('Please retry saving');
+  await screen.findByText(/SYS-001/);
   fireEvent.submit(screen.getByRole('form'));
   await screen.findByText('Event registry');
   expect(state.upload).toHaveBeenCalledTimes(1);

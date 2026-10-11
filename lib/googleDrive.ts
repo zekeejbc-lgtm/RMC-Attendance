@@ -1,5 +1,6 @@
 import { toast, type OperationProgress } from './toast';
 import { supabase } from './supabase';
+import { retainedUploadFile } from './fileUploads';
 
 const DEFAULT_GOOGLE_DRIVE_GAS_URL = 'https://script.google.com/macros/s/AKfycby2BH5kpT9BN1BX2ODlGmjz6oIbKnbChfZuCAv2QDDcLvVbGB0RJXz1uaJ1eTHJ_t8/exec';
 export const GOOGLE_DRIVE_GAS_URL = import.meta.env.VITE_GOOGLE_DRIVE_GAS_URL || DEFAULT_GOOGLE_DRIVE_GAS_URL;
@@ -35,6 +36,7 @@ function forgetCapability(id: string) {
 }
 
 export function validateProfileImage(file: File) {
+  if (!file.size) throw new Error('This image is empty. Choose another photo.');
   if (!PROFILE_IMAGE_TYPES.includes(file.type as (typeof PROFILE_IMAGE_TYPES)[number])) {
     throw new Error('Choose a JPG, PNG, or WebP image.');
   }
@@ -43,13 +45,29 @@ export function validateProfileImage(file: File) {
   }
 }
 
-export function fileAsDataUrl(file: File): Promise<string> {
+export async function fileAsDataUrl(file: File): Promise<string> {
+  try { file = await retainedUploadFile(file); }
+  catch (cause) { throw new Error('Unable to read this image. Save the photo to your phone, then choose it again.', { cause }); }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Unable to preview this image.'));
-    reader.onerror = () => reject(new Error('Unable to read this image.'));
+    reader.onerror = () => reject(new Error('Unable to read this image. Save the photo to your phone, then choose it again.', { cause: reader.error }));
+    reader.onabort = () => reject(new Error('Image reading was cancelled. Choose the photo again.'));
     reader.readAsDataURL(file);
   });
+}
+
+/** Read picker-backed files once while access is available. Upload the retained
+ * bytes rather than reopening a mobile gallery/cloud provider's file later. */
+export async function retainProfileImage(file: File) {
+  validateProfileImage(file);
+  const preview = await fileAsDataUrl(file);
+  const encoded = preview.slice(preview.indexOf(',') + 1);
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  if (bytes.length !== file.size) throw new Error('The image could not be read completely. Choose the photo again.');
+  return { file: new File([bytes], file.name, { type: file.type, lastModified: file.lastModified }), preview };
 }
 
 function responseError(payload: DriveResponse, status: number) {

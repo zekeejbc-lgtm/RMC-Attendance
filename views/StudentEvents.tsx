@@ -1,3 +1,6 @@
+import { selectUploadFile } from '../lib/fileUploads';
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from '../components/ui/ErrorNotice';
 import { usePageMemory } from '../components/usePageMemory';
 import { excuseBlockReason, excuseFileError, EXCUSE_FILE_ACCEPT } from '../lib/excusePolicy';
 import { ExcuseWindowNotice, useExcuseClock } from '../components/events/ExcuseWindowNotice';
@@ -74,7 +77,7 @@ const StudentEvents: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
+      const file = selectUploadFile(e.currentTarget)!;
       setSelectedFile(file);
       setFilePreviewName(file.name);
     }
@@ -90,7 +93,7 @@ const StudentEvents: React.FC = () => {
       const proof = await uploadDocument(selectedFile!, 'excuses');
       await appData.submitExcuseApplication({ event_id: selectedEvent.id, reason: excuseDetails, contact_mobile: excuseContact.trim() || undefined, category: /medical|health/i.test(excuseReason) ? 'medical' : /emergency/i.test(excuseReason) ? 'emergency' : /academic|official/i.test(excuseReason) ? 'institutional' : 'personal', proof_url: proof });
       setSubmittedExcuse(true);
-    } catch (error) { setExcuseError(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to submit excuse.'); }
+    } catch (error) { setExcuseError(errorMessage(error)); }
     finally { setSubmitting(false); }
   };
 
@@ -430,7 +433,7 @@ const StudentEvents: React.FC = () => {
             ) : (
               <form id="event-excuse-form" onSubmit={handleExcuseSubmit} className="space-y-4">
                 <ExcuseWindowNotice event={selectedEvent} blocked={blockReason(selectedEvent)} />
-                {excuseError && <p role="alert" className="text-sm text-red-600">{excuseError}</p>}
+                {excuseError && <ErrorNotice error={excuseError} operation="Student Events"></ErrorNotice>}
                 {/* Event Summary */}
                 <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest">Target Event</p>

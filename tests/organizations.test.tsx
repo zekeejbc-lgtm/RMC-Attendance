@@ -154,11 +154,11 @@ it('does not render an empty organization panel or a separate add action', () =>
 });
 
 
-it('previews a selected logo and releases it when removed', () => {
+it('previews a selected logo and releases it when removed', async () => {
   render(<OrganizationForm profile={state.auth.profile as any} onClose={() => {}} />);
   expect(screen.getByRole('button', { name: 'Choose image' })).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Organization logo'), { target: { files: [new File(['image'], 'club.png', { type: 'image/png' })] } });
-  expect(screen.getByAltText('Selected organization logo preview')).toHaveAttribute('src', 'blob:organization-logo');
+  expect(await screen.findByAltText('Selected organization logo preview')).toHaveAttribute('src', 'blob:organization-logo');
   expect(screen.getByText('club.png')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Remove selected image' }));
   expect(screen.queryByAltText('Selected organization logo preview')).not.toBeInTheDocument();

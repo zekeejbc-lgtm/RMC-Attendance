@@ -1,3 +1,5 @@
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from '../components/ui/ErrorNotice';
 import RecordPagination from '../components/ui/RecordPagination';
 import { usePagination } from '../components/usePagination';
 
@@ -185,7 +187,7 @@ const ManageMembers: React.FC = () => {
       closeMemberModal();
       setRegistryRevision((revision) => revision + 1);
     } catch (error) {
-      setMemberSubmitError(error instanceof Error ? error.message : 'The member could not be created.');
+      setMemberSubmitError(errorMessage(error));
     }
   };
 
@@ -602,9 +604,7 @@ const ManageMembers: React.FC = () => {
                 value={memberData[key as keyof typeof memberData]}
               />
               {memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors] ? (
-                <span className="block text-xs text-red-600 dark:text-red-300" id={`${id}-error`}>
-                  {memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors]}
-                </span>
+                <ErrorNotice id={`${id}-error`} error={memberErrors[key === 'studentId' ? 'student_id' : key as keyof MemberCsvErrors]} />
               ) : null}
             </label>
           ))}
@@ -628,11 +628,11 @@ const ManageMembers: React.FC = () => {
                 type={type}
                 value={memberData[key as keyof typeof memberData]}
               />
-              {key === 'guardianEmail' && memberErrors.guardian_email ? <span className="block text-xs text-red-600 dark:text-red-300" id={`${id}-error`}>{memberErrors.guardian_email}</span> : null}
+              {key === 'guardianEmail' && memberErrors.guardian_email ? <ErrorNotice id={`${id}-error`} error={memberErrors.guardian_email} /> : null}
             </label>
           ))}
           <CustomSelect className="sm:col-span-2" label="Initial role" onChange={(value) => setMemberData({ ...memberData, role: value as UserProfile['role'] })} options={[{ value: 'student', label: 'Student' }, { value: 'mayor', label: 'Mayor / attendance officer' }]} value={memberData.role} />
-          {memberSubmitError ? <p className="sm:col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200" role="alert">{memberSubmitError}</p> : null}
+          {memberSubmitError ? <ErrorNotice error={memberSubmitError} operation="Manage Members"></ErrorNotice> : null}
         </div>
       </Modal>
 

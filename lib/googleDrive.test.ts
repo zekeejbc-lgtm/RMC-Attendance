@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('./supabase', () => ({ supabase: { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: null } }) } } }));
-import { createDriveImage, getDriveImage, updateDriveImage, publicDriveImageUrl, deleteDriveImage } from './googleDrive';
+import { createDriveImage, getDriveImage, updateDriveImage, publicDriveImageUrl, deleteDriveImage, retainProfileImage, fileAsDataUrl } from './googleDrive';
 
 import { toast, toastStore } from './toast';
 
@@ -77,4 +77,51 @@ it('keeps successful uploads and cleanup working when session storage is unavail
   const upload = JSON.parse(fetcher.mock.calls[0][1].body);
   await deleteDriveImage('storage-disabled-file');
   expect(JSON.parse(fetcher.mock.calls[1][1].body).managementToken).toBe(upload.managementToken);
+});
+
+it('uploads retained bytes even when the original mobile picker file becomes unreadable', async () => {
+  const original = new File(['photo bytes'], 'phone.jpg', { type: 'image/jpeg', lastModified: 123 });
+  const retained = await retainProfileImage(original);
+  expect(retained.file).not.toBe(original);
+  expect(retained.file.name).toBe(original.name);
+  expect(retained.file.lastModified).toBe(123);
+  const read = FileReader.prototype.readAsDataURL;
+  vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (blob) {
+    if (blob === original) {
+      queueMicrotask(() => this.onerror?.(new ProgressEvent('error') as ProgressEvent<FileReader>));
+    } else read.call(this, blob);
+  });
+  // Subsequent reads of the selection now use the shared retained copy too.
+  await expect(fileAsDataUrl(original)).resolves.toBe(retained.preview);
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '{"success":true,"id":"retained-photo","url":"https://drive.google.com/thumbnail?id=retained-photo"}' });
+  vi.stubGlobal('fetch', fetcher);
+  await createDriveImage(retained.file, 'Student', '123');
+  expect(JSON.parse(fetcher.mock.calls[0][1].body).dataUrl).toBe(retained.preview);
+});
+
+it('preserves the underlying mobile file-read error and classifies it as a photo problem', async () => {
+  const cause = new DOMException('Provider access expired', 'NotReadableError');
+  vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function () {
+    Object.defineProperty(this, 'error', { value: cause });
+    queueMicrotask(() => this.onerror?.(new ProgressEvent('error') as ProgressEvent<FileReader>));
+  });
+  const fetcher = vi.fn();
+  vi.stubGlobal('fetch', fetcher);
+  const failure = await createDriveImage(new File(['photo'], 'photo.jpg', { type: 'image/jpeg' }), 'Student', '123').catch(error => error);
+  expect(failure.cause).toBe(cause);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(toastStore.getSnapshot()[0]).toMatchObject({ kind: 'error', code: 'FILE-002' });
+});
+
+it('rejects empty photos before reading them', async () => {
+  const reader = vi.spyOn(FileReader.prototype, 'readAsDataURL');
+  await expect(retainProfileImage(new File([], 'empty.jpg', { type: 'image/jpeg' }))).rejects.toThrow('empty');
+  expect(reader).not.toHaveBeenCalled();
+});
+
+it('settles aborted image reads with recovery instructions', async () => {
+  vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function () {
+    queueMicrotask(() => this.onabort?.(new ProgressEvent('abort') as ProgressEvent<FileReader>));
+  });
+  await expect(retainProfileImage(new File(['photo'], 'photo.jpg', { type: 'image/jpeg' }))).rejects.toThrow('Choose the photo again');
 });

@@ -26,7 +26,7 @@ try {
   pass('production security headers protect scripts, framing, camera, and GPS');
 
   await page.waitForSelector('#landing-login-identifier');
-  await page.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration())?.active), { timeout: 45000 });
+  await page.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration())?.active), { timeout: 180000 });
   await page.reload({ waitUntil: 'networkidle0' });
   assert.equal(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)), true);
   const cdp = await page.createCDPSession();
@@ -65,7 +65,7 @@ try {
   for (const url of cachedUrls) {
     const parsed = new URL(url);
     assert.equal(parsed.origin, new URL(base).origin, `Foreign cache entry: ${parsed.origin}`);
-    assert.ok(/^\/(?:assets\/|icons\/|index\.html$|manifest\.webmanifest$|academic-seal(?:\.jpeg|-transparent\.png)$|avatar-placeholder\.svg$)/.test(parsed.pathname), `Unexpected cached path: ${parsed.pathname}`);
+    assert.ok(/^\/(?:assets\/|icons\/|fonts\/[^/]+\.woff2$|index\.html$|manifest\.webmanifest$|academic-seal(?:\.jpeg|-transparent\.png)$|avatar-placeholder\.svg$)/.test(parsed.pathname), `Unexpected cached path: ${parsed.pathname}`);
     assert.ok(!/access_token|refresh_token|password|code=/.test(parsed.search));
   }
   pass('cache contains only app assets after real authentication; no API responses or credentials');

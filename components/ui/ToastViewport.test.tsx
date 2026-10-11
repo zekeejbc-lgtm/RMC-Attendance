@@ -26,3 +26,36 @@ it('animates the success popup again when an operation finishes', () => {
   expect(after).not.toBe(before);
   expect(after).toHaveAttribute('data-state', 'open');
 });
+
+it('renders repeated failures once, including during the exit animation', () => {
+  vi.useFakeTimers(); render(<ToastViewport />);
+  act(() => { toast.start('Refresh data').fail(new Error('network')); });
+  const before = document.querySelector('.app-toast[data-kind="error"]');
+  act(() => { toast.start('Refresh data').fail(new Error('network')); });
+  expect(document.querySelectorAll('.app-toast[data-kind="error"]')).toHaveLength(1);
+  expect(document.querySelector('.app-toast[data-kind="error"]')).toBe(before);
+  act(() => { vi.advanceTimersByTime(200); });
+  expect(document.querySelectorAll('.app-toast')).toHaveLength(1);
+});
+
+it('keeps distinct calls with identical messages visible as separate toasts', () => {
+  render(<ToastViewport />);
+  act(() => { toast.success('Changes saved'); toast.success('Changes saved'); });
+  expect(screen.getAllByText('Changes saved')).toHaveLength(2);
+});
+
+it('keeps a visible background completion readable while another action runs', () => {
+  vi.useFakeTimers(); render(<ToastViewport />);
+  let request!: ReturnType<typeof toast.start>;
+  act(() => { request = toast.start('Loading information', undefined, true); });
+  act(() => { vi.advanceTimersByTime(500); });
+  expect(screen.getByText('Loading information')).toBeInTheDocument();
+  act(() => { request.complete(); toast.start('Save changes'); });
+  expect(screen.getByText('Loading information completed')).toBeInTheDocument();
+  act(() => { vi.advanceTimersByTime(4999); });
+  expect(screen.getByText('Loading information completed')).toBeInTheDocument();
+  act(() => { vi.advanceTimersByTime(1); });
+  expect(screen.getByText('Loading information completed').closest('.app-toast')).toHaveAttribute('data-state', 'closing');
+  act(() => { vi.advanceTimersByTime(200); });
+  expect(screen.queryByText('Loading information completed')).not.toBeInTheDocument();
+});

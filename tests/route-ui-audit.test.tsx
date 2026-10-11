@@ -25,6 +25,7 @@ import OSSADashboard from '../views/OSSADashboard';
 import AdminControls from '../views/AdminControls';
 import { changeField } from './ui-select';
 import { defaultLegalPages } from '../lib/legalPages';
+import { DEFAULT_CORE_ROLES, setMockDataRef } from '../lib/accessControl';
 
 vi.mock('../lib/legalPageStore', () => ({ loadLegalPage: vi.fn(async () => defaultLegalPages.agreement) }));
 vi.mock('../lib/attendanceCorrections', async importOriginal => ({
@@ -254,6 +255,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setMockDataRef(null);
   cleanup();
   routeState.applications = [];
   routeState.auth = { isMock: false, loading: false, profile: null, stats: null, user: null };
@@ -994,7 +996,7 @@ describe('staff route UI behavior', () => {
     await waitFor(() => expect(scannerState.decoded).toBeTypeOf('function'));
     scannerState.decoded?.('not-a-student');
 
-    expect((await screen.findAllByText(/invalid or expired qr code/i)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/ATT-001/)).length).toBeGreaterThan(0);
     expect(staffState.logAttendance).not.toHaveBeenCalled();
   });
 
@@ -1645,6 +1647,11 @@ describe('staff route UI behavior', () => {
   it('uses named SSG dialogs, mobile registry cards, and protected confirmation for sanction changes', async () => {
     const user = userEvent.setup();
     useStaff();
+    setMockDataRef({
+      getCoreRoles: () => ({ ...DEFAULT_CORE_ROLES, ssg: { ...DEFAULT_CORE_ROLES.ssg,
+        permissions: [...DEFAULT_CORE_ROLES.ssg.permissions, 'directory.manage_student_sanctions'] } }),
+      getCustomRoles: () => ({}),
+    });
     seedStaffDirectory();
     renderRoute(<SSGPanel />);
 
@@ -1672,5 +1679,45 @@ describe('staff route UI behavior', () => {
     );
     await user.click(within(memberDialog).getByRole('button', { name: /^mayor$/i }));
     expect(staffState.assignSectionMayor).toHaveBeenCalledWith('student-1', 'section-newton', 'Newton');
+  });
+
+  it('returns a Mayor to Regular using designation access and the current class', async () => {
+    const user = userEvent.setup();
+    useStaff();
+    seedStaffDirectory();
+    staffState.students[0].role = 'mayor';
+    setMockDataRef({ getCoreRoles: () => ({ ...DEFAULT_CORE_ROLES,
+      ssg: { ...DEFAULT_CORE_ROLES.ssg, permissions: ['attendance.scan', 'directory.change_member_designation'] } }),
+      getCustomRoles: () => ({}) });
+    renderRoute(<SSGPanel />);
+    await user.click(screen.getByRole('button', { name: /rmc campus/i }));
+    await user.click(screen.getByRole('button', { name: /senior high school/i }));
+    await user.click(screen.getByRole('button', { name: /^newton/i }));
+    await user.click(screen.getAllByRole('button', { name: /manage juan dela cruz/i })[0]);
+    await user.click(within(screen.getByRole('dialog', { name: /member details/i })).getByRole('button', { name: /^regular$/i }));
+    await waitFor(() => expect(staffState.assignRole).toHaveBeenCalledWith('student-1', 'student', 'section-newton'));
+    expect(staffState.assignSectionMayor).not.toHaveBeenCalled();
+  });
+
+  it.each(['ssg', 'mayor', 'ossa_staff'])('keeps member sanctions and designations separate for default %s', async role => {
+    const user = userEvent.setup();
+    useStaff();
+    routeState.auth.profile = { ...routeState.auth.profile!, role };
+    seedStaffDirectory();
+    renderRoute(<SSGPanel />);
+    await user.click(screen.getByRole('button', { name: /rmc campus/i }));
+    await user.click(screen.getByRole('button', { name: /senior high school/i }));
+    await user.click(screen.getByRole('button', { name: /^newton/i }));
+    await user.click(screen.getAllByRole('button', { name: /manage juan dela cruz/i })[0]);
+    const dialog = screen.getByRole('dialog', { name: /member details/i });
+    if (role === 'ossa_staff') {
+      expect(within(dialog).getByRole('button', { name: /add one sanction hour/i })).toBeInTheDocument();
+      expect(within(dialog).getByRole('button', { name: /clear one sanction hour/i })).toBeEnabled();
+    } else {
+      expect(within(dialog).queryByRole('button', { name: /add one sanction hour/i })).not.toBeInTheDocument();
+    }
+    if (role === 'ssg') expect(within(dialog).getByRole('button', { name: /^mayor$/i })).toBeInTheDocument();
+    else expect(within(dialog).queryByRole('button', { name: /^mayor$/i })).not.toBeInTheDocument();
+    expect(staffState.adjustSanctionHours).not.toHaveBeenCalled();
   });
 });

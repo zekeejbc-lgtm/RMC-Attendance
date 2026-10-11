@@ -68,7 +68,7 @@ describe('Unit Deletion & Security Confirmation', () => {
     expect(sensitiveAction).not.toHaveBeenCalled();
     await user.type(fields.getByLabelText('Reason'), 'Remove unused test unit');
     await user.click(confirm);
-    expect(await fields.findByRole('alert')).toHaveTextContent('Incorrect password');
+    expect(await fields.findByRole('alert')).toHaveTextContent('SYS-001');
     expect(fields.getByLabelText('Current password')).toHaveValue('');
     expect(fields.getByLabelText('Google Authenticator code')).toHaveValue('');
     expect(confirm).toBeDisabled();

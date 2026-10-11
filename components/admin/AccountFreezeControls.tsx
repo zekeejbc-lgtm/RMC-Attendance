@@ -1,3 +1,5 @@
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 import React, { useEffect, useId, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, Lock, Unlock, Users, RefreshCw } from 'lucide-react';
 import { appData, refreshData } from '../../lib/backend';
@@ -65,7 +67,7 @@ export default function AccountFreezeControls() {
     setPassword(''); setCode(''); setFactor(null); setError(''); setMessage('');
     if (!configurationError) {
       const factors = await supabase.auth.mfa.listFactors();
-      if (factors.error) { setError(factors.error.message); return; }
+      if (factors.error) { setError(errorMessage(factors.error)); return; }
       setFactor(factors.data.totp.find(item => item.status === 'verified')?.id || null);
     }
   };
@@ -86,7 +88,7 @@ export default function AccountFreezeControls() {
       await appData.setAccountFreezeStatuses(action.ids, action.frozen, reason.trim());
       setMessage(`${action.ids.length} account${action.ids.length === 1 ? '' : 's'} ${action.frozen ? 'frozen' : 'unfrozen'} successfully.`);
       setSelected(ids => ids.filter(id => !action.ids.includes(id))); setAction(null);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : (caught as { message?: string })?.message || 'Unable to update account freezes.'); }
+    } catch (caught) { setError(errorMessage(caught)); }
     finally { setSaving(false); }
   };
 
@@ -103,7 +105,7 @@ export default function AccountFreezeControls() {
     <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_200px_220px]"><div className="min-w-0 sm:col-span-2 lg:col-span-1"><SearchInput value={query} onChange={setQuery} ariaLabel="Search accounts to freeze" placeholder="Search name, username, email or ID" /></div><SelectField aria-label="Filter account role" value={role} onChange={setRole}><option value="all">All roles</option>{roles.map(id => <option key={id} value={id}>{roleLabels[id] || id}</option>)}</SelectField><SelectField aria-label="Filter account freeze" value={status} onChange={setStatus}><option value="all">All account freezes</option><option value="frozen">Account frozen</option><option value="active">No account freeze</option></SelectField></div>
     <div className="flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50"><label className="flex min-h-11 items-center gap-2 text-xs font-semibold"><input type="checkbox" aria-label="Select visible accounts" checked={allVisibleSelected} disabled={!visible.length || saving} onChange={e => toggle(visible.map(account => account.uid), e.target.checked)} className="h-4 w-4 accent-brand-900" />Select this page</label><span className="text-xs text-slate-500">{selected.length} selected</span><div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto"><Button fullWidth={false} size="sm" variant="danger" disabled={!selected.length || saving} onClick={() => void open([...selected], true)}><Lock size={13} /> Freeze selected</Button><Button fullWidth={false} size="sm" variant="secondary" disabled={!selected.length || saving} onClick={() => void open([...selected], false)}><Unlock size={13} /> Unfreeze selected</Button></div></div>
     {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">{message}</p>}
-    {error && !action && <p role="alert" className="text-sm text-red-600">{error}</p>}
+    {error && !action && <ErrorNotice error={error} operation="Account Freeze Controls"></ErrorNotice>}
     <div className="divide-y divide-slate-100 dark:divide-slate-700">{visible.length ? visible.map(account => {
       const direct = Boolean(account.account_freeze?.isFrozen);
       const inherited = !direct && appData.isUserScopeFrozen(account);
@@ -118,7 +120,7 @@ export default function AccountFreezeControls() {
         <label className="block text-sm font-semibold">Reason<textarea rows={2} maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} className="input-field mt-1" /></label>
         {!configurationError && <label className="block text-sm font-semibold">Current password<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} className="input-field mt-1" /></label>}
         {factor && <label className="block text-sm font-semibold">Google Authenticator code<input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} className="input-field mt-1" /></label>}
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+        {error && <ErrorNotice error={error} operation="Account Freeze Controls"></ErrorNotice>}
       </div>
     </Modal>
   </section>;

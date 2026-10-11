@@ -1,3 +1,5 @@
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
@@ -29,7 +31,7 @@ export default function ActivityApprovalQueue({ purpose }: { purpose?: 'event' |
     if (!selected || busy || !canReview(selected) || (decision === 'rejected' && !notes.trim()) || (decision === 'approved' && selected.startTime <= Date.now())) return;
     setBusy(true); setError('');
     try { await appData.reviewEvent(selected.id, decision, notes.trim()); setSelectedId(null); }
-    catch (err) { setError(err && typeof err === 'object' && 'message' in err ? String(err.message) : 'Unable to save decision.'); }
+    catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   };
   if (!requests.length && !reviewer) return null;
@@ -48,7 +50,7 @@ export default function ActivityApprovalQueue({ purpose }: { purpose?: 'event' |
         <ActivityRequestDetails event={selected} />
         {canReview(selected) && <><label className={approvalLabel} htmlFor="activity-review-notes">Decision notes (required for rejection)</label><textarea id="activity-review-notes" className={approvalControl} rows={3} maxLength={2000} disabled={busy} value={notes} onChange={event => setNotes(event.target.value)} />
           {selected.startTime <= Date.now() && <p className="text-amber-700">The author must reschedule this activity before approval.</p>}
-          {error && <p role="alert" className="text-red-600">{error}</p>}
+          {error && <ErrorNotice error={error} operation="Activity Approval Queue"></ErrorNotice>}
         </>}
       </div>}
         {selected && selected.approvalStatus !== 'approved' && hasPermission(profile.role, 'events.manage') && canManageEventInScope(profile, selected, appData.getSchoolStructure()) && <Button fullWidth={false} variant="secondary" disabled={busy} onClick={() => navigate(selected.organizationId ? `/organizations/${selected.organizationId}/events/${selected.id}/edit` : `/ssg/${selected.kind === 'flag_ceremony' ? 'ceremonies' : 'events'}/${selected.id}/edit`)}>Edit request</Button>}

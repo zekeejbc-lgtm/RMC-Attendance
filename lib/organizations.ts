@@ -1,5 +1,6 @@
 import type { Organization, UserProfile } from '../types';
 import { hasPermission } from './accessControl';
+import { errorMessage } from './errors';
 
 export const canReviewOrganizations = (profile: UserProfile | null) => Boolean(profile &&
   ['ossa', 'ossa_staff'].includes(profile.role) && hasPermission(profile.role, 'ossa.manage_cases'));
@@ -11,5 +12,5 @@ export const canCreateOrganization = (profile: UserProfile | null) => Boolean(pr
   hasPermission(profile.role, 'directory.manage_structure'));
 
 export function organizationError(error: unknown) {
-  return error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to save this change.';
+  return errorMessage(error);
 }

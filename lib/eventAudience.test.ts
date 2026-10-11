@@ -1,6 +1,38 @@
-import { expect, it } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
+import { setMockDataRef } from './accessControl';
 import { AppEvent, SchoolNode, UserProfile } from '../types';
-import { canManageEventInScope, eventRecipientRoots, isEventRecipient, isCeremonyVolunteer, recipientGroupLabel } from './eventAudience';
+import { canManageEventInScope, eventRecipientRoots, isEventRecipient, isCeremonyVolunteer, recipientGroupLabel, recipientRoleOptions } from './eventAudience';
+
+afterEach(() => setMockDataRef(null));
+
+it('includes every configured role except admin and labels custom roles', () => {
+  setMockDataRef({ getCustomRoles: () => ({ adviser: { id: 'adviser', name: 'Faculty Advisers' } }) });
+  expect(recipientRoleOptions().map(option => option.value)).toEqual(expect.arrayContaining([
+    'All Students', 'All SSG Officers', 'All Mayors', 'role:ossa', 'role:ossa_staff', 'role:adviser',
+  ]));
+  expect(recipientRoleOptions().some(option => option.value === 'role:admin')).toBe(false);
+  expect(recipientGroupLabel('role:adviser', [])).toBe('All Faculty Advisers');
+});
+
+it.each(['ossa', 'ossa_staff'])('matches only the selected %s role within scope', role => {
+  const event = { scopeNodeId: 'a', audienceTarget: { mode: 'group_list', groups: [`role:${role}`] } } as AppEvent;
+  const profile = { role, school_data: {}, official_data: { assignment_node_id: 'a1' } } as UserProfile;
+  expect(isEventRecipient(event, profile, roots)).toBe(true);
+  expect(isEventRecipient(event, { ...profile, role: 'student' }, roots)).toBe(false);
+  expect(isEventRecipient(event, { ...profile, official_data: { body: 'OSSA', assignment_node_id: 'b1' } }, roots)).toBe(false);
+  expect(isEventRecipient({ ...event, approvalStatus: 'pending' }, profile, roots)).toBe(false);
+});
+
+it('matches custom positions without including admins or unknown roles', () => {
+  setMockDataRef({ getCustomRoles: () => ({ adviser: { id: 'adviser', name: 'Faculty Advisers' } }) });
+  const event = { audienceTarget: { mode: 'group_list', groups: ['role:adviser'] } } as AppEvent;
+  const profile = { role: 'student', positionRoleIds: ['adviser'], school_data: {} } as UserProfile;
+  expect(isEventRecipient(event, profile, roots)).toBe(true);
+  expect(isEventRecipient(event, { ...profile, positionRoleIds: [] }, roots)).toBe(false);
+  expect(isEventRecipient(event, { ...profile, role: 'admin' }, roots)).toBe(false);
+  expect(isEventRecipient({ audienceTarget: { mode: 'group_list', groups: ['role:admin'] } } as AppEvent, { ...profile, role: 'admin' }, roots)).toBe(false);
+  expect(isEventRecipient({ audienceTarget: { mode: 'group_list', groups: ['role:unknown'] } } as AppEvent, { ...profile, role: 'unknown' }, roots)).toBe(false);
+});
 
 const roots: SchoolNode[] = [
   { id: 'a', name: 'General A', type: 'education_unit', children: [{ id: 'a1', name: 'Section 1', type: 'section' }, { id: 'a2', name: 'Section 2', type: 'section' }] },

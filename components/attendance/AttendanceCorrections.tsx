@@ -1,3 +1,5 @@
+import { selectUploadFile } from '../../lib/fileUploads';
+import ErrorNotice from '../ui/ErrorNotice';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowRight, CalendarClock, ExternalLink, FilePenLine, FileUp, Info, Paperclip, X } from 'lucide-react';
 import { useAuth } from '../AuthContext';
@@ -200,14 +202,14 @@ export default function AttendanceCorrections({ review = false, target, onTarget
    </div>
    <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">{creditKind ? 'Completed check-in and checkout are required to earn credit.' : 'Time-out is optional.'} Arrival after {formatManilaTime(option.late_at)} is marked late automatically.</p>
   </> : <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">You are requesting absent status with no attendance times. {creditKind ? 'This removes service or merit credit and may restore previously cleared sanctions.' : 'This may add an absence sanction. If you missed the activity for a valid reason, submit an excuse instead.'}</p>}
-  {timeError && timeIn ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{timeError}</p> : <p role="status" className="text-sm">{attendanceIntent === 'attended' && !timeIn ? 'Add your arrival time to preview the attendance status.' : `Status: ${correctionStatus(timeIn, option)}`}</p>}
+  {timeError && timeIn ? <ErrorNotice error={timeError} operation="Attendance Corrections"></ErrorNotice> : <p role="status" className="text-sm">{attendanceIntent === 'attended' && !timeIn ? 'Add your arrival time to preview the attendance status.' : `Status: ${correctionStatus(timeIn, option)}`}</p>}
   <ChangePreview original={verified ? selected?.original || null : option.original} timeIn={timeIn} timeOut={timeOut} option={option} valid={!timeError} attended={attendanceIntent === 'attended'} />
  </fieldset>;
  return <Surface aria-label={review ? 'Attendance corrections review' : 'Attendance corrections'} className="space-y-4 p-4 sm:p-5">
   {!review && <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-lg">Attendance corrections</h2><p className="text-sm text-slate-500 dark:text-slate-400">Report recording mistakes within 30 days after an institutional event, ceremony, service, or merit activity ends. For an absence reason, use the excuse workflow.</p></div>
    <Button fullWidth={false} variant="secondary" disabled={loading || busy} onClick={() => { choose(''); setReason(''); setFile(null); setError(''); setReporting(true); }}><FilePenLine size={16} />Report a problem / missing record</Button></div>}
   {loading && <p role="status">Loading attendance corrections...</p>}
-  {error && <p role="alert" className="text-red-600 dark:text-red-400">{error} <button type="button" className="underline" disabled={busy} onClick={() => void load()}>Refresh requests</button></p>}
+  {error && <ErrorNotice error={error} operation="Attendance Corrections"><button type="button" className="underline" disabled={busy} onClick={() => void load()}>Refresh requests</button></ErrorNotice>}
   {!loading && <ApprovalQueue title={review ? 'Attendance correction queue' : 'My correction requests'} description={review ? 'Review the original recording, student evidence, and verified times. Approval reconciles attendance penalties or service and merit credits.' : 'Your original records remain available in each request alongside the decision.'}
    initialStatus={review ? 'pending' : 'all'}
    rows={rows.map(row => ({ id: row.id, title: `${row.event_title} / ${row.slot}${review ? ` - ${row.student_name}` : ''}`, status: row.status, searchText: `${row.student_number} ${row.reason}`, subtitle: `${row.status} · ${formatManilaDateTime(row.created_at)}` }))}
@@ -217,7 +219,7 @@ export default function AttendanceCorrections({ review = false, target, onTarget
    {!options.length ? <div className="space-y-4">
     <div role="status" className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900/50"><CalendarClock size={28} className="mb-3 text-gold-600 dark:text-gold-400" /><h3 className="font-bold text-brand-900 dark:text-white">No sessions available for correction</h3><p className={`${muted} mt-2`}>You can request corrections for institutional events, flag ceremonies, service, and merit activities that ended within the last 30 days.</p></div>
     <div className="space-y-2"><h3 className="text-sm font-bold">What you can do next</h3><ul className="list-disc space-y-2 pl-5 text-sm leading-6 text-slate-600 dark:text-slate-300"><li>Wait until your activity ends, then refresh the sessions.</li><li>Check your request history if you already submitted a correction.</li><li>Contact OSSA if the activity is older, has an excuse request, or belongs to an organization or involves volunteer credit.</li></ul></div>
-    {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    {error && <ErrorNotice error={error} operation="Attendance Corrections"></ErrorNotice>}
    </div> : <form id={formId} onSubmit={submit} className="space-y-6">
     <div className="flex items-start gap-3 rounded-xl bg-brand-50 p-3 dark:bg-brand-950/40"><Info size={18} className="mt-0.5 shrink-0 text-brand-700 dark:text-gold-400" /><p className="text-sm leading-6 text-brand-900 dark:text-slate-200">Choose the session, enter the correct attendance, then explain the mistake. Review the comparison before submitting.</p></div>
     <div className="space-y-3"><h3 className="font-bold text-brand-900 dark:text-white">1. Choose the activity and session</h3>
@@ -231,15 +233,15 @@ export default function AttendanceCorrections({ review = false, target, onTarget
       <div id={`${formId}-reason-help`} className="flex flex-wrap justify-between gap-2 text-xs text-slate-500 dark:text-slate-400"><span>Include the scan problem and who can verify your attendance.</span><span>{reason.trim().length}/2,000 characters · minimum 10</span></div>
      </section>
      <section className="space-y-3"><h3 className="font-bold text-brand-900 dark:text-white">4. Add evidence <span className="font-normal text-slate-500 dark:text-slate-400">(optional)</span></h3><p className={muted}>A screenshot, attendance photo, or document can help OSSA verify the mistake. Choose PDF, JPG, PNG, or WebP, up to 5 MB.</p>
-      <input ref={fileInput} id={fileInputId} aria-label="Supporting evidence" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" disabled={busy} className="sr-only" onChange={event => setFile(event.target.files?.[0] || null)} />
+      <input ref={fileInput} id={fileInputId} aria-label="Supporting evidence" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" disabled={busy} className="sr-only" onChange={event => setFile(selectUploadFile(event.currentTarget) || null)} />
       <div className={`rounded-2xl border-2 border-dashed p-4 ${fileError ? 'border-red-300 dark:border-red-800' : 'border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-900/40'}`}>
        {file ? <div className="flex min-w-0 items-center gap-3"><Paperclip size={22} className="shrink-0 text-gold-600 dark:text-gold-400" /><div className="min-w-0 flex-1"><p className="break-all text-sm font-semibold">{file.name}</p><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{(file.size / 1024).toFixed(1)} KB · {fileError ? 'Choose another file' : 'Ready to attach'}</p></div><Button iconOnly aria-label="Remove supporting evidence" variant="secondary" disabled={busy} onClick={() => { setFile(null); if (fileInput.current) fileInput.current.value = ''; }}><X size={16} /></Button></div> : <div className="flex flex-col items-center gap-2 text-center"><FileUp size={26} className="text-slate-400" /><p className="text-sm font-semibold">Choose a supporting file</p><p className="text-xs text-slate-500 dark:text-slate-400">Your file will be shared with authorized reviewers.</p></div>}
        <Button variant="secondary" fullWidth={false} className="mt-3" disabled={busy} onClick={() => fileInput.current?.click()}><FileUp size={16} />{file ? 'Replace file' : 'Choose file'}</Button>
       </div>
-      {fileError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{fileError}</p>}
+      {fileError && <ErrorNotice error={fileError} operation="Attendance Corrections"></ErrorNotice>}
      </section>
     </>}
-    {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    {error && <ErrorNotice error={error} operation="Attendance Corrections"></ErrorNotice>}
    </form>}
   </Modal>
   <Modal open={Boolean(selected)} onClose={() => { if (!busy && !openingProof) setSelectedId(null); }} title="Attendance correction request" size="lg"
@@ -255,14 +257,14 @@ export default function AttendanceCorrections({ review = false, target, onTarget
     {review && selected.status === 'pending' ? <>{timeInputs(true)}{creditKind ? <>
       {creditLoading && <p role="status">Calculating credit adjustment...</p>}
       {creditValid && <CreditPreview plan={credit!.plan} />}
-      {creditError && <p role="alert" className="text-red-600 dark:text-red-400">{creditError}</p>}
+      {creditError && <ErrorNotice error={creditError} operation="Attendance Corrections"></ErrorNotice>}
       <Button variant="secondary" fullWidth={false} disabled={busy || creditLoading} onClick={() => setPreviewVersion(v => v + 1)}>Refresh credit preview</Button>
      </> : <p className="text-slate-500 dark:text-slate-400">Approval adjusts this session's penalty. Reductions stop at the outstanding balance; previously completed service is preserved.</p>}<label className={approvalLabel}>Decision notes (required)<textarea aria-label="Decision notes" className={approvalControl} required minLength={5} maxLength={2000} rows={3} disabled={busy} value={note} onChange={event => setNote(event.target.value)} /></label></> : selected.status !== 'pending' && <>
      {selected.credit_adjustment && <CreditPreview plan={selected.credit_adjustment} />}
      {selected.corrected && <AttendanceSnapshot title="Approved corrected recording" record={selected.corrected} />}
      <DetailFields fields={[{ label: 'Decision notes', value: selected.review_note }, { label: 'Reviewer', value: selected.reviewer_name || '' }, { label: 'Reviewed', value: formatManilaDateTime(selected.reviewed_at) }, { label: 'Sanction balance adjustment', value: `${Number(selected.sanction_change).toFixed(2)} hours` }]} />
     </>}
-    {error && <p role="alert" className="text-red-600 dark:text-red-400">{error}</p>}
+    {error && <ErrorNotice error={error} operation="Attendance Corrections"></ErrorNotice>}
    </div>}
   </Modal>
  </Surface>;

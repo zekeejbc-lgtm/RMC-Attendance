@@ -1,3 +1,5 @@
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 import { useState } from 'react';
 import { FileText, KeyRound, ShieldCheck } from 'lucide-react';
 import { appData, documentUrl } from '../../lib/backend';
@@ -34,7 +36,7 @@ function ApplicationDocument({ label, path }: { label: string; path: string }) {
     } finally { setLoading(false); }
   };
   return <div><Button size="sm" fullWidth={false} variant="secondary" loading={loading} onClick={open}><FileText size={14} /> {label.replaceAll('_', ' ')}</Button>
-    {error && <p role="alert" className="mt-1 text-xs text-red-600 dark:text-red-300">{error}</p>}</div>;
+    {error && <ErrorNotice error={error} operation="Account Profile Panel"></ErrorNotice>}</div>;
 }
 
 export default function AccountProfilePanel({ account, access, accessLoading, accessError, applications }: {
@@ -56,7 +58,7 @@ export default function AccountProfilePanel({ account, access, accessLoading, ac
     try {
       await appData.resetAccountPassword(account.uid, password);
       setPassword(''); setMessage(`Password updated for ${account.name}.`);
-    } catch (error) { setError(error instanceof Error ? error.message : 'Unable to update password.'); }
+    } catch (error) { setError(errorMessage(error)); }
     finally { setSaving(false); }
   };
   return <div className="space-y-6">
@@ -77,7 +79,7 @@ export default function AccountProfilePanel({ account, access, accessLoading, ac
         <Detail label="Account created" value={access?.created_at ? formatManilaDateTime(access.created_at) : 'Unavailable'} />
         <Detail label="Last sign-in (Manila time)" value={access?.last_sign_in_at ? formatManilaDateTime(access.last_sign_in_at) : access ? 'Never signed in' : accessLoading ? 'Loading…' : 'Unavailable'} />
       </dl>
-      {accessError && <p role="alert" className="text-xs text-red-600 dark:text-red-300">{accessError}</p>}
+      {accessError && <ErrorNotice error={accessError} operation="Account Profile Panel"></ErrorNotice>}
     </section>
     <section aria-label="Enrollment applications" className="space-y-3">
       <h3 className="flex items-center gap-2 text-sm font-bold text-brand-900 dark:text-white"><FileText size={17} /> Enrollment applications <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs dark:bg-slate-700">{enrollment.length}</span></h3>
@@ -101,7 +103,7 @@ export default function AccountProfilePanel({ account, access, accessLoading, ac
         <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">Set a new password and share it securely with the account holder.</p></div>
       <fieldset disabled={saving} className="min-w-0"><ManagedPasswordField label="New password" value={password} onChange={value => { setPassword(value); setMessage(''); setError(''); }} /></fieldset>
       {message && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">{message}</p>}
-      {error && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{error}</p>}
+      {error && <ErrorNotice error={error} operation="Account Profile Panel"></ErrorNotice>}
       <div className="flex justify-end"><Button className="sm:w-auto" type="submit" loading={saving} disabled={!isValidPassword(password)}>Update password</Button></div>
     </form>
   </div>;

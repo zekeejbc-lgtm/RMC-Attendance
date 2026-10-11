@@ -1,3 +1,4 @@
+import { formatHourDuration } from '../lib/duration';
 import ActivityCredits from '../components/attendance/ActivityCredits';
 import AttendanceCorrections from '../components/attendance/AttendanceCorrections';
 import SanctionClearance from '../components/attendance/SanctionClearance';
@@ -183,12 +184,12 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
         <MetricCard icon={<CheckCircle2 size={20} />} label="Attendance Rate" value={`${stats.rate}%`} detail="Present, late, and excused" />
         <MetricCard icon={<Clock size={20} />} label="Late Check-Ins" value={stats.lateCount} detail="Recorded tardy arrivals" />
         <MetricCard icon={<XCircle size={20} />} label="Unexcused Absences" value={stats.absentCount} detail="Attendance violations" />
-        <MetricCard icon={<ShieldAlert size={20} />} label="Active Sanctions" value={`${stats.totalSanctionHours} Hours`} detail="Community service balance" />
-        {embedded && <MetricCard icon={<Award size={20} />} label="Earned Merit" value={`${(userStats?.merit_hours || 0).toFixed(2)} Hours`} detail="Saved activity credits" />}
+        <MetricCard icon={<ShieldAlert size={20} />} label="Active Sanctions" value={formatHourDuration(stats.totalSanctionHours)} detail="Community service balance" />
+        {embedded && <MetricCard icon={<Award size={20} />} label="Earned Merit" value={formatHourDuration(userStats?.merit_hours || 0)} detail="Saved activity credits" />}
       </div>
 
       {/* SEARCH AND FILTERS */}
-      {!embedded && <MetricCard icon={<Award size={20} />} label="Earned Merit" value={`${(userStats?.merit_hours || 0).toFixed(2)} Hours`} detail="Saved credit remaining after activity awards clear existing sanctions. This is separate from your sanction balance." />}
+      {!embedded && <MetricCard icon={<Award size={20} />} label="Earned Merit" value={formatHourDuration(userStats?.merit_hours || 0)} detail="Saved credit remaining after activity awards clear existing sanctions. This is separate from your sanction balance." />}
       <ActivityCredits records={activityCredits} uid={profile?.uid || ''} onOpen={setSelectedRecordId} />
       <Surface className="flex flex-col items-stretch justify-between gap-3 p-4 md:flex-row md:items-center">
         <SearchInput ariaLabel="Search attendance records" className="flex-1" onChange={setSearchTerm} placeholder="Search event/ceremony title..." value={searchTerm} />
@@ -317,7 +318,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
             <h2 className="text-sm font-black text-red-900 dark:text-red-300 uppercase tracking-widest">Sanctions & Demerits Ledger</h2>
           </div>
           <span className="text-xs font-bold text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/50 px-3 py-1 rounded-full">
-            Active Balance: {stats.totalSanctionHours} Hours
+            Active Balance: {formatHourDuration(stats.totalSanctionHours)}
           </span>
         </div>
 
@@ -345,7 +346,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
                 <h4 className="text-xs font-black text-brand-900 dark:text-slate-100 uppercase tracking-tight">{sanc.reason}</h4>
                 <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-2">
                   Impact: <span className={sanc.hours > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}>
-                    {sanc.hours > 0 ? `+${sanc.hours} Hours` : `${sanc.hours} Hours`}
+                    {sanc.hours > 0 ? '+' : ''}{formatHourDuration(sanc.hours)}
                   </span>
                 </p>
 
@@ -371,9 +372,9 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
               ['Event ends', selectedRecord.event ? formatManilaDateTime(selectedRecord.event.endTime) : 'Unavailable'],
               ['Location', selectedRecord.event?.venue || 'Not specified'],
               ...(selectedRecord.correctedAt ? [['Corrected by', selectedRecord.correctedBy || 'OSSA'], ['Corrected at', formatManilaDateTime(selectedRecord.correctedAt)], ['Correction notes', selectedRecord.correctionNote || '']] : []),
-              ...(selectedRecord.renderedHours != null ? [['Rendered hours', Number(selectedRecord.renderedHours).toFixed(2)]] : []),
-              ...(selectedRecord.deductedHours != null ? [['Sanctions cleared', `${Number(selectedRecord.deductedHours).toFixed(2)} hours`]] : []),
-              ...(selectedRecord.meritHours != null ? [['Merit earned', `${Number(selectedRecord.meritHours).toFixed(2)} hours`]] : []),
+              ...(selectedRecord.renderedHours != null ? [['Rendered hours', formatHourDuration(selectedRecord.renderedHours)]] : []),
+              ...(selectedRecord.deductedHours != null ? [['Sanctions cleared', formatHourDuration(selectedRecord.deductedHours)]] : []),
+              ...(selectedRecord.meritHours != null ? [['Merit earned', formatHourDuration(selectedRecord.meritHours)]] : []),
             ].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50"><dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</dt><dd className="mt-1 break-words font-semibold text-slate-800 dark:text-slate-100">{value}</dd></div>)}
           </dl>
           {selectedRecord.event?.description && <div><h4 className="font-semibold">Activity description</h4><p className="mt-1 whitespace-pre-line text-slate-600 dark:text-slate-300">{selectedRecord.event.description}</p></div>}
@@ -384,7 +385,7 @@ const StudentRecords: React.FC<{ student?: UserProfile; studentStats?: UserStats
       <Modal open={Boolean(selectedSanction)} onClose={() => setSelectedSanctionId(null)} title="Sanction details" description="All times are in Manila local time (UTC+8)." size="md">
         {selectedSanction && <dl className="grid gap-4 text-sm">{[
           ['Reason', selectedSanction.reason], ['Assigned at', selectedSanction.assignedAt],
-          ['Impact', `${selectedSanction.hours > 0 ? '+' : ''}${selectedSanction.hours} hours`],
+          ['Impact', `${selectedSanction.hours > 0 ? '+' : ''}${formatHourDuration(selectedSanction.hours)}`],
           ['Status', selectedSanction.status], ['Authorized by', selectedSanction.approvedBy || 'System'],
         ].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/50"><dt className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</dt><dd className="mt-1 break-words font-semibold text-slate-800 dark:text-slate-100">{value}</dd></div>)}</dl>}
       </Modal>

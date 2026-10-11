@@ -1,3 +1,4 @@
+import ErrorNotice from './ErrorNotice';
 import React, { createContext, useContext, useEffect, useId, useState } from 'react';
 import { Download, RefreshCw, X } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
@@ -99,7 +100,7 @@ export default function PwaStatus({ children }: { children?: React.ReactNode }) 
       <Button disabled={!online || updating} onClick={() => void update()}>{updating ? 'Updating…' : 'Reload to update'}</Button>
       <Button variant="secondary" disabled={updating} onClick={() => setNeedRefresh(false)}>Later</Button>
     </div>
-      {updateError && <p role="alert">{updateError}</p>}
+      {updateError && <ErrorNotice error={updateError} operation="Pwa Status"></ErrorNotice>}
   </aside>}
   {online && install && showInstall && !installed && <aside aria-labelledby={installTitleId} className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-40 w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 print:hidden">
     <div className="flex items-start gap-3">

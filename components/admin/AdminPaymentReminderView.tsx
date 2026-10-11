@@ -1,3 +1,5 @@
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 import { formatManilaDate, formatManilaDateTime, parseManilaDateTime } from '../../lib/dateTime';
 import { SelectField } from '../ui/SelectField';
 import React, { useState, useEffect, useRef } from 'react';
@@ -55,7 +57,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
       const latest = appData.getPaymentInfo();
       setPaymentInfo(result && !latest.reminders.some(item => item.id === result.id) ? { ...latest, reminders: [result, ...latest.reminders] } : latest);
       setShowReminderModal(false); setFeedback('Payment notice posted to the OSSA Hub.');
-    } catch (failure) { setError(classifyError(failure).message); }
+    } catch (failure) { setError(errorMessage(classifyError(failure))); }
     finally { busy.current = false; setSaving(false); }
   };
   const handleUpdateStatus = async (e: React.FormEvent) => {
@@ -74,7 +76,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
       const result = await appData.updatePaymentInfo(updated);
       setPaymentInfo(result || { ...appData.getPaymentInfo(), ...updated });
       setShowStatusModal(false); setFeedback('Billing details saved.');
-    } catch (failure) { setError(classifyError(failure).message); }
+    } catch (failure) { setError(errorMessage(classifyError(failure))); }
     finally { busy.current = false; setSaving(false); }
   };
   const statusBadge = {
@@ -245,7 +247,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
       >
         <form id="reminder-form" onSubmit={handleSendReminder} className="space-y-3">
           <fieldset disabled={saving} className="space-y-3">
-          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          {error && <ErrorNotice error={error} operation="Admin Payment Reminder View"></ErrorNotice>}
           <p className="text-sm text-slate-500">To: OSSA team ? Posted in app</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -327,7 +329,7 @@ export const AdminPaymentReminderView: React.FC<{ actorName?: string }> = ({ act
         }
       >
         <form id="status-form" onSubmit={handleUpdateStatus} className="space-y-3">
-          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          {error && <ErrorNotice error={error} operation="Admin Payment Reminder View"></ErrorNotice>}
           <fieldset disabled={saving} className="space-y-3">
             {(['accountName', 'schoolId', 'billingCycle'] as const).map(field => <label key={field} className="block text-sm font-medium">
               {{ accountName: 'School account name', schoolId: 'School ID', billingCycle: 'Billing period' }[field]}

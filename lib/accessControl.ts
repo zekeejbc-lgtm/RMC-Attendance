@@ -11,6 +11,7 @@ export interface PermissionDefinition {
 
 export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'calendar.view', name: 'View Calendar', category: 'Events', description: 'View personal activities, conflicts, holidays and suspensions, and export the calendar.' },
+  { id: 'calendar.manage_schedules', name: 'Manage Informational Schedules', category: 'Events', description: 'Publish, update, or cancel calendar schedules and notify recipients without attendance requirements, within the assigned academic scope.' },
   { id: 'calendar.view_scope', name: 'View Scoped Calendar', category: 'Events', description: 'Also view activities for the assigned academic scope. System administrators see the school-wide schedule. Requires View Calendar.' },
   { id: 'calendar.manage_closures', name: 'Manage Holidays & Suspensions', category: 'Events', description: 'Mark dates, preview affected activities, and suspend, cancel or reschedule within the assigned academic scope.' },
   { id: 'calendar.manage_schoolwide', name: 'Manage School-wide Suspensions', category: 'Events', description: 'Allow school-wide dates and all academic units. Requires Manage Holidays & Suspensions.' },
@@ -42,7 +43,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'System Owner / Super Admin',
     description: 'Full administrative access across all system nodes and controls',
     isPositionOnly: false,
-    permissions: ['calendar.view', 'calendar.view_scope', 'calendar.manage_closures', 'calendar.manage_schoolwide',
+    permissions: ['calendar.view', 'calendar.view_scope', 'calendar.manage_schedules', 'calendar.manage_closures', 'calendar.manage_schoolwide',
       'directory.transfer_students', 'system.manage_accounts', 'system.view_audit', 'system.freeze', 'system.health',
       'system.payment_reminders', 'system.manage_rbac', 'directory.manage_structure', 'directory.create_units',
       'directory.delete_structure', 'directory.manage_members', 'attendance.scan',
@@ -56,7 +57,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'OSSA Administrator',
     description: 'Directs student discipline, excuses, and institutional sanction cases',
     isPositionOnly: false,
-    permissions: ['calendar.view', 'calendar.view_scope',
+    permissions: ['calendar.view', 'calendar.view_scope', 'calendar.manage_schedules',
       'directory.transfer_students', 'directory.manage_structure', 'directory.create_units', 'directory.manage_members', 'attendance.scan', 'events.approve',
       'directory.add_members_manually', 'directory.change_member_designation', 'directory.manage_student_sanctions',
       'attendance.manage', 'events.manage', 'ossa.manage_cases', 'system.health',
@@ -76,7 +77,7 @@ export const DEFAULT_CORE_ROLES: Record<string, CoreRole> = {
     name: 'SSG Officer',
     description: 'Manages events, geofencing, and directory section rosters',
     isPositionOnly: false,
-    permissions: ['calendar.view', 'directory.manage_structure', 'directory.manage_members', 'directory.add_members_manually', 'directory.change_member_designation', 'attendance.scan', 'attendance.manage', 'events.manage', 'events.require_ossa_approval'],
+    permissions: ['calendar.view', 'calendar.manage_schedules', 'directory.manage_structure', 'directory.manage_members', 'directory.add_members_manually', 'directory.change_member_designation', 'attendance.scan', 'attendance.manage', 'events.manage', 'events.require_ossa_approval'],
     isBuiltIn: true,
   },
   mayor: {
@@ -102,6 +103,12 @@ export const setMockDataRef = (ref: any) => {
   mockDataRef = ref;
 };
 
+export const getRoleDefinitions = (): Record<string, CoreRole | CustomRole> => ({
+  ...DEFAULT_CORE_ROLES,
+  ...(mockDataRef?.getCoreRoles?.() || {}),
+  ...(mockDataRef?.getCustomRoles?.() || {}),
+});
+
 export const hasPermission = (
   role: UserRole | string | undefined,
   permission: AppPermission,
@@ -124,8 +131,6 @@ export const hasPermission = (
     if (cRole.isPositionOnly) return false;
     return (cRole.permissions || []).includes(permission);
   }
-
-  if (role === 'admin' && !permission.startsWith('calendar.')) return true;
 
   const defaultRole = DEFAULT_CORE_ROLES[role];
   if (defaultRole) {

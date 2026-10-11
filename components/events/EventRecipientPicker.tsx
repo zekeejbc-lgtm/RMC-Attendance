@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { SchoolNode } from '../../types';
 import { findNodePath } from '../../lib/academicDirectory';
-import { recipientGroupLabel } from '../../lib/eventAudience';
+import { recipientGroupLabel, recipientRoleOptions } from '../../lib/eventAudience';
 import { AcademicPathPicker } from '../academic/AcademicPathPicker';
 import Button from '../ui/Button';
 import CustomSelect from '../ui/CustomSelect';
@@ -25,16 +25,16 @@ export function EventRecipientPicker({ roots, selected, onChange, onPendingChang
   useEffect(() => { onPendingChange?.(Boolean(candidate && !duplicate)); }, [candidate, duplicate, onPendingChange]);
   const add = () => {
     if (!candidate || duplicate) return;
-    onChange(candidate === 'All Students' ? [candidate] : [...selected.filter(group => group !== 'All Students'), candidate]);
+    // Non-student roles can be combined with the existing all-students audience.
+    onChange(candidate === 'All Students' ? [...selected.filter(group => group.startsWith('role:')), candidate]
+      : [...selected.filter(group => candidate.startsWith('role:') || group !== 'All Students'), candidate]);
     setPath([]);
   };
 
   return <div className="min-w-0 space-y-4">
     <CustomSelect label="Recipient type" value={type} onChange={value => { setType(value as string); setPath([]); }} options={[
       { value: 'directory', label: 'School unit or group' },
-      { value: 'All Students', label: 'All Students' },
-      { value: 'All SSG Officers', label: 'All SSG Officers' },
-      { value: 'All Mayors', label: 'All Mayors' },
+      ...recipientRoleOptions(),
     ]} />
     {type === 'directory' && <fieldset className="min-w-0 space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
       <legend className="px-1 text-sm font-semibold">Choose recipient unit</legend>

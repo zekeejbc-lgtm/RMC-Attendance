@@ -45,7 +45,7 @@ it('submits a missing attendance request with optional evidence and claimed Mani
  expect(mocks.upload).not.toHaveBeenCalled();
 });
 it('shows a failed submission in the dialog without clearing the student explanation', async () => {
- mocks.submit.mockRejectedValue(new Error('This session already has a pending correction.'));
+ mocks.submit.mockRejectedValue(new Error('This session is unavailable or already has a pending correction. Refresh or contact OSSA.'));
  render(<AttendanceCorrections target={{ eventId: 'event-1', slot: 'default' }} />);
  const reason = await screen.findByLabelText('Explain the recording mistake');
  setTime('Requested time-in', '8', '05');
@@ -139,11 +139,11 @@ it('requires the server credit preview and passes it unchanged when approving se
 it('blocks approval when the credit preview fails while allowing rejection with notes', async () => {
  mocks.profile = { uid: 'reviewer-1', role: 'ossa' };
  mocks.history.mockResolvedValue([{ ...request, kind: 'merit' }]);
- mocks.preview.mockRejectedValue(new Error('Attendance or credits changed after submission.'));
+ mocks.preview.mockRejectedValue(new Error('Attendance or credits changed after submission. Reject and resubmit against the latest records.'));
  render(<AttendanceCorrections review />);
  fireEvent.click(await screen.findByRole('button', { name: 'Assembly / default - Demo Student' }));
  fireEvent.change(screen.getByLabelText('Decision notes'), { target: { value: 'Please resubmit against the latest records.' } });
- await screen.findByText('Attendance or credits changed after submission.');
+ await screen.findByText('Attendance or credits changed after submission. Reject and resubmit against the latest records.');
  expect(screen.getByRole('button', { name: 'Approve correction' })).toBeDisabled();
  fireEvent.click(screen.getByRole('button', { name: 'Reject correction' }));
  await waitFor(() => expect(mocks.review).toHaveBeenCalledWith('request-1', 'rejected', 'Please resubmit against the latest records.', '2026-10-08T08:05:00', ''));

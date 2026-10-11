@@ -1,3 +1,4 @@
+import ErrorNotice from '../ui/ErrorNotice';
 import { TimeInput } from '../ui/TimeInput';
 import { useState } from 'react';
 import { CeremonyExemptionFilters } from './CeremonyExemptionFilters';
@@ -26,7 +27,7 @@ function VolunteerMeritDuration({ value, onChange }: { value: number; onChange: 
       <label className="app-field-label">Minutes<input aria-label="Volunteer merit minutes" type="number" min="0" max="59.999999" step="any" required className="input-field mt-2" value={minutes} onChange={e => update(hours, e.target.value)} /></label>
     </div>
     <p className="text-sm text-slate-500">For 30 minutes, enter 0 hours and 30 minutes. Maximum total: 24 hours.</p>
-    {!valid(hours, minutes) && <p role="alert" className="text-sm text-red-600">Enter whole hours and minutes from 0 to less than 60, with a total of at least 0.6 minutes and no more than 24 hours.</p>}
+    {!valid(hours, minutes) && <ErrorNotice error="Enter whole hours and minutes from 0 to less than 60, with a total of at least 0.6 minutes and no more than 24 hours." />}
     <p className="text-sm text-slate-500">Deducted from outstanding sanction hours once per ceremony after scan-in and scan-out. No negative balance. Exempt students do not earn volunteer merit.</p>
   </fieldset>;
 }

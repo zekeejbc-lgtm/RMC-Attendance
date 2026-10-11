@@ -1,4 +1,6 @@
+import { retainedUploadFile } from './fileUploads';
 import { hotState } from './hotState';
+import { reconcileData } from './reconcileData';
 import { toast, type OperationProgress } from './toast';
 import { supabase, requireConfiguration, verifyPassword, executeSensitiveAction, type SensitiveConfirmation } from './supabase';
 import { UserProfile, UserStats, Application, AppEvent, SchoolNode, ExcuseApplication, CoreRole, CustomRole, PaymentInfo, SystemFreezeState, NodeFreezeState, Organization, OrganizationMembership, OrganizationSanctionRequest } from '../types';
@@ -39,8 +41,14 @@ const getDB = () => backendState.snapshot;
 const getAssignmentNodeId = (p: UserProfile) => p.official_data?.assignment_node_id || p.school_data?.academic_assignment?.terminalGroupId;
 const getAccountProfiles = (db: Snapshot) => Object.values(db.users).map(u => u.profile);
 const profileBelongsToScope = (db: Snapshot, profile: UserProfile, id: string) => isNodeInSubtree(db.school_structure, id, getAssignmentNodeId(profile) || '');
-export const subscribeData = (callback: () => void) => { window.addEventListener('rmc_data_update', callback); return () => window.removeEventListener('rmc_data_update', callback); };
-export const notifyAuthChange = () => window.dispatchEvent(new Event('rmc_data_update'));
+// Every completed read lets independent queues refresh; only changed snapshots
+// need to advance the shared workspace revision.
+export const subscribeData = (callback: (changed: boolean) => void) => {
+  const listener = (event: Event) => callback((event as CustomEvent).detail?.changed !== false);
+  window.addEventListener('rmc_data_update', listener);
+  return () => window.removeEventListener('rmc_data_update', listener);
+};
+export const notifyAuthChange = (changed = true) => window.dispatchEvent(new CustomEvent('rmc_data_update', { detail: { changed } }));
 export function resetData(uid: string | null = null) { backendState.generation++; backendState.currentUserId = uid; backendState.snapshot = empty(); backendState.lastSync = null; backendState.lastSyncFailed = false; backendState.syncFailures = 0; backendState.syncSuccesses = 0; backendState.latencySamples = []; backendState.latency = 0; notifyAuthChange(); }
 function tree(rows: any[]): SchoolNode[] {
   const nodes = new Map<string, SchoolNode>(rows.map(r => [r.id, { ...r.data, id: r.id, children: [] }]));
@@ -57,7 +65,9 @@ export async function refreshData() {
     const { data, error } = await supabase.from('rmc_nodes').select('id,parent_id,data');
     if (error) { console.error('[Supabase] school structure refresh failed', error); throw error; }
     if (requestGeneration !== backendState.generation || request !== backendState.snapshotRequest) return false;
-    backendState.snapshot.school_structure = tree(data || []); notifyAuthChange(); return true;
+    const previous = backendState.snapshot.school_structure;
+    backendState.snapshot.school_structure = reconcileData(previous, tree(data || []));
+    notifyAuthChange(previous !== backendState.snapshot.school_structure); return true;
   }
   const { data, error } = await supabase.rpc('rmc_snapshot');
   if (error) { if (requestGeneration === backendState.generation && request === backendState.snapshotRequest) { backendState.lastSyncFailed = true; backendState.syncFailures++; notifyAuthChange(); } console.error('[Supabase] snapshot refresh failed', error); throw error; }
@@ -101,9 +111,10 @@ export async function refreshData() {
   next.frozen_nodes = data.settings.frozen_nodes || {};
   next.payment_info = data.settings.payment_info || next.payment_info;
   next.audit_logs = data.audit;
-  backendState.snapshot = next; backendState.lastSync = Date.now(); backendState.latency = Math.round(performance.now() - started);
+  const previous = backendState.snapshot;
+  backendState.snapshot = reconcileData(previous, next); backendState.lastSync = Date.now(); backendState.latency = Math.round(performance.now() - started);
   backendState.lastSyncFailed = false; backendState.syncSuccesses++; backendState.latencySamples = [...backendState.latencySamples.slice(-29), { time: backendState.lastSync, ms: backendState.latency }];
-  notifyAuthChange();
+  notifyAuthChange(previous !== backendState.snapshot);
   return true;
 }
 
@@ -157,7 +168,7 @@ async function accounts(action: string, data: unknown) {
   const { data: result, error } = await supabase.functions.invoke('rmc-accounts', { body: { action, data } });
   if (error) {
     const body = await error.context?.json?.().catch(() => null);
-    throw new Error(body?.error || error.message);
+    throw Object.assign(new Error(body?.error || error.message), { code: body?.code || error.code, status: error.context?.status });
   }
   if (result.error) throw new Error(result.error);
   await refreshAfterWrite(progress); return result;
@@ -209,13 +220,14 @@ export const appAuth = {
 };
 
 export async function uploadDocument(file: File, kind: string) {
+  const retained = retainedUploadFile(file);
   return toast.track(async (progress) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Sign in and verify your email before uploading documents.');
   if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type) || file.size > 5 * 1024 * 1024) throw new Error('Choose a JPG, PNG, WebP, or PDF file up to 5 MB.');
   const path = `${user.id}/${kind}/${crypto.randomUUID()}.${file.type.split('/')[1]}`;
   progress.step(1);
-  const { error } = await supabase.storage.from('rmc-documents').upload(path, file, { upsert: false });
+  const { error } = await supabase.storage.from('rmc-documents').upload(path, await retained, { upsert: false });
   if (error) throw error;
   return `storage://${path}`;
 

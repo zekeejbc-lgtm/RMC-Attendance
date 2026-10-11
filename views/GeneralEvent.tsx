@@ -14,6 +14,7 @@ import EventLocationDetails from '../components/events/EventLocationDetails';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
 import { Modal } from '../components/ui/Modal';
 import Button from '../components/ui/Button';
+import RouteLoading from '../components/ui/RouteLoading';
 
 export default function GeneralEvent({ student = false }: { student?: boolean }) {
   const { eventId, organizationId } = useParams();
@@ -33,7 +34,7 @@ export default function GeneralEvent({ student = false }: { student?: boolean })
   const canManage = !student && Boolean(parent && (organization ? canManageOrganization(profile, organization) : canManageEventInScope(profile, parent, appData.getSchoolStructure())));
   const base = parent?.organizationId ? `/organizations/${parent.organizationId}/events` : '/ssg/events';
   const back = student ? '/student/events' : organizationId ? `/organizations/${organizationId}` : '/ssg/events';
-  if (loading) return <Page><p role="status">Loading event...</p></Page>;
+  if (loading) return <RouteLoading embedded label="Loading event" />;
   if (!parent) return <Page><Button variant="secondary" onClick={() => goBack(back)}>Back to events</Button><p>This general event is unavailable.</p></Page>;
   return <Page className="max-w-6xl">
     <section aria-label="Event header" className="relative isolate overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">

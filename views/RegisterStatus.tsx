@@ -1,3 +1,6 @@
+import { selectUploadFile } from '../lib/fileUploads';
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from '../components/ui/ErrorNotice';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
@@ -5,6 +8,7 @@ import Button from '../components/ui/Button';
 import ThemeToggle from '../components/ui/ThemeToggle';
 import { appData, appAuth, uploadDocument, documentUrl, refreshData } from '../lib/backend';
 import { supabase } from '../lib/supabase';
+import { PageSkeletonForRoute } from '../components/ui/PageLoading';
 import { AppLoading } from '../components/ui/Skeleton';
 import { toast } from '../lib/toast';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
@@ -60,11 +64,11 @@ export default function RegisterStatus() {
     });
   }, [application?.id, application?.reviewed_at, revision]);
 
-  if (loading) return <AppLoading label="Loading application status" />;
+  if (loading) return <AppLoading label="Loading application status"><PageSkeletonForRoute pathname="/register/status" /></AppLoading>;
   if (frozen) return <main><FrozenAccess /></main>;
   if (profile && !approvalReady) return error
-    ? <main className="app-surface mx-auto my-20 max-w-lg space-y-4 p-6"><p role="alert">{error}</p><Button onClick={() => setApprovalRetry(value => value + 1)}>Try again</Button><Button variant="secondary" onClick={() => void appAuth.signOut()}>Sign out</Button></main>
-    : <AppLoading label="Loading account approval" />;
+    ? <main className="app-surface mx-auto my-20 max-w-lg space-y-4 p-6"><ErrorNotice error={error} operation="Register Status"></ErrorNotice><Button onClick={() => setApprovalRetry(value => value + 1)}>Try again</Button><Button variant="secondary" onClick={() => void appAuth.signOut()}>Sign out</Button></main>
+    : <AppLoading label="Loading account approval"><PageSkeletonForRoute pathname="/register/status" /></AppLoading>;
 
   const upload = async (file: File | undefined, kind: string) => {
     if (!file) return;
@@ -74,7 +78,7 @@ export default function RegisterStatus() {
       const { error } = await toast.result(() => supabase.rpc('rmc_admission_update', { documents: { [kind]: path } }), 'Save admission document');
       if (error) throw error;
       await refreshData();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to upload document.'); }
+    } catch (caught) { setError(errorMessage(caught)); }
     finally { setUploading(false); }
   };
 
@@ -94,7 +98,7 @@ export default function RegisterStatus() {
       };
       await appData.submitApplication(updated, '');
       await refreshData();
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to resubmit the application.'); }
+    } catch (caught) { setError(errorMessage(caught)); }
   };
 
   const heading = profile ? 'Account approved'
@@ -126,9 +130,9 @@ export default function RegisterStatus() {
         <p className="text-sm text-slate-500">Profile photo is required. Additional documents appear only when requested by a reviewer.</p>
         {([['photo', 'Profile photo'], ['id_front', 'Student ID front'], ['id_back', 'Student ID back']] as const)
           .filter(([kind]) => kind === 'photo' || (application.status === 'bounced' && clarificationFields.includes(kind)))
-          .map(([kind, label]) => <div key={kind} className="block text-sm">{kind === 'photo' && savedProfilePhoto && !photoNeedsCorrection ? <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><p className="text-xs font-semibold text-slate-500">Submitted profile photo</p><ProfileAvatar src={savedProfilePhoto} alt="Submitted profile" className="mt-2 h-28 w-28 rounded-xl object-cover" /><a href={savedProfilePhoto} target="_blank" rel="noreferrer" className="mt-2 block text-xs underline">Open submitted photo</a></div> : <label>{photoNeedsCorrection ? 'Replace profile photo' : label}<input className="mt-2 block w-full" type="file" accept={kind === 'photo' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,application/pdf'} disabled={uploading} onChange={event => void upload(event.target.files?.[0], kind)} /></label>}{kind !== 'photo' && application.documents?.[kind] && <button type="button" className="mt-1 underline" onClick={async () => { const url = await documentUrl(application.documents![kind]); window.open(url, '_blank', 'noopener,noreferrer'); }}>View uploaded document</button>}</div>)}
+          .map(([kind, label]) => <div key={kind} className="block text-sm">{kind === 'photo' && savedProfilePhoto && !photoNeedsCorrection ? <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><p className="text-xs font-semibold text-slate-500">Submitted profile photo</p><ProfileAvatar src={savedProfilePhoto} alt="Submitted profile" className="mt-2 h-28 w-28 rounded-xl object-cover" /><a href={savedProfilePhoto} target="_blank" rel="noreferrer" className="mt-2 block text-xs underline">Open submitted photo</a></div> : <label>{photoNeedsCorrection ? 'Replace profile photo' : label}<input className="mt-2 block w-full" type="file" accept={kind === 'photo' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,application/pdf'} disabled={uploading} onChange={event => void upload(selectUploadFile(event.currentTarget), kind)} /></label>}{kind !== 'photo' && application.documents?.[kind] && <button type="button" className="mt-1 underline" onClick={async () => { const url = await documentUrl(application.documents![kind]); window.open(url, '_blank', 'noopener,noreferrer'); }}>View uploaded document</button>}</div>)}
       </section>}
-      {error && <p role="alert" className="text-red-600">{error}</p>}
+      {error && <ErrorNotice error={error} operation="Register Status"></ErrorNotice>}
       {uploading && <p role="status">Uploading…</p>}
       {profile && <Button onClick={() => navigate('/dashboard', { replace: true })}>Open dashboard</Button>}
       {canResubmit && <Button onClick={resubmit}>{application?.status === 'bounced' ? 'Submit clarifications' : 'Reapply with updated details'}</Button>}

@@ -1,3 +1,5 @@
+import ErrorNotice from '../components/ui/ErrorNotice';
+import { OrganizationCardsSkeleton } from '../components/ui/PageLoading';
 import { hierarchyPathForRole } from '../lib/workspaceRoutes';
 import { usePageMemory } from '../components/usePageMemory';
 import { formatManilaDate, formatManilaDateTime, formatClockTime } from '../lib/dateTime';
@@ -84,12 +86,12 @@ export default function Organizations({ publicDirectory = false }: { publicDirec
       actions={organization ? <><Button variant="secondary" onClick={() => navigate(canCreateOrganization(profile) ? hierarchyPath : '/organizations')}>{canCreateOrganization(profile) ? 'Back to hierarchy' : 'All organizations'}</Button>{manager && <Button variant="secondary" onClick={() => setForm(organization)}><Settings size={16} /> Settings</Button>}</>
         : publicDirectory ? <Link className="btn-secondary" to={profile ? '/organizations' : '/login'}>{profile ? 'My organizations' : 'Sign in to join'}</Link>
           : canCreateOrganization(profile) ? <Button onClick={() => setForm('create')}><Plus size={16} /> Establish organization</Button> : undefined} />
-    {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
+    {error && <ErrorNotice error={error} operation="Organizations"></ErrorNotice>}
     {notice && <p role="status" className="text-emerald-700 dark:text-emerald-300 text-sm">{notice}</p>}
     {organizationId && !organization && <Surface className="p-5">This organization is unavailable or private.</Surface>}
     {!organizationId && <>
       <SearchInput ariaLabel="Search organizations" placeholder="Search organizations" value={query} onChange={setQuery} />
-      {loadingPublic && <p role="status">Loading organizations…</p>}
+      {loadingPublic && <div role="status" aria-label="Loading organizations" aria-busy="true"><OrganizationCardsSkeleton /></div>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{organizations.filter(o => `${o.name} ${o.description} ${unitName(o)}`.toLowerCase().includes(query.toLowerCase())).map(org => {
         const membership = appData.getOrganizationMemberships().find(m => m.organization_id === org.id && m.student_id === profile?.uid);
         const manage = !publicDirectory && canManageOrganization(profile, org);
@@ -160,7 +162,7 @@ export default function Organizations({ publicDirectory = false }: { publicDirec
     {joining && <Modal open onClose={() => { if (!busy) setJoining(null); }} title={`${joining.joining === 'approval' ? 'Apply to' : 'Join'} ${joining.name}`} footer={<><Button variant="secondary" disabled={busy} onClick={() => setJoining(null)}>Cancel</Button><Button disabled={busy || (joining.key_required && !joinKey)} onClick={async () => {
       if (await run('join', { organizationId: joining.id, key: joinKey }, joining.joining === 'approval' ? 'Application submitted to the organization heads.' : 'You have joined the organization.')) setJoining(null);
     }}>{joining.joining === 'approval' ? 'Submit application' : 'Join organization'}</Button></>}>
-      {error && <p role="alert" className="text-sm text-red-600 mb-3">{error}</p>}
+      {error && <ErrorNotice error={error} operation="Organizations"></ErrorNotice>}
       <p className="text-sm">Membership is available to students within {unitName(joining)}.</p>
       {joining.key_required && <label className="app-field-label mt-4 block">Join key<input autoComplete="off" type="password" className="input-field mt-2" value={joinKey} onChange={e => setJoinKey(e.target.value)} /></label>}
     </Modal>}

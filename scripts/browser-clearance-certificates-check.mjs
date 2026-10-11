@@ -7,7 +7,7 @@ const base = process.env.AUDIT_BASE_URL || 'http://127.0.0.1:4176';
 const artifacts = path.resolve('artifacts/clearance'); fs.mkdirSync(artifacts, { recursive: true });
 const accounts = JSON.parse(fs.readFileSync('.demo-accounts.local', 'utf8'));
 const certificate = { id: 'sample', reference: 'CLR-DEMO0000000000000000000000000000', token: 'a'.repeat(64), issued_at: '2026-10-09T08:00:00Z', cleared_at: '2026-10-09T07:00:00Z',
- details: { student_name: 'Juan Dela Cruz (Demo)', student_number: '2026-00001', school_name: 'Rizal Memorial Colleges', period_title: 'Demonstration clearing period', starts_at: '2026-10-08T00:00:00Z', ends_at: '2026-10-10T09:00:00Z', authorized_by: 'OSSA Administrator' } };
+ details: { student_name: 'Juan Dela Cruz (Demo)', student_number: '2026-00001', school_name: 'Senior High School', period_title: 'Demonstration clearing period', starts_at: '2026-10-08T00:00:00Z', ends_at: '2026-10-10T09:00:00Z', authorized_by: 'OSSA Administrator' } };
 let rows = [{ id: 'sample-period', title: certificate.details.period_title, starts_at: certificate.details.starts_at, ends_at: certificate.details.ends_at, release_enabled: false, eligible: true, eligible_count: 1, issued_count: 0 }];
 const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
 const errors = [];
@@ -68,10 +68,11 @@ try {
  await student.waitForSelector('iframe[title="A4 landscape clearance certificate preview"]', { timeout: 45000 });
  const client = await student.createCDPSession();
  await client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: artifacts });
+ const downloadedSince = Date.now();
  await clickText(student, 'Download A4 landscape PDF');
  const pdf = path.join(artifacts, `${certificate.reference}.pdf`);
- for (let i = 0; i < 100 && !fs.existsSync(pdf); i++) await new Promise(r => setTimeout(r, 200));
- assert.ok(fs.existsSync(pdf), 'PDF download must complete');
+ for (let i = 0; i < 100 && (!fs.existsSync(pdf) || fs.statSync(pdf).mtimeMs < downloadedSince); i++) await new Promise(r => setTimeout(r, 200));
+ assert.ok(fs.existsSync(pdf) && fs.statSync(pdf).mtimeMs >= downloadedSince, 'A fresh PDF download must complete');
  assert.ok(fs.statSync(pdf).size > 10000);
 
  // Verify the real public endpoint while signed out; fixture PDF uses demo data only.

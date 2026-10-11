@@ -1,6 +1,7 @@
+import ErrorNotice from '../ui/ErrorNotice';
 import { TimeInput } from '../ui/TimeInput';
 import { SelectField } from '../ui/SelectField';
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { ClassWeekSchedule, SchoolNode } from '../../types';
 import { weekDays } from '../../lib/classSchedules';
 import { appData } from '../../lib/backend';
@@ -14,6 +15,7 @@ export function ClassScheduleEditor({ node, onSaved }: { node: SchoolNode; onSav
   const [schedule, setSchedule] = useState<ClassWeekSchedule>(node.metadata?.classSchedule || {});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState<unknown>(null);
   const valid = Object.values(schedule).every(day => day && (day.status === 'no_class' || /^([01]\d|2[0-3]):[0-5]\d$/.test(day.timeIn) && /^([01]\d|2[0-3]):[0-5]\d$/.test(day.timeOut) && day.timeOut > day.timeIn));
   const close = () => { if (!saving) setOpen(false); };
   return <>
@@ -28,7 +30,7 @@ export function ClassScheduleEditor({ node, onSaved }: { node: SchoolNode; onSav
     </Surface>
     <Modal open={open} onClose={close} title="Weekly class schedule" description={node.name} size="lg" footer={<>
       <Button variant="secondary" disabled={saving} onClick={close}>Close</Button>
-      <Button type="button" loading={saving} disabled={!valid} onClick={async () => { setSaving(true); setMessage(''); try { await appData.setClassSchedule(node.id,schedule); setMessage('Class schedule saved.'); onSaved(); } catch (error) { setMessage(error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Unable to save the class schedule.'); } finally {setSaving(false);} }}>Save class schedule</Button>
+      <Button type="button" loading={saving} disabled={!valid} onClick={async () => { setSaving(true); setMessage(''); setError(null); try { await appData.setClassSchedule(node.id,schedule); setMessage('Class schedule saved.'); onSaved(); } catch (error) { setError(error); } finally {setSaving(false);} }}>Save class schedule</Button>
     </>}>
     <fieldset disabled={saving} className="min-w-0 space-y-4">
     <p className="text-sm text-slate-500">OSAS and admins set the first class start and last class end for {node.name}, in Philippine time. These times help filter ceremony exemptions. Mark no-class days explicitly; unconfigured days never count as no classes. Saving here does not change exemptions in existing ceremonies.</p>
@@ -39,8 +41,8 @@ export function ClassScheduleEditor({ node, onSaved }: { node: SchoolNode; onSav
         {day?.status === 'classes' && (['timeIn','timeOut'] as const).map(field => <label className="app-field-label" key={field}>{field === 'timeIn' ? 'First class starts' : 'Last class ends'}<TimeInput aria-label={`${name} ${field}`} type="time" className="input-field mt-2" value={day[field]} onChange={e => {setSchedule({...schedule,[index]:{...day,[field]:e.target.value}}); setMessage('');}} /></label>)}
       </fieldset>;
     })}
-    {!valid && <p role="alert">Each class day needs a valid start time and a later end time.</p>}
-    {message && <p role="status">{message}</p>}
+    {!valid && <ErrorNotice error="Each class day needs a valid start time and a later end time." />}
+    {message && <p role="status">{message}</p>}{!!error && <ErrorNotice error={error} operation="Save class schedule" />}
     </fieldset>
     </Modal>
   </>;

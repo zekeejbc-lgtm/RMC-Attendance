@@ -44,7 +44,7 @@ it('keeps the draft on save failure', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Edit page' }));
   fireEvent.change(screen.getByLabelText('Page title'), { target: { value: 'Retry policy' } });
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Connection failed');
+  expect(await screen.findByRole('alert')).toHaveTextContent('SYS-001');
   expect(screen.getByLabelText('Page title')).toHaveValue('Retry policy');
 });
 

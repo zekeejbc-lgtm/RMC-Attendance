@@ -8,7 +8,7 @@ export async function googleRequest(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('rmc-enroll', { body });
   if (error) {
     const details = await error.context?.json?.().catch(() => null);
-    throw new Error(details?.error || error.message || 'Unable to connect. Try again.');
+    throw Object.assign(new Error(details?.error || error.message || 'Unable to connect. Try again.'), { code: details?.code || error.code, status: error.context?.status });
   }
   if (data?.error) throw new Error(data.error);
   return data;

@@ -17,8 +17,14 @@ describe('clearance certificate PDF', () => {
   expect(doc.getNumberOfPages()).toBe(1);
   expect(doc.internal.pageSize.getWidth()).toBeCloseTo(297, 0);
   expect(doc.internal.pageSize.getHeight()).toBeCloseTo(210, 0);
-  for (const text of ['CERTIFICATE OF CLEARANCE', 'Juan Dela Cruz', '2026-001', 'CLR-TEST', 'October 10, 2026', 'OSSA Reviewer', 'SCAN TO VERIFY', '/I0 Do', '/I1 Do']) expect(content).toContain(text);
+  for (const text of ['Certificate of Clearance', 'OFFICE OF THE STUDENTS SERVICES AND AFFAIRS', 'Juan Dela Cruz', '2026-001', 'CLR-TEST', 'October 10, 2026', 'OSSA Reviewer', 'SCAN TO VERIFY', '/I0 Do', '/I1 Do']) expect(content).toContain(text);
   expect(doc.output()).toContain('https://school.example/#/verify/clearance/token');
+ });
+ it('embeds the Old English typeface for the school, title and student name', () => {
+  const font = new Uint8Array(readFileSync('public/fonts/UnifrakturMaguntia-Book.ttf'));
+  const doc = createClearanceCertificatePdf(c, qr, 'https://school.example/verify', logo, font);
+  expect(doc.getFontList().OldEnglish).toEqual(['normal']);
+  expect(doc.getNumberOfPages()).toBe(1);
  });
  it('keeps lengthy school names, student names and authority on a single page', () => {
   const doc = createClearanceCertificatePdf({ ...c, details: { ...c.details, student_name: 'Alexandra '.repeat(22), school_name: 'School '.repeat(32), authorized_by: 'Reviewer '.repeat(22) } }, qr, 'https://school.example/verify');

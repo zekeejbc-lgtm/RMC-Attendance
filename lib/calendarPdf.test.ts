@@ -5,11 +5,18 @@ import { readFileSync } from 'node:fs';
 
 const item: CalendarItem = { id: 'session', event_id: 'event', title: 'Opening program', label: 'Morning window', starts_at: '2026-10-08T23:00:00Z', ends_at: '2026-10-09T01:00:00Z', kind: 'attendance', organization_id: null, general: false, cancelled: false, suspended: false, venue: 'Main Gym', description: '' };
 describe('calendar PDF', () => {
+ it('labels informational schedules as requiring no attendance', () => {
+  const notice = { ...item, kind: 'informational', label: 'No attendance required' };
+  const doc = createCalendarPdf('2026-10', [notice], [], 'Informational schedules');
+  const content = doc.internal.pages.slice(1).flat().join('\n');
+  expect(content).toContain('(No attendance required)');
+  expect(content).toContain('(Informational - no attendance)');
+ });
  it('puts a visually distinct general event before its children and repeats branding in the header', () => {
   const child = { ...item, parent_event_id: 'parent' };
   const parent = { ...item, id: 'parent', event_id: 'parent', title: 'School Week', general: true };
   const doc = createCalendarPdf('2026-10', [child, parent], [], 'All activities', Date.now(), { unitName: 'College Department', logo: new Uint8Array(readFileSync('public/academic-seal-transparent.png')) });
-  const agenda = doc.internal.pages[2].join('\n');
+  const agenda = (doc.internal.pages as unknown as string[][]).slice(2, 3).flat().join('\n');
   expect(agenda.indexOf('(School Week)')).toBeLessThan(agenda.indexOf('(Specific activity: Opening program)'));
   expect(agenda).toContain('College Department');
   expect(agenda).toContain('SYSTEM GENERATED');

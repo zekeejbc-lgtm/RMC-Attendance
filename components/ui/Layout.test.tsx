@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import Layout from './Layout';
 import { ThemeProvider } from '../ThemeContext';
+import { DEFAULT_CORE_ROLES, setMockDataRef } from '../../lib/accessControl';
 
 const authMocks = vi.hoisted(() => ({
   firebaseSignOut: vi.fn(),
@@ -79,6 +80,7 @@ vi.mock('../../lib/backend', () => ({
 }));
 
 afterEach(() => {
+  setMockDataRef(null);
   cleanup();
   localStorage.removeItem('iars.sidebar.collapsed');
   document.body.classList.remove('app-scroll-lock');
@@ -291,6 +293,17 @@ it('uses OSSA-specific naming for the shared control panel', () => {
   const navigation = screen.getByRole('navigation', { name: /desktop navigation/i });
   expect(within(navigation).getByRole('button', { name: /ossa hierarchy/i })).toBeInTheDocument();
   expect(within(navigation).queryByRole('button', { name: /ssg panel/i })).not.toBeInTheDocument();
+});
+
+it('shows default OSSA system access and permission-granted staff event management', () => {
+  layoutAuth.role = 'ossa_staff';
+  setMockDataRef({ getCoreRoles: () => ({ ...DEFAULT_CORE_ROLES,
+    ossa_staff: { ...DEFAULT_CORE_ROLES.ossa_staff, permissions: [...DEFAULT_CORE_ROLES.ossa_staff.permissions, 'events.manage', 'system.health'] } }),
+    getCustomRoles: () => ({}) });
+  render(<ThemeProvider><MemoryRouter><Layout><p>Workspace</p></Layout></MemoryRouter></ThemeProvider>);
+  const navigation = screen.getByRole('navigation', { name: /desktop navigation/i });
+  expect(within(navigation).getByRole('button', { name: /event management/i })).toBeInTheDocument();
+  expect(within(navigation).getByRole('button', { name: /system controls/i })).toBeInTheDocument();
 });
 
 it('moves logout to the profile page and expands from the arrow beside the logo', async () => {

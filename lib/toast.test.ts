@@ -9,10 +9,10 @@ describe('action feedback', () => {
     { status: 403, code: '42501', message: 'Operations are frozen for this school or class.' },
     { message: 'Enrollment is frozen.' },
   ])('explains a freeze instead of reporting invalid input or permissions', error => {
-    expect(classifyError(error)).toEqual({ code: 'FREEZE-001', message: 'Access is temporarily paused by school administration.' });
+    expect(classifyError(error)).toMatchObject({ code: 'FREEZE-001', owner: 'school', message: expect.stringContaining('Contact your school officer') });
   });
   it('identifies a missing server function instead of a deleted student record', () => {
-    expect(classifyError({ status: 404, code: 'PGRST202' })).toEqual({ code: 'SYS-002', message: 'This feature is unavailable. The server needs an update.' });
+    expect(classifyError({ status: 404, code: 'PGRST202' })).toMatchObject({ code: 'SYS-002', owner: 'developer', message: expect.stringContaining('update the backend') });
   });
   it('replaces progress with success and automatically dismisses it', async () => {
     let finish!: (value: number) => void;
@@ -22,7 +22,7 @@ describe('action feedback', () => {
     finish(42);
     expect(await operation).toBe(42);
     expect(toastStore.getSnapshot()[0]).toMatchObject({ id: initial.id, kind: 'success', message: 'Save completed', percent: 100 });
-    vi.advanceTimersByTime(3500);
+    vi.advanceTimersByTime(5000);
     expect(toastStore.getSnapshot()).toHaveLength(0);
   });
   it('preserves rejection, hides raw details and suppresses duplicate unhandled feedback', async () => {
@@ -60,7 +60,7 @@ it('retains the failed phase and cannot overwrite partial success with full succ
     return 42;
   }, 'Save', undefined, ['Write record', 'Refresh data']);
   expect(result).toBe(42);
-  expect(toastStore.getSnapshot()[0]).toMatchObject({ kind: 'error', phase: 1, percent: 50, message: 'Saved, but refresh failed.' });
+  expect(toastStore.getSnapshot()[0]).toMatchObject({ kind: 'error', phase: 1, percent: 50, message: expect.stringContaining('Saved, but refresh failed.') });
 });
 it('isolates the phases of simultaneous operations', () => {
   const first = toast.start('First', ['Upload', 'Save']);
@@ -75,12 +75,13 @@ it('isolates the phases of simultaneous operations', () => {
 });
 it('consolidates recurring polling failures without hiding their phase', () => {
   toast.start('Refresh data').fail(new Error('network'));
+  const id = toastStore.getSnapshot()[0].id;
   toast.start('Refresh data').fail(new Error('network'));
   expect(toastStore.getSnapshot()).toHaveLength(1);
-  expect(toastStore.getSnapshot()[0]).toMatchObject({ kind: 'error', phase: 0, occurrences: 2 });
+  expect(toastStore.getSnapshot()[0]).toMatchObject({ id, kind: 'error', phase: 0, occurrences: 2 });
 });
 
-it('keeps quick background checks quiet and shows slower ones only while pending', () => {
+it('keeps quick background checks quiet and retains visible completions for five seconds', () => {
   const quick = toast.start('Checking your account', ['Working on it'], true);
   quick.complete();
   vi.advanceTimersByTime(500);
@@ -89,6 +90,10 @@ it('keeps quick background checks quiet and shows slower ones only while pending
   vi.advanceTimersByTime(500);
   expect(toastStore.getSnapshot()[0]).toMatchObject({ kind: 'progress', request: true });
   slow.complete();
+  expect(toastStore.getSnapshot()[0]).toMatchObject({ kind: 'success', message: 'Loading your information completed' });
+  vi.advanceTimersByTime(4999);
+  expect(toastStore.getSnapshot()).toHaveLength(1);
+  vi.advanceTimersByTime(1);
   expect(toastStore.getSnapshot()).toHaveLength(0);
 });
 it('shows one brief error when a request and its action report the same problem', () => {
@@ -96,8 +101,24 @@ it('shows one brief error when a request and its action report the same problem'
   toast.start('Saving your changes', undefined, true).fail(new Error('network'));
   action.fail(new Error('network'));
   expect(toastStore.getSnapshot()).toHaveLength(1);
-  expect(toastStore.getSnapshot()[0]).toMatchObject({ message: 'Connection lost.', code: 'NET-001' });
+  expect(toastStore.getSnapshot()[0]).toMatchObject({ message: expect.stringContaining('check whether your change was saved'), code: 'NET-001' });
+});
+it('retains the action context when merging a request failure', () => {
+  const action = toast.start('Save contact details');
+  toast.start('Saving your changes', undefined, true).fail(new Error('network'));
+  action.fail(new Error('network'), 'Saved, but refresh failed.');
+  expect(toastStore.getSnapshot()).toHaveLength(1);
+  expect(toastStore.getSnapshot()[0]).toMatchObject({ title: 'Save contact details', message: expect.stringContaining('Saved, but refresh failed.') });
+});
+it('gives an updated success toast its full duration', () => {
+  const id = toast.success('Saved');
+  vi.advanceTimersByTime(4900);
+  toast.success('Updated', id);
+  vi.advanceTimersByTime(4999);
+  expect(toastStore.getSnapshot()).toEqual([expect.objectContaining({ id, message: 'Updated' })]);
+  vi.advanceTimersByTime(1);
+  expect(toastStore.getSnapshot()).toHaveLength(0);
 });
 it('explains the offline roster preparation window instead of reporting invalid input', () => {
-  expect(classifyError({ status: 400, code: '22023', message: 'Prepare an approved ongoing event or one starting within 24 hours.' })).toEqual({ code: 'ROSTER-001', message: 'Roster download requires an approved event that is ongoing or starts within 24 hours.' });
+  expect(classifyError({ status: 400, code: '22023', message: 'Prepare an approved ongoing event or one starting within 24 hours.' })).toMatchObject({ code: 'ROSTER-001', owner: 'user', message: expect.stringContaining('within 24 hours') });
 });

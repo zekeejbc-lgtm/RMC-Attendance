@@ -1,14 +1,28 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const api = vi.hoisted(() => ({ rpc: vi.fn(), select: vi.fn(), invoke: vi.fn(), signUp: vi.fn(), setSession: vi.fn() }));
+const api = vi.hoisted(() => ({ rpc: vi.fn(), select: vi.fn(), invoke: vi.fn(), signUp: vi.fn(), setSession: vi.fn(), getUser: vi.fn(), upload: vi.fn() }));
 vi.mock('./supabase', () => ({
   requireConfiguration: () => {},
-  supabase: { rpc: api.rpc, from: () => ({ select: api.select }), functions: { invoke: api.invoke }, auth: { signUp: api.signUp, setSession: api.setSession } },
+  supabase: { rpc: api.rpc, from: () => ({ select: api.select }), functions: { invoke: api.invoke }, auth: { signUp: api.signUp, setSession: api.setSession, getUser: api.getUser }, storage: { from: () => ({ upload: api.upload }) } },
 }));
-import { appAuth, appData, refreshData, resetData } from './backend';
+import { appAuth, appData, refreshData, resetData, subscribeData, uploadDocument } from './backend';
+import { retainedUploadFile, selectUploadFile, uploadFileText } from './fileUploads';
 import { toastStore } from './toast';
 import type { UserProfile } from '../types';
 
 const applicant = { email: 'student@example.edu', name: 'Student', username: 'student_123', student_id: '123', school_data: {} } as UserProfile;
+it('sends retained document bytes to Storage after the original picker becomes unavailable', async () => {
+  api.getUser.mockResolvedValue({ data: { user: { id: 'student' } } });
+  api.upload.mockResolvedValue({ error: null });
+  const file = new File(['PDF bytes'], 'proof.pdf', { type: 'application/pdf' });
+  selectUploadFile({ files: [file], value: 'proof.pdf' } as unknown as HTMLInputElement);
+  const retained = await retainedUploadFile(file);
+  expect(api.upload).not.toHaveBeenCalled();
+  await expect(uploadDocument(file, 'excuses')).resolves.toMatch(/^storage:\/\/student\/excuses\//);
+  expect(api.upload.mock.calls[0][1]).toBe(retained);
+  expect(await uploadFileText(api.upload.mock.calls[0][1])).toBe('PDF bytes');
+  expect(api.upload.mock.calls[0][2]).toEqual({ upsert: false });
+  api.upload.mockClear();
+});
 it('applies an individual freeze to admins before the school-freeze exemption', () => {
   expect(appData.isUserScopeFrozen({ role: 'admin', account_freeze: { isFrozen: true, reason: 'Review', frozenAt: 123 } } as UserProfile)).toBe(true);
   expect(appData.isUserScopeFrozen({ role: 'admin' } as UserProfile)).toBe(false);
@@ -89,6 +103,24 @@ it('resolves missing audit names from visible records and preserves recorded nam
 });
 beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); resetData('student'); });
 afterEach(() => { resetData(); });
+
+it('keeps unchanged profiles stable and only marks actual snapshot changes as updates', async () => {
+  api.rpc.mockImplementation(async () => ({ data: structuredClone(snapshot()), error: null }));
+  const updates = vi.fn();
+  const unsubscribe = subscribeData(updates);
+  try {
+    await refreshData();
+    const profile = appAuth.getCurrentUser()?.profile;
+    await refreshData();
+    expect(appAuth.getCurrentUser()?.profile).toBe(profile);
+    expect(updates.mock.calls.map(call => call[0])).toEqual([true, false]);
+    api.rpc.mockResolvedValueOnce({ data: { ...snapshot(), events: [] }, error: null });
+    await refreshData();
+    expect(appData.getEvents()).toEqual([]);
+    expect(appAuth.getCurrentUser()?.profile).toBe(profile);
+    expect(updates).toHaveBeenLastCalledWith(true);
+  } finally { unsubscribe(); }
+});
 
 it.each(['ssg', 'student'])('shows school-wide general events to an unassigned %s without exposing restricted events', async role => {
   const data = snapshot();

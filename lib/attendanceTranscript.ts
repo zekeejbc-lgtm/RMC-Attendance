@@ -1,3 +1,4 @@
+import { formatHourDuration } from './duration';
 import { jsPDF } from 'jspdf';
 import { autoTable, type UserOptions } from 'jspdf-autotable';
 import { drawPdfSchoolSeal } from './pdfSchoolSeal';
@@ -82,7 +83,7 @@ export function createAttendanceTranscript(data: AttendanceTranscript, logo: Uin
   });
   y += 3;
   table({
-    body: [[`Attendance rate: ${data.attendanceRate}%`, `Active sanction hours: ${data.sanctionHours}`]],
+    body: [[`Attendance rate: ${data.attendanceRate}%`, `Active sanction balance: ${formatHourDuration(data.sanctionHours)}`]],
     styles: { ...base.styles, fontStyle: 'bold', cellPadding: 4 },
     columnStyles: { 0: { cellWidth: contentWidth / 2 }, 1: { cellWidth: contentWidth / 2 } },
   });
@@ -104,7 +105,7 @@ export function createAttendanceTranscript(data: AttendanceTranscript, logo: Uin
   section('Sanctions & Demerits Ledger', data.sanctions.length);
   table({
     head: [['Date', 'Reason / Infraction', 'Sanction value', 'Status', 'Authorizing official']],
-    body: data.sanctions.length ? data.sanctions.map(s => [s.dateAssigned, s.reason, `${s.hours > 0 ? '+' : ''}${s.hours} hours`, s.status.toUpperCase(), s.approvedBy])
+    body: data.sanctions.length ? data.sanctions.map(s => [s.dateAssigned, s.reason, `${s.hours > 0 ? '+' : ''}${formatHourDuration(s.hours)}`, s.status.toUpperCase(), s.approvedBy])
       : [[{ content: 'No sanctions or demerits on file.', colSpan: 5, styles: { textColor: muted, halign: 'center', cellPadding: 5 } }]],
     columnStyles: { 0: { cellWidth: 23 }, 1: { cellWidth: contentWidth - 106 }, 2: { cellWidth: 27 }, 3: { cellWidth: 24 }, 4: { cellWidth: 32 } },
     didParseCell: ({ section, column, cell }) => {

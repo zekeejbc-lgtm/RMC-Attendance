@@ -1,3 +1,6 @@
+import { selectUploadFile, uploadFileText } from '../../lib/fileUploads';
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 import { SelectField } from '../ui/SelectField';
 import { useMemo, useRef, useState } from 'react';
 import { AlertCircle, Download, FileSpreadsheet, Trash2, Upload } from 'lucide-react';
@@ -80,7 +83,7 @@ export default function BulkMemberImportModal({
     setReviewIds([]);
     setReadingFile(true);
     try {
-      const parsed = parseMemberCsv(await file.text());
+      const parsed = parseMemberCsv(await uploadFileText(file));
       if (request !== uploadRequest.current) return;
       setRows(parsed);
       setReviewIds(parsed.map(() => nextReviewId.current++));
@@ -89,7 +92,7 @@ export default function BulkMemberImportModal({
       if (request !== uploadRequest.current) return;
       setRows([]);
       setReviewIds([]);
-      setFileError(error instanceof Error ? error.message : 'The CSV file could not be read.');
+      setFileError(errorMessage(error));
     } finally {
       if (request === uploadRequest.current) setReadingFile(false);
     }
@@ -114,7 +117,7 @@ export default function BulkMemberImportModal({
       setFileName('');
       setSubmitting(false);
     } catch (error) {
-      setFileError(error instanceof Error ? error.message : 'The members could not be created.');
+      setFileError(errorMessage(error));
       setSubmitting(false);
     }
   };
@@ -171,15 +174,13 @@ export default function BulkMemberImportModal({
           <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 px-4 py-5 text-center transition-colors hover:border-gold-400 dark:border-slate-600 dark:hover:border-gold-400">
             <Upload aria-hidden="true" className="text-slate-400" size={24} />
             <span className="mt-2 text-sm font-semibold text-brand-900 dark:text-white">Upload completed CSV</span>
-            <span className="mt-1 text-xs text-slate-500 dark:text-slate-400">{readingFile ? `Reading ${fileName}â€¦` : fileName || 'Choose a .csv file'}</span>
+            <span className="mt-1 text-xs text-slate-500 dark:text-slate-400">{readingFile ? `Reading ${fileName}…` : fileName || 'Choose a .csv file'}</span>
             <input
               accept=".csv,text/csv,application/csv"
               aria-label="Upload completed CSV"
               className="sr-only"
               onChange={async (event) => {
-                const input = event.currentTarget;
-                await uploadFile(event.target.files?.[0]);
-                input.value = '';
+                await uploadFile(selectUploadFile(event.currentTarget, 10 * 1024 * 1024));
               }}
               type="file"
             />
@@ -187,9 +188,7 @@ export default function BulkMemberImportModal({
         </section>
 
         {fileError ? (
-          <p className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200" role="alert">
-            <AlertCircle aria-hidden="true" className="mt-0.5 shrink-0" size={16} /> {fileError}
-          </p>
+          <ErrorNotice error={fileError} operation="Bulk Member Import Modal"><AlertCircle aria-hidden="true" className="mt-0.5 shrink-0" size={16} /></ErrorNotice>
         ) : null}
 
         {rows.length > 0 ? (
@@ -231,13 +230,13 @@ export default function BulkMemberImportModal({
                         aria-label={`${label} for person ${rowIndex + 1}`}
                         aria-describedby={errors[key] ? `review-${reviewIds[rowIndex]}-${key}-error` : undefined}
                         aria-invalid={Boolean(errors[key])}
-                        className={`app-control ${`h-11 w-full rounded-xl border bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:bg-slate-900 dark:text-white ${errors[key] ? 'border-red-400 dark:border-red-700' : 'border-slate-200 dark:border-slate-700'}`}`}
+                        className={`app-control ${`h-11 w-full rounded-xl border bg-white px-3 text-sm text-brand-900 outline-none focus:border-gold-400 dark:bg-slate-900 dark:text-white ${errors[key] ? 'border-amber-600 dark:border-amber-400' : 'border-slate-200 dark:border-slate-700'}`}`}
                         onChange={(event) => updateRow(rowIndex, key, event.target.value)}
                         placeholder={key === 'student_id' ? 'YYYY-XXXXXL' : undefined}
                         type={type}
                         value={row[key]}
                       />
-                      {errors[key] ? <span className="block text-xs text-red-600 dark:text-red-300" id={`review-${reviewIds[rowIndex]}-${key}-error`}>{errors[key]}</span> : null}
+                      {errors[key] ? <ErrorNotice id={`review-${reviewIds[rowIndex]}-${key}-error`} error={errors[key]} /> : null}
                     </label>
                   ))}
                   <label className="space-y-1.5">
@@ -254,7 +253,7 @@ export default function BulkMemberImportModal({
                       <option value="student">Student</option>
                       <option value="mayor">Mayor</option>
                     </SelectField>
-                    {errors.role ? <span className="block text-xs text-red-600 dark:text-red-300" id={`review-${reviewIds[rowIndex]}-role-error`}>{errors.role}</span> : null}
+                    {errors.role ? <ErrorNotice id={`review-${reviewIds[rowIndex]}-role-error`} error={errors.role} /> : null}
                   </label>
                 </div>
               </fieldset>

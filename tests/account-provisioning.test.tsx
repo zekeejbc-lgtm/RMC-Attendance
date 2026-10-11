@@ -11,7 +11,7 @@ vi.mock('../lib/backend', () => ({
   subscribeData: (callback: () => void) => { window.addEventListener('rmc_data_update', callback); return () => window.removeEventListener('rmc_data_update', callback); },
   documentUrl: vi.fn(async (path: string) => path),
   appData: {
-  getCoreRoles: () => ({}), getCustomRoles: () => ({}), getOfficialsForNode: () => [],
+  getCoreRoles: () => ({}), getCustomRoles: () => ({}), getOfficialsForNode: vi.fn((): UserProfile[] => []),
   getOfficialAccounts: vi.fn((): UserProfile[] => []), getSchoolStructure: vi.fn(), getAccountAccess: vi.fn(async () => ({})),
   getSchoolNodePath: vi.fn(() => []), getApplications: vi.fn(() => []), resetAccountPassword: vi.fn(async () => {}),
   createSchoolOfficial: vi.fn(async () => 'new-id'), createUser: vi.fn(async () => 'new-id'),
@@ -29,10 +29,16 @@ function fillOfficer(index: number) {
   fill('Full name', `Officer ${index}`); fill('Email', `officer${index}@example.test`);
   fill('Username', `officer${index}`); fill('Official ID', `ID${index}`); fill('Temporary password', 'Example-password-123!');
 }
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(appData.getSchoolStructure).mockReturnValue([campus]); vi.mocked(appData.getOfficialAccounts).mockReturnValue([]); });
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(appData.getSchoolStructure).mockReturnValue([campus]); vi.mocked(appData.getOfficialAccounts).mockReturnValue([]); vi.mocked(appData.getOfficialsForNode).mockReturnValue([]); });
 afterEach(cleanup);
 
 describe('Multiple managed accounts', () => {
+  it.each(['ssg', 'ossa'])('hides officer deletion from a default %s without account-management permission', role => {
+    vi.mocked(appData.getOfficialsForNode).mockReturnValue([{ uid: 'officer', name: 'Assigned Officer', role: 'ssg' } as UserProfile]);
+    render(<NodeOfficerManager actor={{ ...actor, role }} node={campus} canManage onChanged={vi.fn()} />);
+    expect(screen.getByText('Assigned Officer')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete Assigned Officer' })).not.toBeInTheDocument();
+  });
   it.each(['admin', 'ossa', 'ossa_staff', 'ssg'])('creates two separate %s accounts from the officer dialog', async role => {
     render(<NodeOfficerManager actor={actor} node={campus} canManage onChanged={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Assign officer' }));
@@ -63,7 +69,7 @@ describe('Multiple managed accounts', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Department' }));
     fill('Full name', 'SSG One'); fill('Email', 'ssg@example.test'); fill('Username', 'ssg-one');
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Email already exists.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('SYS-001');
     expect(screen.getByLabelText('Full name')).toHaveValue('SSG One');
   });
 
@@ -124,7 +130,7 @@ describe('Multiple managed accounts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View profile for Admin' }));
     fill('New password', 'Example-password-123!');
     fireEvent.click(screen.getByRole('button', { name: 'Update password' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Update failed.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('SYS-001');
     expect(screen.getByRole('button', { name: 'Update password' })).toBeEnabled();
   });
 

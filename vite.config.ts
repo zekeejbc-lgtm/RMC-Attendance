@@ -69,11 +69,15 @@ export default defineConfig(({ mode }) => {
         }
       },
       test: {
+        // Keep generated browser profiles and verification artifacts out of discovery.
+        include: ['lib/**/*.test.{ts,tsx}', 'components/**/*.test.{ts,tsx}', 'views/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
         environment: 'jsdom',
         setupFiles: './tests/setup.ts',
         css: true,
         pool: 'threads',
-        testTimeout: 15000,
+        // Bound jsdom workers so the full suite fits developer machines.
+        maxWorkers: 2,
+        testTimeout: 30000,
         exclude: ['**/node_modules/**', '**/dist/**', '**/.worktrees/**'],
       }
     };

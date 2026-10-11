@@ -41,7 +41,7 @@ it('requires confirmation before revocation and retains the credential on a serv
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' })); expect(api.remove).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Remove Windows Hello' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirm removal' }));
-  await screen.findByText('Access denied'); expect(screen.getByText('Windows Hello')).toBeInTheDocument();
+  expect(await screen.findByRole('alert')).toHaveTextContent('SYS-001'); expect(screen.getByText('Windows Hello')).toBeInTheDocument();
 });
 it('revokes the selected credential and refreshes the list', async () => {
   api.list.mockResolvedValueOnce([passkey]).mockResolvedValueOnce([]); api.remove.mockResolvedValue(undefined);
@@ -52,5 +52,5 @@ it('revokes the selected credential and refreshes the list', async () => {
 });
 it('distinguishes an initial list failure from an empty account', async () => {
   api.list.mockRejectedValue(new Error('Network unavailable')); render(<PasskeySettings />);
-  await screen.findByText('Network unavailable'); expect(screen.queryByText('No passkeys added yet.')).not.toBeInTheDocument();
+  expect(await screen.findByRole('alert')).toHaveTextContent('NET-001'); expect(screen.queryByText('No passkeys added yet.')).not.toBeInTheDocument();
 });

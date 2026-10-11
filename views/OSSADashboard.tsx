@@ -247,7 +247,7 @@ const OSSADashboard: React.FC<{ section?: OSSASection }> = ({ section = 'overvie
           )}
           className="relative z-10 flex-col sm:flex-row"
           description={currentSection?.description || 'Choose a workspace to review requests, manage student cases, or view reports.'}
-          eyebrow={<span className="inline-flex items-center gap-1"><ShieldCheck size={12} /> Office of Student Services and Affairs{pendingExcuseCount > 0 ? ` · ${pendingExcuseCount} Pending Excuses` : ''}</span>}
+          eyebrow={<span className="inline-flex items-center gap-1"><ShieldCheck size={12} /> Office of the Students Services and Affairs{pendingExcuseCount > 0 ? ` · ${pendingExcuseCount} Pending Excuses` : ''}</span>}
           title={currentSection?.title || 'OSSA Hub'}
         />
       </Surface>

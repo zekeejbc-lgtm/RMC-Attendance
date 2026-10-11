@@ -1,3 +1,5 @@
+import { classifyError } from './errors';
+export { classifyError, errorMessage } from './errors';
 export type ToastKind = 'progress' | 'success' | 'error';
 export interface ToastItem { id: number; kind: ToastKind; message: string; code?: string; title?: string; phases?: string[]; phase?: number; percent?: number; occurrences?: number; request?: boolean }
 export interface OperationProgress {
@@ -5,6 +7,7 @@ export interface OperationProgress {
   fail: (error: unknown, message?: string) => void;
   complete: (message?: string) => void;
 }
+export interface ClassifiedError { code: string; message: string }
 const listeners = new Set<() => void>();
 const timers = new Map<number, ReturnType<typeof setTimeout>>();
 let items: ToastItem[] = [];
@@ -21,61 +24,49 @@ function dismiss(id: number) {
 }
 function show(kind: ToastKind, message: string, code?: string, id = ++sequence) {
   clearTimeout(timers.get(id));
-  const previous = items.find(item => item.id === id);
-  const next = { ...previous, id, kind, message, code };
+  let previous = items.find(item => item.id === id);
+  let next: ToastItem = { ...previous, id, kind, message, code };
   // Background polling can repeat the same failure. Keep one reviewable entry.
   if (kind === 'error') {
     const duplicates = items.filter(item => item.id !== id && item.kind === 'error' && item.code === code && item.message === message);
     if (duplicates.length) {
+      // Update the existing popup in place so its exit animation cannot create
+      // a second copy of the same failure.
+      next = { ...duplicates[0], ...next, id: duplicates[0].id };
       next.occurrences = 1 + duplicates.reduce((count, item) => count + (item.occurrences || 1), 0);
-      items = items.filter(item => !duplicates.includes(item));
+      for (const duplicate of duplicates) {
+        clearTimeout(timers.get(duplicate.id)); timers.delete(duplicate.id);
+      }
+      items = items.filter(item => item.id !== id && (!duplicates.includes(item) || item.id === next.id));
+      id = next.id;
+      previous = duplicates[0];
     }
   }
   if (kind === 'success' && previous?.phases) next.percent = 100;
   items = previous ? items.map(item => item.id === id ? next : item) : [...items, next];
   // Active requests and failures stay available until finished or dismissed.
-  if (kind === 'success') timers.set(id, setTimeout(() => dismiss(id), 3500));
+  if (kind === 'success') timers.set(id, setTimeout(() => dismiss(id), 5000));
   emit(); return id;
 }
 
-/** Stable UI codes, independent of server internals. Never display raw server messages. */
-export function classifyError(error: unknown) {
-  const value = error as { code?: string; status?: number; name?: string; message?: string } | null;
-  const code = String(value?.code || '');
-  const message = String(value?.message || error || '').toLowerCase();
-  if (/\bfrozen\b/.test(message)) return { code: 'FREEZE-001', message: 'Access is temporarily paused by school administration.' };
-  if (message === 'prepare an approved ongoing event or one starting within 24 hours.') return { code: 'ROSTER-001', message: 'Roster download requires an approved event that is ongoing or starts within 24 hours.' };
-  if (code === 'PGRST202') return { code: 'SYS-002', message: 'This feature is unavailable. The server needs an update.' };
-  if (value?.name === 'NotAllowedError' || /camera|geolocation/.test(message)) return { code: 'DEVICE-001', message: 'Camera or location access is blocked.' };
-  if (value?.name === 'AbortError') return { code: 'ACT-001', message: 'Action cancelled.' };
-  if (value?.name === 'TimeoutError' || /timeout|timed out/.test(message)) return { code: 'NET-002', message: 'This is taking too long.' };
-  if (/fetch|network|offline|connection/.test(message)) return { code: 'NET-001', message: 'Connection lost.' };
-  if (value?.status === 429 || /rate.limit|too many requests/.test(message)) return { code: 'LIMIT-001', message: 'Please wait before trying again.' };
-  if (value?.status === 401 || /credentials|password|sign in|jwt|session|otp|auth/.test(message)) return { code: 'AUTH-001', message: 'Could not verify your sign-in details.' };
-  if (value?.status === 403 || code === '42501' || /permission|not allowed|forbidden|denied|unauthorized/.test(message)) return { code: 'ACCESS-001', message: 'You do not have permission to do this.' };
-  if (value?.status === 409 || code === '23505' || /duplicate|already exists|conflict/.test(message)) return { code: 'DATA-001', message: 'A matching record already exists.' };
-  if (value?.status === 404 || /not found|no longer exists/.test(message)) return { code: 'DATA-002', message: 'This record is no longer available.' };
-  if (value?.status === 413 || /file|upload|5 mb/.test(message)) return { code: 'FILE-001', message: 'Could not upload this file.' };
-  if ([400, 422].includes(value?.status || 0) || /invalid|required|choose|must |missing/.test(message)) return { code: 'INPUT-001', message: 'Some details are missing or incorrect.' };
-  return { code: 'SYS-001', message: 'Something went wrong.' };
-}
 function errorToast(error: unknown, id?: number) {
   const value = error as { name?: string; message?: string; code?: string; details?: string; hint?: string; status?: number } | null;
+  const detail = classifyError(error);
   console.error('[Toast] operation failed', {
+    appCode: detail.code,
+    reference: detail.reference,
     errorName: value?.name,
     errorMessage: value?.message,
     errorCode: value?.code,
     errorDetails: value?.details,
     errorHint: value?.hint,
     errorStatus: value?.status,
-    errorRaw: typeof error === 'object' ? JSON.stringify(error) : String(error),
   });
-  const detail = classifyError(error);
   if (typeof error === 'object' && error !== null) {
     if (reported.has(error) && id === undefined) return;
     reported.add(error);
   }
-  return show('error', detail.message, detail.code, id);
+  return show('error', detail.message + (detail.reference ? ` Reference: ${detail.reference}.` : ''), detail.code, id);
 }
 export const toast = {
   dismiss,
@@ -95,14 +86,20 @@ export const toast = {
     step(0);
     return {
       step,
-      complete(message = `${label} completed`) { if (finished) return; finished = true; clearTimeout(delay); if (request) dismiss(id); else show('success', message, undefined, id); },
+      complete(message = `${label} completed`) {
+        if (finished) return;
+        finished = true; clearTimeout(delay);
+        // Fast background checks stay quiet. Once progress is visible, keep
+        // its completion readable instead of removing it immediately.
+        if (!request || items.some(item => item.id === id)) show('success', message, undefined, id);
+      },
       fail(error, message) {
         if (finished) return;
         clearTimeout(delay);
         if (request && !items.some(item => item.id === id)) publish();
         finished = true;
-        errorToast(error, id);
-        if (message) { items = items.map(item => item.id === id ? { ...item, message } : item); emit(); }
+        const failureId = errorToast(error, id);
+        if (message) { items = items.map(item => item.id === failureId ? { ...item, message: `${message} ${item.message}` } : item); emit(); }
       },
     };
   },

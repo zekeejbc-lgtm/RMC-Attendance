@@ -1,3 +1,5 @@
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from './ui/ErrorNotice';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { appAuth } from '../lib/backend';
@@ -20,12 +22,12 @@ export function AuthChallenge({ recovery = false, onComplete }: { recovery?: boo
         : await toast.result(() => supabase.auth.mfa.challengeAndVerify({ factorId, code: value }), 'Verify identity');
       if (result.error) throw result.error;
       onComplete();
-    } catch (error) { setError(error instanceof Error ? error.message : 'Verification failed.'); }
+    } catch (error) { setError(errorMessage(error)); }
     finally { setBusy(false); }
   }}>
     <h1 className="text-xl font-bold">{recovery ? 'Set a new password' : 'Two-factor verification'}</h1>
     <label className="block">{recovery ? 'New password (at least 12 characters)' : 'Authenticator code'}<span className="relative mt-2 block"><input className="input-field pr-12" required type={recovery && !showPassword ? 'password' : 'text'} inputMode={recovery ? undefined : 'numeric'} minLength={recovery ? 12 : 6} maxLength={recovery ? 128 : 6} autoComplete={recovery ? 'new-password' : 'one-time-code'} value={value} onChange={e => setValue(e.target.value)} />{recovery && <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => setShowPassword(visible => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} className="absolute inset-y-0 right-1 flex w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700">{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>}</span></label>
-    {error && <p role="alert" className="text-red-600">{error}</p>}
+    {error && <ErrorNotice error={error} operation="Auth Challenge"></ErrorNotice>}
     <Button type="submit" disabled={busy || (!recovery && !factorId)}>{busy ? 'Verifying…' : 'Continue'}</Button>
     <Button variant="secondary" onClick={() => void appAuth.signOut()}>Sign out</Button>
   </form></div>;

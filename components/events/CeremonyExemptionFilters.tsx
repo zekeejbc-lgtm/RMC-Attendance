@@ -1,6 +1,6 @@
 import { TimeInput } from '../ui/TimeInput';
 import { SelectField } from '../ui/SelectField';
-﻿import { useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { AppEvent, SchoolNode, UserProfile } from '../../types';
 import { ExemptionFilter, previewExemptions } from '../../lib/classSchedules';
 import { recipientGroupLabel } from '../../lib/eventAudience';

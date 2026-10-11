@@ -1,10 +1,9 @@
 import { hierarchyPathForRole } from '../lib/workspaceRoutes';
 import { formatManilaTime, formatManilaDateTime, formatManilaDate } from '../lib/dateTime';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { AppEvent } from '../types';
 import { Calendar, Award, QrCode, FileText, User, ShieldAlert, CheckCircle2, Clock, ArrowRight, Sparkles, TrendingUp, AlertTriangle, ChevronRight, Activity, Building2, Users2, ScanLine, BarChart3, CalendarDays, ShieldCheck } from 'lucide-react';
 import { appData } from '../lib/backend';
 import { MetricCard, Page, PageHeader, Surface } from '../components/ui/Page';
@@ -13,19 +12,8 @@ import { hasPermission } from '../lib/accessControl';
 const Dashboard: React.FC = () => {
   const { profile, stats, isMock, revision } = useAuth();
   const navigate = useNavigate();
-  const [activeEvents, setActiveEvents] = useState<AppEvent[]>([]);
-
-  useEffect(() => {
-    {
-      const refresh = () => {
-        const events = (profile ? appData.getRecipientEvents(profile.uid) : []).filter(e => !e.isGeneralEvent && e.status === 'active' && !e.cancellationStatus);
-        setActiveEvents(events);
-      };
-      refresh();
-      const interval = setInterval(refresh, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [revision]);
+  const activeEvents = useMemo(() => (profile ? appData.getRecipientEvents(profile.uid) : [])
+    .filter(e => !e.isGeneralEvent && e.status === 'active' && !e.cancellationStatus), [profile?.uid, revision]);
 
   const ceremonies = (profile ? appData.getRecipientEvents(profile.uid) : []).filter(e => e.kind === 'flag_ceremony' && e.status !== 'done' && !e.cancellationStatus).sort((a,b) => a.startTime - b.startTime);
   const recent = appData.getAttendanceRecords(profile?.uid || '').sort((a,b) => (b.time_in || b.recorded_at || 0) - (a.time_in || a.recorded_at || 0)).slice(0, 5);

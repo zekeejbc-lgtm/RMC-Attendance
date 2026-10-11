@@ -116,7 +116,8 @@ try {
     const id = checked(await who.rpc('rmc_command', { action: 'createEvent', args: [future] })); events.push(id);
   }
   pass('admin, OSAS, SSG, and organization heads can create merit events');
-  await new Promise(resolve => setTimeout(resolve, Math.max(0, stored.startTime - Date.now() + 200)));
+  // Allow for small differences between the workstation and database clocks.
+  await new Promise(resolve => setTimeout(resolve, Math.max(0, stored.startTime - Date.now() + 5000)));
   const attendance = (who, direction, studentId = student.id) => who.rpc('rmc_record_attendance', { event_id: merit, student_id: studentId, direction, manual_reason: 'Identity verified in person' });
   assert.ok((await attendance(student.who, 'in')).error);
   assert.ok((await attendance(head.who, 'in', outsider.id)).error);

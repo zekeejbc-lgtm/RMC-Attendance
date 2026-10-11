@@ -1,3 +1,4 @@
+import { errorMessage } from '../lib/errors';
 import { useEffect, useRef, useState } from 'react';
 import { googleClientId } from '../lib/googleAuth';
 
@@ -35,12 +36,12 @@ export default function GoogleSignIn({ enrollment = false, onCredential, onError
       window.google!.accounts.id.initialize({ client_id: googleClientId, nonce: hash, use_fedcm_for_prompt: true, callback: result => {
         if (disposed || inFlight.current) return;
         inFlight.current = true; setBusy(true);
-        void callbacks.current.onCredential(result.credential, nonce).catch(error => callbacks.current.onError(error.message)).finally(() => {
+        void callbacks.current.onCredential(result.credential, nonce).catch(error => callbacks.current.onError(errorMessage(error))).finally(() => {
           inFlight.current = false; if (!disposed) setBusy(false);
         });
       } });
       window.google!.accounts.id.renderButton(container.current, { type: 'standard', theme: 'outline', size: 'large', text: enrollment ? 'signup_with' : 'signin_with' });
-    })().catch(error => { if (!disposed) callbacks.current.onError(error.message); });
+    })().catch(error => { if (!disposed) callbacks.current.onError(errorMessage(error)); });
     return () => { disposed = true; };
   }, [enrollment]);
   return <div className="space-y-2">

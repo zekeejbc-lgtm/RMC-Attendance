@@ -71,8 +71,8 @@ begin
  insert into public.rmc_notifications(user_id,source,title,detail,path)
  values(new.student_id,'excuse:'||new.id||':'||(new.data->>'status'),
   'Excuse letter: '||coalesce(new.data->>'status','pending'),
-  coalesce(new.data->>'event_title','Your event')||case when new.data->>'status'='pending' then ' â€” Submitted and awaiting review.'
-   else ' â€” '||coalesce(nullif(new.data->>'review_notes',''),'Your review has been completed.') end,'/student/records')
+  coalesce(new.data->>'event_title','Your event')||case when new.data->>'status'='pending' then ' — Submitted and awaiting review.'
+   else ' — '||coalesce(nullif(new.data->>'review_notes',''),'Your review has been completed.') end,'/student/records')
  on conflict(user_id,source) do nothing;
  return new;
 end $$;

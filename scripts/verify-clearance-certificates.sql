@@ -7,7 +7,11 @@ begin
  select id into strict administrator from public.rmc_profiles where is_test_account and role_id='admin' limit 1;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',administrator,'role','authenticated','aal','aal2')::text,true);
  insert into public.rmc_nodes(id,data) values('clearance-test-scope','{"name":"Clearance Test School","type":"school"}');
+ insert into public.rmc_nodes(id,parent_id,data) values
+  ('clearance-test-academic','clearance-test-scope','{"name":"Highest Academic Unit","type":"education_unit"}'),
+  ('clearance-test-section','clearance-test-academic','{"name":"Demo section","type":"section"}');
  update public.rmc_profiles set node_id='clearance-test-scope',status='active' where id in (student,reviewer);
+ update public.rmc_profiles set node_id='clearance-test-section' where id=student;
  -- Start from a known balance before the schedule exists. These changes are rolled back.
  perform app_private.sanction(student,-app_private.balance(student),'Clearance test setup');
  perform set_config('request.jwt.claims',jsonb_build_object('sub',reviewer,'role','authenticated','aal','aal2')::text,true);
@@ -49,6 +53,7 @@ begin
  again:=public.rmc_clearance('issue',jsonb_build_object('schedule_id',sid));
  assert c->>'id'=again->>'id','Repeat downloads must reuse reference and issue date';
  assert c->>'reference' like 'CLR-%','Certificate must have a reference';
+ assert c#>>'{details,school_name}'='Highest Academic Unit','School name must use the highest academic unit below the campus container';
  assert c#>>'{details,authorized_by}' is not null,'Certificate must record OSSA release authority';
  v:=public.rmc_verify_clearance(c->>'token');
  assert (v->>'valid')::boolean,'Certificate must verify';

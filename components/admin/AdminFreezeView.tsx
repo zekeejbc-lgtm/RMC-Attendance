@@ -1,6 +1,8 @@
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 import { formatManilaDateTime } from '../../lib/dateTime';
 import { SelectField } from '../ui/SelectField';
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Building2, CheckCircle2, ChevronDown, ChevronRight, Lock, RefreshCw, ShieldCheck, Snowflake, Unlock } from 'lucide-react';
 import { appData } from '../../lib/backend';
 import { SchoolNode, SystemFreezeState, NodeFreezeState } from '../../types';
@@ -80,7 +82,7 @@ export const AdminFreezeView: React.FC<{ actorName?: string }> = ({ actorName })
     if (mfaFactorId) {
       if (!authCode.trim()) { setAuthError('Enter the Google Authenticator code to continue.'); return false; }
       const challenge = await supabase.auth.mfa.challenge({ factorId: mfaFactorId });
-      if (challenge.error) { setAuthError(challenge.error.message); return false; }
+      if (challenge.error) { setAuthError(errorMessage(challenge.error)); return false; }
       const verified = await supabase.auth.mfa.verify({ factorId: mfaFactorId, challengeId: challenge.data.id, code: authCode.trim() });
       if (verified.error) { setAuthError('Invalid or expired Google Authenticator code.'); return false; }
     }
@@ -135,7 +137,7 @@ export const AdminFreezeView: React.FC<{ actorName?: string }> = ({ actorName })
     {!configurationError && <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Current password<input autoComplete="current-password" type="password" value={password} onChange={e => setPassword(e.target.value)} className="app-control mt-2 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="Enter password" /></label>}
     {!configurationError && mfaFactorId && <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Google Authenticator code<input inputMode="numeric" value={authCode} onChange={e => setAuthCode(e.target.value)} className="app-control mt-2 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm tracking-[0.35em] dark:border-slate-700 dark:bg-slate-900" placeholder="000000" /></label>}
     {configurationError && <p className="text-xs text-slate-500">Local demo mode: authentication is simulated.</p>}
-    {authError && <p role="alert" className="text-xs font-semibold text-red-600">{authError}</p>}
+    {authError && <ErrorNotice error={authError} operation="Admin Freeze View"></ErrorNotice>}
   </div>;
 
   return <div className="space-y-6 animate-in fade-in duration-fast">

@@ -1,3 +1,4 @@
+import ErrorNotice from './ErrorNotice';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bell, CheckCheck, Search } from 'lucide-react';
@@ -98,7 +99,7 @@ export function Notifications({ desktopContainer, desktopCollapsed = false }: No
         </label>
       </div>
       <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-4" style={{ maxHeight: 'min(55dvh, 480px)' }} aria-label="Notification list" aria-busy={loading}>
-        {error && <p role="alert" className="mb-3 text-sm text-red-600">Unable to load the latest notifications. Reconnect to try again.</p>}
+        {error && <ErrorNotice error="Unable to load the latest notifications. Reconnect to try again." />}
         {loading && !rows.length ? <p className="py-6 text-center text-sm text-slate-500">Loading notifications…</p> : filtered.length === 0 ?
           <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-300">{query ? 'No notifications match your search.' : "You're all caught up. No notifications yet."}</p> :
           <ul className="space-y-2">{filtered.map(row => <li key={row.id}><button type="button" disabled={saving} onClick={async () => {

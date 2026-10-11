@@ -1,9 +1,12 @@
+import { selectUploadFile, retainedUploadFile } from '../lib/fileUploads';
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from '../components/ui/ErrorNotice';
 import { getProfileSchoolName } from '../lib/academicDirectory';
 import { formatManilaDate } from '../lib/dateTime';
 import ProfileAvatar from '../components/ui/ProfileAvatar';
 import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
 import { appAuth, appData } from '../lib/backend';
@@ -74,6 +77,8 @@ const StudentProfile: React.FC = () => {
   const [isSaved, setIsSaved] = useState(false);
   const [showProfileRequests, setShowProfileRequests] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const photoSelection = useRef(0);
+  const [readingPhoto, setReadingPhoto] = useState(false);
   const [photoPreview, setPhotoPreview] = useState(profile?.photo_url || '');
   const [photoError, setPhotoError] = useState('');
   const [isSavingPhoto, setIsSavingPhoto] = useState(false);
@@ -101,14 +106,14 @@ const StudentProfile: React.FC = () => {
       if (!currentPassword) { setPasswordStatus('error'); setPasswordMessage('Enter your current password to continue.'); return; }
       let verified = false;
       try { verified = await verifyPassword(profile.email, currentPassword); }
-      catch (error) { setPasswordStatus('error'); setPasswordMessage(error instanceof Error ? error.message : 'Unable to verify your current password.'); return; }
+      catch (error) { setPasswordStatus('error'); setPasswordMessage(errorMessage(error)); return; }
       if (!verified) { setPasswordStatus('error'); setPasswordMessage('Current password is incorrect.'); return; }
       setPasswordStatus('idle'); setPasswordMessage(''); setPasswordStep(is2FAEnabled ? 'mfa' : 'change'); return;
     }
     if (passwordStep === 'mfa') {
       if (!/^\d{6}$/.test(passwordMfaCode)) { setPasswordStatus('error'); setPasswordMessage('Enter the six-digit authenticator code.'); return; }
       const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: passwordMfaCode });
-      if (error) { setPasswordStatus('error'); setPasswordMessage(error.message); return; }
+      if (error) { setPasswordStatus('error'); setPasswordMessage(errorMessage(error)); return; }
       setPasswordMfaCode(''); setPasswordStatus('idle'); setPasswordStep('change'); return;
     }
     if (!newPassword) {
@@ -128,7 +133,7 @@ const StudentProfile: React.FC = () => {
     }
 
     try { await appAuth.changePassword(currentPassword, newPassword); }
-    catch (error) { setPasswordStatus('error'); setPasswordMessage(error instanceof Error ? error.message : 'Unable to update password.'); return; }
+    catch (error) { setPasswordStatus('error'); setPasswordMessage(errorMessage(error)); return; }
     setPasswordStatus('success');
     setPasswordMessage('Password updated successfully!');
     setCurrentPassword('');
@@ -151,13 +156,13 @@ const StudentProfile: React.FC = () => {
       const { data, error } = await toast.result(() => supabase.auth.mfa.enroll({ factorType: 'totp', issuer: 'RMC Attendance' }), 'Prepare authenticator', 'Authenticator ready to verify');
       if (error) throw error;
       setFactorId(data.id); setFactorUri(data.totp.uri); setFactorSecret(data.totp.secret); setFactorCreatedAt(new Date().toISOString()); setShow2FASetup(true);
-    } catch (error) { setFactorError(error instanceof Error ? error.message : 'Unable to update two-factor authentication.'); }
+    } catch (error) { setFactorError(errorMessage(error)); }
   };
   const close2FASetup = () => { setShow2FASetup(false); setTwoFactorCode(''); setTwoFactorStatus('idle'); };
   const handleVerify2FA = async (e: React.FormEvent) => {
     e.preventDefault(); setFactorError('');
     const { error } = await toast.result(() => supabase.auth.mfa.challengeAndVerify({ factorId, code: twoFactorCode }), 'Verify authenticator');
-    if (error) { setFactorError(error.message); return; }
+    if (error) { setFactorError(errorMessage(error)); return; }
     setTwoFactorStatus('success'); setIs2FAEnabled(true); close2FASetup();
   };
 
@@ -202,34 +207,41 @@ const StudentProfile: React.FC = () => {
       const { error } = await supabase.auth.mfa.unenroll({ factorId });
       if (error) throw error;
       setIs2FAEnabled(false); setFactorId(''); setFactorCreatedAt(null); setShowDisable2FA(false);
-    } catch (error) { setFactorError(error instanceof Error ? error.message : 'Unable to disable two-factor authentication.'); }
+    } catch (error) { setFactorError(errorMessage(error)); }
     finally { setDisableBusy(false); }
   };
 
   const handlePhotoSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+    const file = selectUploadFile(event.currentTarget);
     if (!file) return;
+    const selection = ++photoSelection.current;
+    setReadingPhoto(true);
     setPhotoError('');
     try {
       validateProfileImage(file);
-      setPhotoPreview(await fileAsDataUrl(file));
-      setPhotoFile(file);
+      const retained = await retainedUploadFile(file);
+      const preview = await fileAsDataUrl(retained);
+      if (selection !== photoSelection.current) return;
+      setPhotoPreview(preview);
+      setPhotoFile(retained);
     } catch (error) {
+      if (selection !== photoSelection.current) return;
       setPhotoFile(null);
       setPhotoPreview(profile.photo_url || '');
-      setPhotoError(error instanceof Error ? error.message : 'Unable to select this image.');
-    }
+      setPhotoError(errorMessage(error));
+    } finally { if (selection === photoSelection.current) setReadingPhoto(false); }
   };
 
   const cancelPhotoChange = () => {
+    photoSelection.current++;
+    setReadingPhoto(false);
     setPhotoFile(null);
     setPhotoPreview(profile.photo_url || '');
     setPhotoError('');
   };
 
   const savePhoto = async () => {
-    if (!photoFile || isSavingPhoto) return;
+    if (!photoFile || isSavingPhoto || readingPhoto) return;
     setPhotoError('');
     setIsSavingPhoto(true);
     let uploadedId = '';
@@ -442,9 +454,7 @@ const StudentProfile: React.FC = () => {
             <Collapsible id="password-fields" open={showPasswordSection} innerClassName="pt-4">
               <form onSubmit={handlePasswordReset} className="border-t border-slate-200 pt-4 dark:border-slate-700 space-y-3">
                 {passwordStatus === 'error' && (
-                  <div role="alert" className="p-3 bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400 text-xs font-bold rounded-xl border border-red-200 dark:border-red-900/50 flex items-center gap-2">
-                    <AlertCircle size={16} /> {passwordMessage}
-                  </div>
+                  <ErrorNotice error={passwordMessage} operation="Change password" />
                 )}
                 {passwordStatus === 'success' && (
                   <div role="status" className="p-3 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-2">
@@ -580,7 +590,7 @@ const StudentProfile: React.FC = () => {
 
       </div>
 
-      {factorError && <p role="alert" className="text-sm text-red-600">{factorError}</p>}
+      {factorError && <ErrorNotice error={factorError} operation="Student Profile"></ErrorNotice>}
       <Modal
         open={show2FASetup}
         onClose={close2FASetup}
@@ -603,7 +613,7 @@ const StudentProfile: React.FC = () => {
           </>
         )}
       >
-        <form id="two-factor-enrollment-form" onSubmit={handleVerify2FA} className="space-y-5 text-center">{factorError && <p role="alert" className="text-sm text-red-600">{factorError}</p>}
+        <form id="two-factor-enrollment-form" onSubmit={handleVerify2FA} className="space-y-5 text-center">{factorError && <ErrorNotice error={factorError} operation="Student Profile"></ErrorNotice>}
           <p className="text-xs font-bold text-brand-900 dark:text-slate-100">Scan QR in Google Authenticator App</p>
 
           <div role="img" aria-label="Two-factor authentication QR code" className="mx-auto w-full max-w-48 rounded-2xl border border-slate-200 bg-white p-4 shadow-inner dark:border-slate-700">
@@ -645,7 +655,7 @@ const StudentProfile: React.FC = () => {
         )}
       >
         <form id="disable-2fa-form" onSubmit={handleDisable2FA} className="space-y-3">
-          {factorError && <p role="alert" className="text-sm font-semibold text-red-600">{factorError}</p>}
+          {factorError && <ErrorNotice error={factorError} operation="Student Profile"></ErrorNotice>}
           <div className="relative">
             <label htmlFor="disable-2fa-password" className="sr-only">Current password</label>
             <input id="disable-2fa-password" type={showDisablePassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Current password" value={disablePassword} onChange={(e) => setDisablePassword(e.target.value)} className="input-field p-3 pr-12" />
@@ -669,11 +679,12 @@ const StudentProfile: React.FC = () => {
             <label htmlFor="profile-photo-file" className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-brand-900 transition hover:border-gold-500 hover:bg-gold-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
               <Upload size={16} /> Choose image
             </label>
-            <input id="profile-photo-file" type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoSelected} />
+            <input id="profile-photo-file" type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" disabled={isSavingPhoto} onChange={handlePhotoSelected} />
+            {readingPhoto && <p role="status" className="text-xs text-slate-500">Checking image…</p>}
             {photoFile && <p className="break-all text-xs font-semibold text-slate-600 dark:text-slate-300">{photoFile.name} · {(photoFile.size / 1024 / 1024).toFixed(2)} MB</p>}
-            {photoError && <p role="alert" className="text-xs font-bold text-red-600 dark:text-red-400">{photoError}</p>}
+            {photoError && <ErrorNotice error={photoError} operation="Student Profile"></ErrorNotice>}
             {photoFile && <div className="flex flex-wrap gap-2">
-              <Button className="!w-auto" disabled={isSavingPhoto} onClick={savePhoto} size="sm"><Save size={14} /> {isSavingPhoto ? 'Uploading...' : 'Save photo'}</Button>
+              <Button className="!w-auto" disabled={isSavingPhoto || readingPhoto} onClick={savePhoto} size="sm"><Save size={14} /> {isSavingPhoto ? 'Uploading...' : 'Save photo'}</Button>
               <Button className="!w-auto" disabled={isSavingPhoto} onClick={cancelPhotoChange} size="sm" variant="secondary"><X size={14} /> Cancel</Button>
             </div>}
           </div>

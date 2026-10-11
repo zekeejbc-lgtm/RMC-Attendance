@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import BulkMemberImportModal from './BulkMemberImportModal';
 import { MEMBER_CSV_COLUMNS } from '../../lib/memberCsv';
+import * as fileUploads from '../../lib/fileUploads';
 
 afterEach(() => {
   cleanup();
@@ -104,7 +105,9 @@ describe('BulkMemberImportModal', () => {
     let resolveSlow!: (value: string) => void;
     const slowCsv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nSlow,slow@example.edu,slow,2026-00002A,student,,,,`;
     const slow = new File([slowCsv], 'slow.csv', { type: 'text/csv' });
-    Object.defineProperty(slow, 'text', { value: () => new Promise<string>((resolve) => { resolveSlow = resolve; }) });
+    const readText = fileUploads.uploadFileText;
+    vi.spyOn(fileUploads, 'uploadFileText').mockImplementation(file => file === slow
+      ? new Promise<string>(resolve => { resolveSlow = resolve; }) : readText(file));
     const latestCsv = `${MEMBER_CSV_COLUMNS.join(',')}\r\nLatest,latest@example.edu,latest,2026-00003A,student,,,,`;
     const latest = new File([latestCsv], 'latest.csv', { type: 'text/csv' });
     Object.defineProperty(latest, 'text', { value: async () => latestCsv });

@@ -5,6 +5,14 @@ import { calendarDay, calendarConflicts, calendarICS, itemsOnDay, monthBounds, m
 import { supabase } from '../lib/supabase';
 const item = (id: string, start = '2026-10-09T00:00:00Z', end = '2026-10-09T02:00:00Z', changes = {}): CalendarItem => ({ id, event_id: id, title: 'Program', starts_at: start, ends_at: end, label: 'Default session', kind: 'attendance', general: false, organization_id: null, suspended: false, cancelled: false, venue: 'Hall', description: '', ...changes });
 describe('Personal calendar', () => {
+ it('shows informational notices without attendance conflicts and exports them as transparent', () => {
+  const notice = item('notice', undefined, undefined, { kind: 'informational', label: 'No attendance required', description: 'Bring review materials.' });
+  expect(itemsOnDay([notice], '2026-10-09')).toEqual([notice]);
+  expect(calendarConflicts([item('attendance'), notice]).size).toBe(0);
+  const ics = calendarICS([notice]);
+  expect(ics).toContain('TRANSP:TRANSPARENT');
+  expect(ics).toContain('No attendance required.\\nBring review materials.');
+ });
  it('uses Philippine dates independently of the browser timezone', () => { expect(calendarDay('2026-10-08T16:00:00Z')).toBe('2026-10-09'); expect(calendarDay('2026-10-08T15:59:59Z')).toBe('2026-10-08'); });
  it('handles leap years, year boundaries, and leading weekdays', () => { expect(monthBounds('2028-02').last_day).toBe('2028-02-29'); expect(shiftMonth('2026-12', 1)).toBe('2027-01'); expect(shiftMonth('2026-01', -1)).toBe('2025-12'); expect(monthDays('2026-10').slice(0, 5)).toEqual([null, null, null, null, '2026-10-01']); expect(() => monthBounds('2026-13')).toThrow(); });
  it('shows overnight events on both days and excludes an event ending at midnight from the next day', () => { const rows = [item('overnight', '2026-10-09T15:00:00Z', '2026-10-09T17:00:00Z'), item('boundary', '2026-10-09T14:00:00Z', '2026-10-09T16:00:00Z')]; expect(itemsOnDay(rows, '2026-10-09')).toHaveLength(2); expect(itemsOnDay(rows, '2026-10-10').map(row => row.id)).toEqual(['overnight']); });

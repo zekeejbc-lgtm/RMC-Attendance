@@ -263,10 +263,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (item.path === '/organizations' && hasPermission(userRole, 'directory.manage_structure')) return false;
 
 
-  // First check role access
+  // Permission-based navigation follows the same precedence as ProtectedRoute.
   if (
     item.roles &&
     item.roles.length > 0 &&
+    !item.permission &&
+    !(item as any).permissionAny &&
     !item.roles.includes(userRole) && !(item.path === hierarchyPath && hasPermission(userRole, 'directory.transfer_students'))
   ) {
     return false;

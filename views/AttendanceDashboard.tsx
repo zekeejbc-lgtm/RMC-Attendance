@@ -5,6 +5,7 @@ import { usePageMemory } from '../components/usePageMemory';
 import { formatManilaDate, formatManilaTime, parseManilaDateTime } from '../lib/dateTime';
 import { attendanceWindowTitle, eventDisplayTitle } from '../lib/eventGroups';
 import { toast } from '../lib/toast';
+import ErrorNotice from '../components/ui/ErrorNotice';
 import { downloadCsv } from '../lib/export';
 import { attendanceSpreadsheetRows } from '../lib/attendanceSpreadsheet';
 
@@ -490,7 +491,7 @@ const AttendanceDashboard: React.FC = () => {
               {reportPreview.url ? <iframe title="Attendance PDF preview" src={`${reportPreview.url}#toolbar=0&navpanes=0&view=FitH`} className="h-[460px] w-full sm:h-[580px]" />
                 : <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 p-6 text-center">
                   <FileText size={32} className="text-slate-400" />
-                  {reportPreview.error ? <><p role="alert" className="text-sm text-red-700 dark:text-red-300">{reportPreview.error}</p><Button onClick={reportPreview.retry} variant="secondary" fullWidth={false}>Retry preview</Button></>
+                  {reportPreview.error ? <><ErrorNotice error={reportPreview.error} operation="Preview attendance report" /><Button onClick={reportPreview.retry} variant="secondary" fullWidth={false}>Retry preview</Button></>
                     : <p role="status" className="text-sm text-slate-500 dark:text-slate-400">{reportPreview.loading ? 'Preparing your PDF preview...' : 'Choose an educational unit to see your report here.'}</p>}
                 </div>}
             </div>

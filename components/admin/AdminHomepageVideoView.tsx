@@ -1,3 +1,5 @@
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 import { useEffect, useState } from 'react';
 import { Surface } from '../ui/Page';
 import { homepageVideos, HomepageVideoSetting, loadHomepageVideo, saveHomepageVideo } from '../../lib/homepageVideos';
@@ -21,12 +23,12 @@ export default function AdminHomepageVideoView() {
   return <Surface className="space-y-5 p-6 sm:p-8">
     <div><h2 className="text-xl font-bold">Homepage Video</h2><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Choose a repository video, preview it, then save to update the homepage for all visitors.</p></div>
     {loading && <p role="status">Loading saved video…</p>}
-    {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    {error && <ErrorNotice error={error} operation="Admin Homepage Video View"></ErrorNotice>}
     {message && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">{message}</p>}
     {!loading && saved && <form className="space-y-5" onSubmit={async event => {
       event.preventDefault(); setSaving(true); setError(''); setMessage('');
       try { const value = await saveHomepageVideo(selected, saved.updated_at); setSaved(value); setMessage('Homepage video saved. Visitors will see it when they open the homepage.'); }
-      catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to save the video.'); }
+      catch (cause) { setError(errorMessage(cause)); }
       finally { setSaving(false); }
     }}>
       <div><label htmlFor="homepage-video" className="mb-2 block text-sm font-semibold">Available videos</label>
@@ -36,7 +38,7 @@ export default function AdminHomepageVideoView() {
         </select>
       </div>
       {video && <div className="space-y-2"><video key={video.id} src={video.url} controls playsInline preload="metadata" aria-label="Homepage video preview" onError={() => setPreviewFailed(true)} className="aspect-video w-full rounded-2xl bg-brand-950" />
-        {previewFailed && <p role="alert" className="text-sm text-red-600">The preview could not load. Try another video.</p>}
+        {previewFailed && <ErrorNotice error="The preview could not load. Try another video." />}
         <p className="break-all text-xs text-slate-500">{video.id}</p>
       </div>}
       <div className="flex flex-wrap gap-3">

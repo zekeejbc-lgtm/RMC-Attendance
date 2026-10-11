@@ -31,6 +31,13 @@ async function openCalendar() {
  await screen.findByText('Opening program');
  await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled());
 }
+it('displays informational schedules without counting them as attendance sessions', async () => {
+ load.mockResolvedValue({ closures: [], items: [{ ...data.items[0], kind: 'informational', label: 'No attendance required' }] });
+ await openCalendar();
+ expect(screen.getByText('Informational schedule')).toBeVisible();
+ expect(screen.getByRole('button', { name: 'View schedule' })).toBeVisible();
+ expect(screen.getByRole('button', { name: '2026-10-09, 0 sessions' })).toBeVisible();
+});
 
 it('keeps the agenda, counts and markers visible while a background refresh is pending', async () => {
  await openCalendar();
@@ -50,7 +57,7 @@ it('retains the loaded schedule when a refresh fails and permits retry', async (
  await openCalendar();
  load.mockRejectedValueOnce(new Error('Connection interrupted'));
  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
- expect(await screen.findByRole('alert')).toHaveTextContent('Connection interrupted');
+ expect(await screen.findByRole('alert')).toHaveTextContent('NET-001');
  expect(screen.getByText('Opening program')).toBeVisible();
  fireEvent.click(screen.getByRole('button', { name: 'Retry calendar' }));
  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
@@ -62,7 +69,7 @@ it('hides the previous month while loading a different month', async () => {
  let resolve!: (value: CalendarData) => void;
  load.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
  fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
- expect(screen.getByText('Loading your schedule…')).toBeVisible();
+ expect(screen.getByRole('status', { name: 'Loading your schedule' })).toBeVisible();
  expect(screen.queryByText('Opening program')).not.toBeInTheDocument();
  await act(async () => { resolve({ items: [], closures: [] }); });
  expect(screen.getByText('No activities for this day and filter.')).toBeVisible();

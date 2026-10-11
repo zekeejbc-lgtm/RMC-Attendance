@@ -1,3 +1,5 @@
+import { errorMessage } from '../lib/errors';
+import ErrorNotice from '../components/ui/ErrorNotice';
 import { signInDestination } from '../lib/navigationMemory';
 import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
@@ -17,7 +19,7 @@ import { Collapsible } from '../components/ui/Collapsible';
 import { AcademicPathPicker } from '../components/academic/AcademicPathPicker';
 import { serializeAcademicAssignment, findNodePath } from '../lib/academicDirectory';
 import PasswordStrengthMeter from '../components/ui/PasswordStrengthMeter';
-import { createDriveImage, driveFileIdFromUrl, fileAsDataUrl, validateProfileImage } from '../lib/googleDrive';
+import { createDriveImage, driveFileIdFromUrl, retainProfileImage } from '../lib/googleDrive';
 import { enrollmentUsername, STUDENT_ID_ERROR, validEmergencyPhone, validStudentId } from '../lib/enrollment';
 import GoogleSignIn from '../components/GoogleSignIn';
 import EnrollmentPrivacyAgreement from '../components/EnrollmentPrivacyAgreement';
@@ -189,7 +191,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
       if (err.code === 'ACCOUNT_NOT_FOUND' && identifier.includes('@')) {
         setMissingAccountEmail(identifier.trim().toLowerCase());
       } else {
-        setLoginError(err.message || 'Failed to sign in.');
+        setLoginError(errorMessage(err));
       }
       setIsLoggingIn(false);
     }
@@ -220,16 +222,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
     if (!file) return;
     setReadingPhoto(true); setRegError('');
     try {
-      validateProfileImage(file);
-      const preview = await fileAsDataUrl(file);
+      const retained = await retainProfileImage(file);
+      const preview = retained.preview;
       await new Promise<void>((resolve, reject) => {
         const img = new Image();
         img.onload = () => img.naturalWidth && img.naturalHeight ? resolve() : reject(new Error('Choose a readable image.'));
         img.onerror = () => reject(new Error('This file is not a readable image. Choose another photo.'));
         img.src = preview;
       });
-      setPhotoFile(file); setPhotoPreview(preview); setSavedPhotoUrl('');
-    } catch (error) { setRegError(error instanceof Error ? error.message : 'Unable to read the photo.'); }
+      setPhotoFile(retained.file); setPhotoPreview(preview); setSavedPhotoUrl('');
+    } catch (error) { setRegError(errorMessage(error)); }
     finally { setReadingPhoto(false); }
   };
 
@@ -237,7 +239,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
     if (!identifier.includes('@') || resendingConfirmation) return;
     setResendingConfirmation(true);
     try { await appAuth.resendConfirmation(identifier); setLoginError('Confirmation email sent. Check your inbox and spam folder.'); }
-    catch (error) { console.error('[Auth] resend confirmation failed', error); setLoginError(error instanceof Error ? error.message : 'Unable to resend confirmation email.'); }
+    catch (error) { console.error('[Auth] resend confirmation failed', error); setLoginError(errorMessage(error)); }
     finally { setResendingConfirmation(false); }
   };
 
@@ -247,7 +249,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
     if (!validStudentId(lookupId)) { setLookupError(STUDENT_ID_ERROR); return; }
     setLookingUp(true);
     try { setLookupResult(await lookupEnrollment(lookupId)); }
-    catch (error) { setLookupError(error instanceof Error && error.message ? error.message : 'Unable to check enrollment status.'); }
+    catch (error) { setLookupError(errorMessage(error)); }
     finally { setLookingUp(false); }
   };
 
@@ -319,7 +321,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
     } catch (submissionError) {
       // Keep the uploaded photo for retries. A lost signup response can also
       // mean an account already references it, so deleting it here is unsafe.
-      setRegError(submissionError instanceof Error ? submissionError.message : (submissionError as { message?: string })?.message || 'Unable to submit the application.');
+      setRegError(errorMessage(submissionError));
     } finally {
       setIsRegistering(false);
     }
@@ -451,9 +453,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
               <div className="flex flex-col justify-between">
                 <div>
                    {loginError && (
-                     <div className="mb-4 sm:mb-5 p-3.5 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl border border-red-200 dark:border-red-800 flex items-center gap-3 text-xs font-bold uppercase animate-in shake">
+                     <div className="mb-4 sm:mb-5">
                        <ShieldAlert size={18} className="shrink-0" /> 
-                       <span>{loginError}</span>
+                       <ErrorNotice error={loginError} operation="Landing Page"></ErrorNotice>
                      </div>
                    )}
                    {loginError && /confirm|verification/i.test(loginError) && identifier.includes('@') && (
@@ -713,7 +715,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                          </button>
                        </div>
                        {regData.confirmPassword && regData.password !== regData.confirmPassword && (
-                         <p className="mt-1 text-[10px] font-bold text-red-500">Passwords do not match.</p>
+                         <ErrorNotice error="Passwords do not match." operation="Confirm password" />
                        )}
                        {regData.confirmPassword && regData.password === regData.confirmPassword && (
                          <p className="mt-1 text-[10px] font-bold text-emerald-500 flex items-center gap-1">
@@ -788,7 +790,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                   {(photoPreview || savedPhotoUrl) && <img src={photoPreview || savedPhotoUrl} alt="Profile picture preview" className="h-36 w-36 rounded-2xl object-cover" />}
                   <div className="space-y-2">
                     <label htmlFor="enrollment-photo" className="block text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300">Choose profile picture</label>
-                    <input id="enrollment-photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={readingPhoto || isRegistering} className="sr-only" onChange={e => { void selectEnrollmentPhoto(e.target.files?.[0]); e.target.value = ''; }} />
+                    <input id="enrollment-photo" type="file" accept="image/jpeg,image/png,image/webp" disabled={readingPhoto || isRegistering} className="sr-only" onChange={e => {
+                      const input = e.currentTarget;
+                      void selectEnrollmentPhoto(input.files?.[0]).finally(() => { input.value = ''; });
+                    }} />
                     <label
                       htmlFor="enrollment-photo"
                       className={`inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-3 text-sm font-black transition-colors ${readingPhoto || isRegistering ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-700 dark:bg-slate-800' : 'border-brand-200 bg-brand-50 text-brand-900 hover:border-gold-400 hover:bg-gold-50 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:hover:border-gold-400'}`}
@@ -802,9 +807,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                 </section>
               )}
               {regError && (
-                <div role="alert" className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-800 text-xs font-semibold">
-                  {regError}
-                </div>
+                <ErrorNotice error={regError} operation="Landing Page"></ErrorNotice>
               )}
 
               <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:gap-4">
@@ -861,7 +864,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                        await appData.validateEnrollment(enrollmentPerson(), securityKey.trim(), regStep);
                        setRegStep(regStep + 1);
                      } catch (error) {
-                       setRegError(error instanceof Error ? error.message : (error as { message?: string })?.message || 'Unable to validate enrollment. Please try again.');
+                       setRegError(errorMessage(error));
                      } finally { setCheckingEnrollment(false); }
                     }}>
                      {checkingEnrollment ? 'Checking…' : 'Next'}
@@ -958,7 +961,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
             <input id="enrollment-lookup-id" value={lookupId} onChange={event => setLookupId(event.target.value)} placeholder="YYYY-XXXXXL" autoFocus className="app-control w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800" />
             <Button type="submit" variant="gold" disabled={lookingUp} className="w-full">{lookingUp ? 'Checking…' : 'Check status'}</Button>
           </form>
-          {lookupError && <p role="alert" className="text-xs font-semibold text-red-600">{lookupError}</p>}
+          {lookupError && <ErrorNotice error={lookupError} operation="Landing Page"></ErrorNotice>}
           {lookupResult && <div role="status" className="space-y-3 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800">
             {!lookupResult.found ? <p>No enrollment application was found for that Student ID.</p> : <>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs"><div><dt className="text-slate-500">Enrollee</dt><dd className="font-semibold">{lookupResult.namePreview || '—'}</dd></div><div><dt className="text-slate-500">Student ID</dt><dd className="font-semibold">{lookupId}</dd></div><div><dt className="text-slate-500">Email</dt><dd className="font-semibold">{lookupResult.emailPreview || '—'}</dd></div><div><dt className="text-slate-500">Section</dt><dd className="font-semibold">{lookupResult.sectionPreview || '—'}</dd></div></dl>

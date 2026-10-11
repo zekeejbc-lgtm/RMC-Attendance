@@ -35,7 +35,7 @@ const AdminControls = lazy(() => import('./views/AdminControls'));
 import { UserRole } from './types';
 import { ossaSections, ossaSectionPath } from './lib/ossaHub';
 import { hasPermission, AppPermission } from './lib/accessControl';
-import { AppLoading, PageSkeleton } from './components/ui/Skeleton';
+import RouteLoading from './components/ui/RouteLoading';
 import ToastViewport from './components/ui/ToastViewport';
 import PwaStatus from './components/ui/PwaStatus';
 import { canAccessSystemControls } from './lib/systemControlsAccess';
@@ -53,12 +53,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
   const routeOwner = useRef<string | undefined>(undefined);
   if (user) routeOwner.current = user.uid;
 
-  if (loading) return <AppLoading label="Loading your workspace"><PageSkeleton /></AppLoading>;
+  if (loading) return profile
+    ? <Layout><RouteLoading embedded label="Loading your workspace" /></Layout>
+    : <RouteLoading label="Loading your workspace" />;
 
   if (!user) return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search, returnToOwner: routeOwner.current }} />;
   if (offlineScanner) {
     if (location.pathname !== '/mayor/scan') return <Navigate to="/mayor/scan" replace />;
-    return <Layout>{children}</Layout>;
+    return <Layout><Suspense fallback={<RouteLoading embedded />}>{children}</Suspense></Layout>;
   }
 
   if (!profile && error) return <main className="mx-auto max-w-xl px-4 py-12 text-slate-800 dark:text-slate-100">
@@ -88,7 +90,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
     return <Navigate to={profile.role === 'ossa' || profile.role === 'ossa_staff' ? '/ossa/dashboard' : '/dashboard'} replace />;
   }
 
-  return <Layout>{children}</Layout>;
+  return <Layout><Suspense fallback={<RouteLoading embedded />}>{children}</Suspense></Layout>;
 };
 
 // Keep saved links working while giving administrators their own hierarchy URL.
@@ -109,7 +111,7 @@ const App: React.FC = () => {
       <AuthProvider>
         <HashRouter>
           <NavigationMemory>
-          <Suspense fallback={<AppLoading label="Loading page"><PageSkeleton /></AppLoading>}><Routes>
+          <Suspense fallback={<RouteLoading />}><Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/verify/clearance/:token" element={<VerifyClearance />} />
           <Route path="/privacy-policy" element={<LegalPage kind="privacy" />} />

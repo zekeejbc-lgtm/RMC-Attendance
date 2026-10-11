@@ -1,3 +1,4 @@
+import ErrorNotice from './ui/ErrorNotice';
 import { useEffect, useRef, useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import Button from './ui/Button';
@@ -47,7 +48,7 @@ export default function PasskeySettings() {
     <p className="text-sm text-slate-600 dark:text-slate-300">Sign in using your device’s face recognition, fingerprint, PIN, or security key. Your biometric data stays on your device.</p>
     <p className="text-xs text-slate-500 dark:text-slate-400">Keep access to your password or Google account for recovery. Add passkeys only on devices or password managers you trust.</p>
     {unavailable && <p className="text-sm text-slate-600 dark:text-slate-300">{unavailable}</p>}
-    {error && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{error}</p>}
+    {error && <ErrorNotice error={error} operation="Passkey Settings"></ErrorNotice>}
     {notice && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>}
     {loading ? <p role="status" className="text-sm">Loading passkeys…</p> : passkeys.length ? <ul className="space-y-3">
       {passkeys.map(passkey => <li key={passkey.id} className="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">

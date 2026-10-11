@@ -43,11 +43,11 @@ it('searches, reads one on navigation, and reads the entire inbox even while fil
   await user.click(screen.getByRole('button', { name: /Excuse letter: approved/ }));
   await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/student/events'));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  await user.click(screen.getAllByRole('button', { name: 'Notifications' })[1]);
+  await user.click((await screen.findAllByRole('button', { name: 'Notifications' }))[1]);
   expect(within(screen.getByRole('dialog')).getByText(/· Read$/)).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Read all' }));
   expect(mocks.read).toHaveBeenLastCalledWith('student-1', ['1', '3']);
-  expect(screen.queryByLabelText('2 unread notifications')).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByLabelText('2 unread notifications')).not.toBeInTheDocument());
   view.unmount(); mount();
   await waitFor(() => expect(screen.queryByLabelText('3 unread notifications')).not.toBeInTheDocument());
 });

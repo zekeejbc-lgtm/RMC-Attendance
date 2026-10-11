@@ -2,6 +2,8 @@ import type { EventAttendanceWindow, EventSanctionRule } from '../types';
 import { supabase } from './supabase';
 import { refreshData } from './backend';
 import { toast } from './toast';
+import { monthBounds } from './calendarDates';
+export { calendarDay, monthBounds, monthDays, shiftMonth } from './calendarDates';
 
 export type CalendarSpecificActivity = {
  id: string; title: string; kind: string; starts_at: string; ends_at: string;
@@ -11,6 +13,7 @@ export type CalendarItem = {
  id: string; event_id: string; title: string; label: string; starts_at: string; ends_at: string;
  kind: string; organization_id: string | null; general: boolean; cancelled: boolean; suspended: boolean;
  venue: string; description: string;
+ schedule?: { scope_node_id: string | null; recipients: string[]; audience?: string; can_manage: boolean };
  parent_event_id?: string | null;
  details?: {
   activity_kind: string; banner_url: string | null; starts_at: string; ends_at: string;
@@ -31,20 +34,6 @@ export type CalendarMove = { event_id: string; date: string };
 export type ScheduleActivity = ClosureActivity & { general: boolean; parent_event_id: string | null; parent_title: string | null; description: string; venue: string; approval_status: string; attendance_windows: Array<{ id: string; title?: string; label?: string; timeIn: string; timeOut: string }>; disabled_reason: string | null; move_days: number | null };
 export type SchedulePreview = { activities: ScheduleActivity[]; token: string; plan_valid: boolean; errors: string[]; moved_count: number };
 export type ClosureDraft = { first_day: string; last_day: string; nodes: string[]; shift_days: number };
-export const calendarDay = (stamp: string | number = Date.now()) => new Date((typeof stamp === 'string' ? Date.parse(stamp) : stamp) + 8 * 3600000).toISOString().slice(0, 10);
-export function monthBounds(month: string) {
- if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Choose a valid month.');
- const [year, number] = month.split('-').map(Number);
- return { first_day: `${month}-01`, last_day: `${month}-${new Date(Date.UTC(year, number, 0)).getUTCDate()}` };
-}
-export function monthDays(month: string): (string | null)[] {
- const { first_day, last_day } = monthBounds(month);
- return [...Array(new Date(`${first_day}T00:00:00Z`).getUTCDay()).fill(null),
-  ...Array.from({ length: Number(last_day.slice(-2)) }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
-}
-export function shiftMonth(month: string, amount: number) {
- const d = new Date(`${monthBounds(month).first_day}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + amount); return d.toISOString().slice(0, 7);
-}
 export function itemsOnDay(items: CalendarItem[], day: string) {
  const start = Date.parse(`${day}T00:00:00+08:00`), end = start + 86400000;
  return items.filter(item => Date.parse(item.starts_at) < end && Date.parse(item.ends_at) > start);
@@ -64,7 +53,7 @@ export function calendarAgendaGroups(items: CalendarItem[]): CalendarAgendaGroup
 }
 export function calendarConflicts(items: CalendarItem[]): Set<string> {
  const ids = new Set<string>();
- const active = items.filter(item => !item.cancelled && !item.suspended && !item.general).sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+ const active = items.filter(item => !item.cancelled && !item.suspended && !item.general && item.kind !== 'informational').sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
  for (let i = 0; i < active.length; i++) for (let j = i + 1; j < active.length && Date.parse(active[j].starts_at) < Date.parse(active[i].ends_at); j++) {
   if (active[i].event_id !== active[j].event_id) { ids.add(active[i].id); ids.add(active[j].id); }
  }
@@ -86,12 +75,24 @@ export function calendarICS(items: CalendarItem[], now = Date.now()) {
  for (const item of items.filter(item => !item.suspended && !item.cancelled)) {
   lines.push('BEGIN:VEVENT', `UID:${escapeText(item.id)}@iars`, `DTSTAMP:${timestamp(now)}`, `DTSTART:${timestamp(item.starts_at)}`,
    `DTEND:${timestamp(item.ends_at)}`, `SUMMARY:${escapeText(item.title + (item.label === 'Default session' ? '' : ` · ${item.label}`))}`,
-   `DESCRIPTION:${escapeText(item.description)}`, `LOCATION:${escapeText(item.venue)}`, `TRANSP:${item.general ? 'TRANSPARENT' : 'OPAQUE'}`, 'END:VEVENT');
+   `DESCRIPTION:${escapeText(item.kind === 'informational' ? `No attendance required.\n${item.description}` : item.description)}`, `LOCATION:${escapeText(item.venue)}`, `TRANSP:${item.general || item.kind === 'informational' ? 'TRANSPARENT' : 'OPAQUE'}`, 'END:VEVENT');
  }
  return lines.map(foldLine).join('\r\n') + '\r\nEND:VCALENDAR\r\n';
 }
 export async function loadPersonalCalendar(month: string): Promise<CalendarData> {
  const { data, error } = await supabase.rpc('rmc_personal_calendar', monthBounds(month)); if (error) throw error; return data;
+}
+export type InformationalScheduleDraft = { title: string; description: string; venue: string; starts_at: string; ends_at: string; scope_node_id: string | null; recipients: string[] };
+export async function saveInformationalSchedule(draft: InformationalScheduleDraft, id: string | null = null) {
+ const { data, error } = await supabase.rpc('rmc_save_calendar_schedule', { schedule_id: id, draft });
+ if (error) throw error;
+ window.dispatchEvent(new Event('rmc_data_update'));
+ return data as string;
+}
+export async function cancelInformationalSchedule(id: string) {
+ const { error } = await supabase.rpc('rmc_cancel_calendar_schedule', { schedule_id: id });
+ if (error) throw error;
+ window.dispatchEvent(new Event('rmc_data_update'));
 }
 export async function loadClosures(): Promise<CalendarClosure[]> {
  const { data, error } = await supabase.rpc('rmc_calendar_closures'); if (error) throw error; return data;

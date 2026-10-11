@@ -1,3 +1,5 @@
+import { errorMessage } from '../../lib/errors';
+import ErrorNotice from '../ui/ErrorNotice';
 import { SelectField } from '../ui/SelectField';
 import { Collapsible } from '../ui/Collapsible';
 import ProfileAvatar from '../ui/ProfileAvatar';
@@ -130,20 +132,20 @@ export function NodeOfficerManager({ node, actor, canManage, onChanged }: Props)
       }
       onChanged();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The officer could not be assigned.');
+      setError(errorMessage(caught));
     } finally {
       setSaving(false);
     }
   };
 
   const remove = async () => {
-    if (!deleteTarget) return;
+    if (!mayCreate || !deleteTarget) return;
     try {
       await appData.deleteSchoolOfficial(actor.uid, deleteTarget.uid);
       setDeleteTarget(null);
       onChanged();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The account could not be deleted.');
+      setError(errorMessage(caught));
     }
   };
 
@@ -167,7 +169,7 @@ export function NodeOfficerManager({ node, actor, canManage, onChanged }: Props)
       setEditingKey(false);
       onChanged();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The enrollment key could not be cleared.');
+      setError(errorMessage(caught));
     }
   };
 
@@ -179,7 +181,7 @@ export function NodeOfficerManager({ node, actor, canManage, onChanged }: Props)
       </div>
       {success && !open && <p role="status" className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">{success}</p>}
       <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {officers.map((officer) => <article className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-900" key={officer.uid}><ProfileAvatar alt="" className="h-10 w-10 rounded-full object-cover" src={officer.photo_url} /><div className="min-w-0 flex-1"><h4 className="truncate text-sm font-bold text-slate-900 dark:text-white">{officer.name}</h4><p className="truncate text-xs text-slate-500">{roleName(officer.role)}</p></div>{canManage ? <button aria-label={`Delete ${officer.name}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40" onClick={() => setDeleteTarget(officer)}><Trash2 size={16} /></button> : null}</article>)}
+        {officers.map((officer) => <article className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-900" key={officer.uid}><ProfileAvatar alt="" className="h-10 w-10 rounded-full object-cover" src={officer.photo_url} /><div className="min-w-0 flex-1"><h4 className="truncate text-sm font-bold text-slate-900 dark:text-white">{officer.name}</h4><p className="truncate text-xs text-slate-500">{roleName(officer.role)}</p></div>{mayCreate ? <button aria-label={`Delete ${officer.name}`} className="rounded-lg p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40" onClick={() => setDeleteTarget(officer)}><Trash2 size={16} /></button> : null}</article>)}
         {!officers.length ? <p className="text-sm text-slate-500">No officer is assigned to this unit.</p> : null}
       </div>
 
@@ -223,7 +225,7 @@ export function NodeOfficerManager({ node, actor, canManage, onChanged }: Props)
           {mode === 'new' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={createAnother} onChange={e => setCreateAnother(e.target.checked)} />Create another account with this role and unit</label>}
           {success && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">{success}</p>}
           </fieldset>
-          {error ? <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200" role="alert">{error}</p> : null}
+          {error ? <ErrorNotice error={error} operation="Node Officer Manager"></ErrorNotice> : null}
         </form>
       </Modal>
 

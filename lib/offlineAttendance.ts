@@ -198,7 +198,7 @@ export async function prepareOfflineAttendance(owner: string, eventId: string, i
   if (!isCurrent() || session.error || session.data.session?.user.id !== owner) throw new Error('Sign in again before preparing an offline roster.');
   const started = Date.now();
   const { data, error } = await supabase.rpc('rmc_prepare_offline_attendance', { target_event_id: eventId });
-  if (error) throw new Error(error.message);
+  if (error) throw error;
   if (!data || data.actorUid !== owner) throw new Error('The account changed. Sign in again before preparing.');
   const clockOffset = data.preparedAt - (started + Date.now()) / 2;
   if (Math.abs(clockOffset) > 60000) throw new Error('Set this device to automatic date and time, then prepare the roster again.');
@@ -263,7 +263,7 @@ export async function rosterQrStudent(roster: OfflineRoster, token: string) {
 export async function authorizeRosterQr(roster: OfflineRoster, token: string) {
   const epoch = await rosterEpoch(roster.actorUid);
   const { data, error } = await supabase.rpc('rmc_authorize_offline_qr', { offline_session_id: roster.id, qr_token: token });
-  if (error) throw new Error(error.message);
+  if (error) throw error;
   const current = (await offlineRosters(roster.actorUid)).find(item => item.id === roster.id);
   if (!current) throw new Error('The downloaded roster was removed. Prepare it again.');
   const next = { ...current, qrHashes: [...current.qrHashes.filter(qr => qr.hash !== data.hash), data] };
@@ -284,7 +284,7 @@ export async function lookupScannerStudent(roster: OfflineRoster, query: { stude
   const session = await supabase.auth.getSession();
   if (session.error || session.data.session?.user.id !== roster.actorUid) throw new Error('Sign in again to verify this student.');
   const { data, error } = await supabase.rpc('rmc_lookup_scanner_student', { offline_session_id: roster.id, lookup_student_id: query.qrToken ? null : query.studentId?.trim() || null, qr_token: query.qrToken || null });
-  if (error) throw new Error(error.message);
+  if (error) throw error;
   if (data?.actorUid !== roster.actorUid || data.sessionId !== roster.id || !data.student?.uid || data.student.account_status !== 'active') throw new Error('The server did not authorize this roster lookup.');
   const saved = await currentOfflineRoster(roster.actorUid, roster.id);
   if (!saved) throw new Error('The roster was cleared. Sign in again.');

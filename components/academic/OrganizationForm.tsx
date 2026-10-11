@@ -1,3 +1,5 @@
+import { selectUploadFile, retainedUploadFile } from '../../lib/fileUploads';
+import ErrorNotice from '../ui/ErrorNotice';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ImagePlus, Upload } from 'lucide-react';
 import { Organization, UserProfile } from '../../types';
@@ -32,9 +34,15 @@ export default function OrganizationForm({ organization, profile, onClose, initi
 
   useEffect(() => {
     if (!logo) { setPreview(''); return; }
-    const url = URL.createObjectURL(logo);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
+    let active = true;
+    let url = '';
+    setPreview('');
+    void retainedUploadFile(logo).then(file => {
+      if (!active) return;
+      url = URL.createObjectURL(file);
+      setPreview(url);
+    }).catch(error => { if (active) setError(organizationError(error)); });
+    return () => { active = false; if (url) URL.revokeObjectURL(url); };
   }, [logo]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -74,7 +82,7 @@ export default function OrganizationForm({ organization, profile, onClose, initi
     description="Choose its academic scope, heads, and membership policy. Students can belong to several organizations."
     footer={<><Button variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button><Button disabled={busy || !name.trim()} onClick={save}>{busy ? 'Saving…' : 'Save organization'}</Button></>}>
     <div className="space-y-4">
-      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorNotice error={error} operation="Organization Form"></ErrorNotice>}
       <label className="app-field-label">Organization name<input className="input-field mt-2" maxLength={120} value={name} onChange={e => setName(e.target.value)} /></label>
       <label className="app-field-label">Description<textarea className="input-field mt-2" maxLength={4000} value={description} onChange={e => setDescription(e.target.value)} /></label>
       <div className="space-y-2">
@@ -92,7 +100,7 @@ export default function OrganizationForm({ organization, profile, onClose, initi
             {logo && <button type="button" disabled={busy} className="text-xs font-semibold text-brand-700 underline dark:text-gold-300" onClick={() => { setLogo(undefined); if (logoInput.current) logoInput.current.value = ''; }}>Remove selected image</button>}
           </div>
           <input id={logoId} ref={logoInput} className="sr-only" tabIndex={-1} disabled={busy} aria-describedby={`${logoId}-help`} type="file" accept="image/jpeg,image/png,image/webp" onChange={e => {
-            const file = e.target.files?.[0]; if (!file) return;
+            const file = selectUploadFile(e.currentTarget); if (!file) return;
             try { validateProfileImage(file); setLogo(file); setError(''); } catch (error) { setError(organizationError(error)); e.target.value = ''; }
           }} />
         </div>
