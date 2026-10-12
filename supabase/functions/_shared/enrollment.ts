@@ -3,7 +3,7 @@ import { rateLimit } from './rateLimit.ts';
 
 export const sha256 = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), b => b.toString(16).padStart(2, '0')).join('');
 // Clients are injected so the security branches can be tested without live users.
-export function enrollmentHandler(admin: any, client: any, verifyGoogle: (credential: string, nonce: string) => Promise<string>) {
+export function enrollmentHandler(admin: any, client: any, verifyGoogle: (credential: string, nonce: string) => Promise<string>, mail?: { ready: boolean; send: (email: string, subject: string, body: string, link: string) => Promise<void> }) {
   const respond = (body: unknown, status = 200) => Response.json(body, { status, headers: responseHeaders });
   const find = async (email: string) => {
     const { data, error } = await admin.from('rmc_profiles').select('id,status').eq('profile->>email', email).maybeSingle();
@@ -24,7 +24,32 @@ export function enrollmentHandler(admin: any, client: any, verifyGoogle: (creden
     try {
       const body = await readJson(req, 32 * 1024);
       const { action, credential, nonce, password, enrollmentKey } = body;
-      if (!['google', 'enroll'].includes(action)) throw new Error('Invalid enrollment action.');
+      if (!['google', 'enroll', 'resend'].includes(action)) throw new Error('Invalid enrollment action.');
+      const { data: settings, error: settingsError } = await admin.from('rmc_enrollment_confirmation').select('*').eq('id', 1).single();
+      if (settingsError || !settings) throw new Error('Enrollment confirmation settings are unavailable. Try again later.');
+      const sendCustom = async (email: string) => {
+        if (!mail?.ready) throw new Error('Custom confirmation email delivery is not configured. Contact your school administrator.');
+        const generated = await admin.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: DenoOrigin(req) } });
+        if (generated.error) throw generated.error;
+        await mail.send(email, settings.email_subject, settings.email_body, generated.data.properties.action_link);
+      };
+      if (action === 'resend') {
+        const email = String(body.email || '').trim().toLowerCase();
+        if (!email || email.length > 254) throw new Error('Enter your enrollment email address.');
+        const existing = await find(email);
+        if (existing) {
+          const result = await admin.auth.admin.getUserById(existing.id);
+          if (result.error) throw result.error;
+          if (!result.data.user.email_confirmed_at) {
+            if (result.data.user.app_metadata?.enrollment_email_kind === 'custom') await sendCustom(email);
+            else {
+              const resent = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: DenoOrigin(req) } });
+              if (resent.error) throw resent.error;
+            }
+          }
+        }
+        return respond({ sent: true });
+      }
       const google = typeof credential === 'string';
       if (google && (credential.length > 12000 || typeof nonce !== 'string' || !/^[a-f0-9]{64}$/.test(nonce))) throw new Error('Choose your Google account again.');
       const email = google ? await verifyGoogle(credential, nonce) : String(body.profile?.email || '').trim().toLowerCase();
@@ -37,6 +62,9 @@ export function enrollmentHandler(admin: any, client: any, verifyGoogle: (creden
         // Google verification alone never calls any Supabase Auth creation API.
         if (action === 'google') return respond({ email, needsEnrollment: true });
       } else if (action !== 'enroll') throw new Error('Choose a Google account.');
+      if (!google && settings.mode === 'google_only') throw new Error('Enrollment requires a verified Google account. Choose Sign up with Google.');
+      if (!google && settings.mode === 'required' && settings.email_kind === 'custom' && !mail?.ready)
+        throw new Error('Custom confirmation email delivery is not configured. Contact your school administrator.');
       if (!body.profile || typeof body.profile !== 'object' || Array.isArray(body.profile)) throw new Error('Complete the enrollment form.');
       if (typeof password !== 'string' || password.length < 12 || password.length > 1024) throw new Error('Password must contain between 12 and 1024 characters.');
       const profile = { ...body.profile, email };
@@ -51,10 +79,25 @@ export function enrollmentHandler(admin: any, client: any, verifyGoogle: (creden
       if (retryAfter > 0) return respond({ error: `Please wait ${retryAfter} seconds before creating another account.`, retryAfter }, 429);
       const metadata = { profile, enrollment_key: enrollmentKey || null, enrollment_ticket: ticket };
       if (!google) {
-        const { data, error } = await client.auth.signUp({ email, password, options: { data: metadata, emailRedirectTo: DenoOrigin(req) } });
-        if (error) throw error;
-        if (!data.user || data.user.identities?.length === 0) throw new Error('This email already has an account. Sign in to track your application.');
-        return respond({ uid: data.user.id, needsEmailConfirmation: !data.session, session: data.session ? { access_token: data.session.access_token, refresh_token: data.session.refresh_token } : undefined });
+        {
+          const created = await admin.auth.admin.createUser({ email, password, email_confirm: settings.mode === 'bypass', user_metadata: metadata,
+            app_metadata: { enrollment_email_kind: settings.email_kind, enrollment_confirmation_required: settings.mode === 'required' } });
+          if (created.error || !created.data.user) throw created.error || new Error('Unable to complete enrollment.');
+          if (settings.mode === 'bypass') {
+            const login = await client.auth.signInWithPassword({ email, password });
+            if (login.error || !login.data.session) throw login.error || new Error('Sign in to continue enrollment.');
+            return respond({ uid: created.data.user.id, needsEmailConfirmation: false, session: { access_token: login.data.session.access_token, refresh_token: login.data.session.refresh_token } });
+          }
+          try {
+            if (settings.email_kind === 'custom') await sendCustom(email);
+            else {
+              const sent = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: DenoOrigin(req) } });
+              if (sent.error) throw sent.error;
+            }
+          }
+          catch { return respond({ uid: created.data.user.id, needsEmailConfirmation: true, deliveryWarning: 'Your application was saved, but the email could not be delivered. Use Resend confirmation email or contact your school administrator.' }); }
+          return respond({ uid: created.data.user.id, needsEmailConfirmation: true });
+        }
       }
       const created = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: metadata });
       if (created.error || !created.data.user) {

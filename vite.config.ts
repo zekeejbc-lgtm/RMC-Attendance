@@ -1,4 +1,5 @@
 import path from 'path';
+import { randomUUID } from 'node:crypto';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { loadEnv } from 'vite';
@@ -9,7 +10,9 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), 'VITE_');
     validatePublicEnvironment(env);
     const headers = securityHeaders(env);
+    const buildVersion = randomUUID();
     return {
+      define: { __APP_BUILD_VERSION__: JSON.stringify(buildVersion) },
       server: {
         port: 3000,
         strictPort: true,
@@ -23,16 +26,17 @@ export default defineConfig(({ mode }) => {
         configurePreviewServer(server) {
           server.middlewares.use((request, response, next) => {
             const pathname = request.url?.split('?')[0];
-            if (pathname === '/sw.js') response.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            if (pathname === '/sw.js' || pathname === '/version.json') response.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             else if (['/', '/index.html', '/manifest.webmanifest'].includes(pathname || '')) response.setHeader('Cache-Control', 'no-cache');
             next();
           });
         },
         generateBundle() {
+          this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ version: buildVersion }) });
           this.emitFile({ type: 'asset', fileName: '_headers', source:
             '/*\n' + Object.entries(headers).map(([key, value]) => `  ${key}: ${value}`).join('\n') +
             '\n/\n  Cache-Control: no-cache\n/sw.js\n  Cache-Control: no-cache, no-store, must-revalidate\n' +
-            '/index.html\n  Cache-Control: no-cache\n/manifest.webmanifest\n  Cache-Control: no-cache\n' });
+            '/index.html\n  Cache-Control: no-cache\n/manifest.webmanifest\n  Cache-Control: no-cache\n/version.json\n  Cache-Control: no-cache, no-store, must-revalidate\n' });
         },
       }, VitePWA({
         registerType: 'prompt',

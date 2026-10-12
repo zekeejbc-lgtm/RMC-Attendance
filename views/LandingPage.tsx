@@ -3,6 +3,8 @@ import ErrorNotice from '../components/ui/ErrorNotice';
 import { signInDestination } from '../lib/navigationMemory';
 import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
+import EnrollmentEmailConfirmation from '../components/EnrollmentEmailConfirmation';
+import { defaultConfirmationSettings, loadConfirmationSettings } from '../lib/enrollmentConfirmation';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
@@ -33,6 +35,15 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) => {
   const navigate = useNavigate();
+  const [confirmationSettings, setConfirmationSettings] = useState(defaultConfirmationSettings);
+  const [confirmationSettingsReady, setConfirmationSettingsReady] = useState(false);
+  const [confirmationSettingsError, setConfirmationSettingsError] = useState('');
+  const [confirmationDeliveryWarning, setConfirmationDeliveryWarning] = useState('');
+  useEffect(() => {
+    let active = true;
+    void loadConfirmationSettings().then(settings => { if (active) { setConfirmationSettings(settings); setConfirmationSettingsReady(true); } }).catch(() => { if (active) setConfirmationSettingsError('Enrollment settings could not be loaded. Reload this page before signing up.'); });
+    return () => { active = false; };
+  }, []);
   const location = useLocation();
   const { isMock, user, profile, revision, loading } = useAuth();
   
@@ -317,6 +328,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
         ? await submitGoogleEnrollment(profile, regData.password, securityKey.trim(), googleEnrollment)
         : await appData.submitApplication(profile, regData.password, securityKey.trim());
       setNeedsEmailConfirmation(result.needsEmailConfirmation);
+      setConfirmationDeliveryWarning(result.deliveryWarning || '');
       setRegSuccess(true);
     } catch (submissionError) {
       // Keep the uploaded photo for retries. A lost signup response can also
@@ -635,9 +647,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                 </span>
               </div>
             </div>
+            {needsEmailConfirmation && <EnrollmentEmailConfirmation email={regData.email.trim()} settings={confirmationSettings} onConfirmed={() => { setNeedsEmailConfirmation(false); navigate('/register/status'); }} />}
+            {confirmationDeliveryWarning && <p role="status" className="text-sm text-amber-800 dark:text-amber-200">{confirmationDeliveryWarning}</p>}
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <Button variant="gold" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { navigate(needsEmailConfirmation ? '/login' : '/register/status'); }}>
-                {needsEmailConfirmation ? 'Sign In After Confirmation' : 'View Application Status'}
+              <Button variant="gold" disabled={needsEmailConfirmation} className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { navigate('/register/status'); }}>
+                {needsEmailConfirmation ? 'Email confirmation required' : 'View Application Status'}
               </Button>
               <Button variant="secondary" className="!w-full !rounded-xl text-xs uppercase font-black tracking-widest" onClick={() => { navigate('/'); }}>
                 Back to home
@@ -654,6 +668,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                      <p className="text-sm text-slate-500">Complete your account details, academic assignment, emergency contact, and profile picture.</p>
                      {!user && isEnrollmentPage && <GoogleSignIn enrollment onCredential={(credential, nonce) => handleGoogle(credential, nonce, true)} onError={setRegError} />}
                      {googleEnrollment && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">Google email verified: {googleEnrollment.email}. Your account will be created only when you finish enrollment.</p>}
+                     {confirmationSettingsError && <ErrorNotice error={confirmationSettingsError} operation="Load enrollment settings" />}
+                     {confirmationSettings.mode === 'google_only' && !googleEnrollment && !user && <p role="status">Sign up with Google to continue. Your Google email is already verified.</p>}
+                     {confirmationSettings.mode === 'required' && !googleEnrollment && <p className="text-sm">After submitting, confirm the link sent to your email here before continuing to your application.</p>}
 
                     <div className="space-y-1">
                        <label htmlFor="landing-register-name" className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-300 ml-1">Legal Full Name</label>
@@ -859,6 +876,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                        setRegError('Enter the emergency contact’s full name and a valid mobile number (09XXXXXXXXX or +639XXXXXXXXX).');
                        return;
                      }
+                     if (!confirmationSettingsReady && !user) { setRegError('Enrollment settings could not be loaded. Reload this page before signing up.'); return; }
+                     if (confirmationSettings.mode === 'google_only' && !googleEnrollment && !user) { setRegError('Sign up with Google to continue enrollment.'); return; }
                      setCheckingEnrollment(true); setRegError('');
                      try {
                        await appData.validateEnrollment(enrollmentPerson(), securityKey.trim(), regStep);

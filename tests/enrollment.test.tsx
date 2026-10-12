@@ -6,6 +6,10 @@ import LandingPage from '../views/LandingPage';
 import { defaultLegalPages } from '../lib/legalPages';
 import { loadLegalPage } from '../lib/legalPageStore';
 vi.mock('../lib/legalPageStore', () => ({ loadLegalPage: vi.fn(async () => defaultLegalPages.agreement) }));
+vi.mock('../lib/enrollmentConfirmation', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/enrollmentConfirmation')>();
+  return { ...actual, loadConfirmationSettings: vi.fn(async () => actual.defaultConfirmationSettings) };
+});
 
 const api = vi.hoisted(() => ({ validate: vi.fn(), submit: vi.fn(), upload: vi.fn(), remove: vi.fn(), google: vi.fn(), googleSubmit: vi.fn(), signIn: vi.fn() }));
 vi.mock('../components/GoogleSignIn', () => ({ default: ({ enrollment, onCredential, onError }: any) => <button onClick={() => onCredential('google-token', 'nonce').catch((error: Error) => onError(error.message))}>{enrollment ? 'Sign up with Google' : 'Sign in with Google'}</button> }));
@@ -146,9 +150,10 @@ it('submits a photo URL accepted by the enrollment validator and shows email con
   const profile = api.submit.mock.calls[0][0];
   expect(profile.photo_url).toBe('https://drive.google.com/thumbnail?id=photo123&sz=w1600');
   expect(api.validate).toHaveBeenLastCalledWith(profile, '', 4);
-  fireEvent.click(screen.getByRole('button', { name: 'Sign In After Confirmation' }));
-  expect(screen.getByLabelText('Current route')).toHaveTextContent('/login');
-  expect(screen.getByLabelText('Username or email')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Email confirmation required' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Check email confirmation' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Resend confirmation email' })).toBeEnabled();
+  expect(screen.getByLabelText('Current route')).toHaveTextContent('/register');
 });
 
 it('retains the uploaded photo after a failed signup and reuses it on retry', async () => {

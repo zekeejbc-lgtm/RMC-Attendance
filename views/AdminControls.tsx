@@ -14,11 +14,15 @@ import { AdminRBACRoleView } from '../components/admin/AdminRBACRoleView';
 import { AdminAccountView } from '../components/admin/AdminAccountView';
 import LegalPage from './LegalPage';
 import AdminHomepageVideoView from '../components/admin/AdminHomepageVideoView';
+import AdminAppUpdates from '../components/admin/AdminAppUpdates';
+import AdminEnrollmentConfirmation from '../components/admin/AdminEnrollmentConfirmation';
 import { LegalKind } from '../lib/legalPages';
 
-type TabId = 'freeze' | 'health' | 'payment' | 'rbac' | 'accounts' | 'legal' | 'video';
+type TabId = 'freeze' | 'health' | 'payment' | 'rbac' | 'accounts' | 'legal' | 'video' | 'updates' | 'enrollment';
 
 const subPages: { id: TabId; label: string; icon: React.ElementType; description: string }[] = [
+  { id: 'enrollment', label: 'Enrollment', icon: ShieldCheck, description: 'Configure email verification and signup policy' },
+  { id: 'updates', label: 'App Updates', icon: Activity, description: 'Refresh all clients and keep everyone on the latest deployed app' },
   { id: 'freeze', label: 'Freeze Controls', icon: Snowflake, description: 'Manage institutional and node-level system freezes' },
   { id: 'health', label: 'System Health', icon: Activity, description: 'Monitor system performance, database status, and audit logs' },
   { id: 'payment', label: 'Payments', icon: DollarSign, description: 'Manage subscription reminders and billing statuses' },
@@ -36,7 +40,7 @@ const AdminControls: React.FC = () => {
   const getInitialTab = (): TabId => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
-    if (tab && ['freeze', 'health', 'payment', 'rbac', 'accounts', 'legal', 'video'].includes(tab)) {
+    if (tab && subPages.some(page => page.id === tab)) {
       return tab as TabId;
     }
     return 'freeze';
@@ -47,7 +51,7 @@ const AdminControls: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
-    if (tab && ['freeze', 'health', 'payment', 'rbac', 'accounts', 'legal', 'video'].includes(tab) && tab !== activeTab) {
+    if (tab && subPages.some(page => page.id === tab) && tab !== activeTab) {
       setActiveTab(tab as TabId);
     }
   }, [location.search]);
@@ -58,7 +62,7 @@ const AdminControls: React.FC = () => {
   };
 
   const tabPermissions = systemControlPermissions;
-  const allowedPages = subPages.filter(page => (page.id === 'legal' || page.id === 'video') ? profile?.role === 'admin' : hasPermission(profile?.role, tabPermissions[page.id]));
+  const allowedPages = subPages.filter(page => (page.id === 'legal' || page.id === 'video' || page.id === 'updates' || page.id === 'enrollment') ? profile?.role === 'admin' : hasPermission(profile?.role, tabPermissions[page.id]));
   const requestedPage = new URLSearchParams(location.search).get('page');
   const legalKinds: LegalKind[] = ['privacy', 'deletion', 'agreement', 'terms'];
   const legalKind = legalKinds.includes(requestedPage as LegalKind) ? requestedPage as LegalKind : 'privacy';
@@ -129,6 +133,8 @@ const AdminControls: React.FC = () => {
         {selectedTab === 'rbac' && <div className="space-y-6"><RoleAssignment /><AdminRBACRoleView actorName={profile?.name} /></div>}
         {selectedTab === 'accounts' && <AdminAccountView />}
         {selectedTab === 'video' && <AdminHomepageVideoView />}
+        {selectedTab === 'updates' && profile?.role === 'admin' && <AdminAppUpdates />}
+        {selectedTab === 'enrollment' && profile?.role === 'admin' && <AdminEnrollmentConfirmation />}
       </div>
     </Page>
   );

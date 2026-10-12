@@ -1,6 +1,6 @@
 # Error codes and messages
 
-This reference contains all 721 published codes in the current application error catalog. Generated from the catalog; run `node scripts/document-error-codes.mjs` after editing it.
+This reference contains all 769 published codes in the current application error catalog. Generated from the catalog; run `node scripts/document-error-codes.mjs` after editing it.
 
 Each error shows its message, code, and a text label explaining who can resolve it. The outline uses amber for user actions, blue for school staff, red for confirmed developer faults, and grey when the cause needs investigation. Colors also have text labels and work in light and dark appearance.
 
@@ -104,6 +104,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `ATT-937691B0` | Amber · You can resolve this | No active student was found with that exact student ID. |
 | `ATT-93CBB2F5` | Amber · You can resolve this | Add attendance windows. |
 | `ATT-96485ABC` | Amber · You can resolve this | image/png |
+| `ATT-9A7E208A` | Amber · You can resolve this | Student assignment changed. Refresh the class roster. |
 | `ATT-9DB6FC38` | Amber · You can resolve this | Choose a non-empty PDF, JPG, PNG, or WebP file up to 5 MB. |
 | `ATT-9E51E90B` | Amber · You can resolve this | This photo is no longer in the authorized roster. |
 | `ATT-A2749196` | Amber · You can resolve this | Enter the time you arrived, or choose “Mark me absent” if the attendance entry is incorrect. |
@@ -189,6 +190,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `AUTH-21210C2F` | Amber · You can resolve this | An authenticated author is required. |
 | `AUTH-220A4B56` | Amber · You can resolve this | Verification failed. |
 | `AUTH-25E2AC1F` | Amber · You can resolve this | Passkeys require HTTPS or localhost. You can still use your password or Google. |
+| `AUTH-26F2510F` | Amber · You can resolve this | Invalid or expired authenticator code. |
 | `AUTH-3348049F` | Blue · School staff can help | Your session has expired. Sign in again before freezing a scope. |
 | `AUTH-356FD3E2` | Amber · You can resolve this | Passwords do not match. |
 | `AUTH-3E0762B6` | Amber · You can resolve this | The passkey request expired. Please try again. |
@@ -209,13 +211,16 @@ The catalog includes current frontend and backend rules as well as published leg
 | `AUTH-63B548AF` | Amber · You can resolve this | Password must be at least 12 characters. |
 | `AUTH-65FD8B58` | Amber · You can resolve this | No login session was created. Please try again. |
 | `AUTH-6C27C2C9` | Amber · You can resolve this | Unable to sign in. Check your credentials and email verification. |
+| `AUTH-6E742391` | Amber · You can resolve this | Unable to check two-factor authentication. Reopen this dialog to retry. |
 | `AUTH-6EB38CD2` | Amber · You can resolve this | Invalid or expired Google Authenticator code. Try the latest code. |
 | `AUTH-7201A2F7` | Amber · You can resolve this | Unable to connect. Try again. |
 | `AUTH-768F3C2B` | Amber · You can resolve this | Temporary password must contain at least 12 characters. |
 | `AUTH-783916D2` | Amber · You can resolve this | Passkey login is currently unavailable. Use your password or Google. |
+| `AUTH-792D806A` | Amber · You can resolve this | Verify your current password again before initiating a refresh. |
 | `AUTH-82FD2676` | Amber · You can resolve this | No matching passkey was found. Sign in with your password or Google, then add a passkey in My Profile. |
 | `AUTH-8B6C734D` | Amber · You can resolve this | Unable to sign in. Check your credentials. |
 | `AUTH-8DB7A9CF` | Grey · Support needs to check this | Unable to update two-factor authentication. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
+| `AUTH-911ED2BE` | Blue · School staff can help | An active, unfrozen authenticated account is required. |
 | `AUTH-9A47EF90` | Grey · Support needs to check this | Unable to disable two-factor authentication. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
 | `AUTH-ADF2076A` | Amber · You can resolve this | You have reached the passkey limit. Remove an unused passkey before adding another. |
 | `AUTH-B444DC21` | Amber · You can resolve this | Passkey request cancelled. Please try again. |
@@ -269,22 +274,29 @@ The catalog includes current frontend and backend rules as well as published leg
 | `ENROLL-08551499` | Amber · You can resolve this | Invalid enrollment key. |
 | `ENROLL-0C795CFD` | Amber · You can resolve this | Admissions may only approve student accounts. |
 | `ENROLL-10BE77E4` | Amber · You can resolve this | Unable to validate enrollment. Please try again. |
+| `ENROLL-12962CF0` | Blue · School staff can help | Custom confirmation email delivery is not configured. Contact your school administrator. |
 | `ENROLL-14F8107A` | Amber · You can resolve this | Choose a profile picture before registering. |
 | `ENROLL-1F47E12A` | Amber · You can resolve this | This Student ID is already registered. |
 | `ENROLL-203A7D75` | Blue · School staff can help | Enrollment is frozen for this unit. |
 | `ENROLL-2550A117` | Amber · You can resolve this | Name, email, username, or student ID already exists. |
 | `ENROLL-26E694C4` | Amber · You can resolve this | Unable to check enrollment status. |
+| `ENROLL-281B46DE` | Amber · You can resolve this | Sign up with Google to continue enrollment. |
 | `ENROLL-28DA53A6` | Amber · You can resolve this | This email already has an account. Sign in to track your application. |
 | `ENROLL-297E7999` | Amber · You can resolve this | Too many attempts. Try again in 15 minutes. |
 | `ENROLL-2BE4545D` | Amber · You can resolve this | Invalid admission decision. |
 | `ENROLL-2DD3523F` | Amber · You can resolve this | Password must contain between 12 and 1024 characters. |
 | `ENROLL-31A7E879` | Amber · You can resolve this | Invalid enrollment step. |
+| `ENROLL-38341ED8` | Amber · You can resolve this | Confirmation email delivery failed. |
 | `ENROLL-38A1002D` | Amber · You can resolve this | You already have an account. Open your application status or sign out to register another student. |
+| `ENROLL-51BC3855` | Amber · You can resolve this | Enrollment requires a verified Google account. Choose Sign up with Google. |
+| `ENROLL-531D2AF4` | Amber · You can resolve this | Confirm your email address using the link in your inbox first. |
 | `ENROLL-565FBC9F` | Amber · You can resolve this | Invalid clarification field. |
 | `ENROLL-5845226E` | Amber · You can resolve this | Unable to sign in with Google. Check the Google provider setup or contact your school officer. |
 | `ENROLL-5BC2D8B2` | Amber · You can resolve this | This account is inactive. Contact your school officer. |
 | `ENROLL-60D48208` | Amber · You can resolve this | Invalid enrollment reservation. |
 | `ENROLL-653DA21B` | Grey · Support needs to check this | Unable to upload document. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
+| `ENROLL-67B18005` | Amber · You can resolve this | Verify your current password again. |
+| `ENROLL-68321DE7` | Amber · You can resolve this | Choose an enrolled student with an assigned class. |
 | `ENROLL-6A431FDD` | Grey · Support needs to check this | Unable to resubmit the application. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
 | `ENROLL-6CB36C87` | Grey · Support needs to check this | Unable to complete enrollment. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
 | `ENROLL-729014AB` | Amber · You can resolve this | Upload the document first. |
@@ -292,11 +304,13 @@ The catalog includes current frontend and backend rules as well as published leg
 | `ENROLL-7FC7F799` | Amber · You can resolve this | Complete enrollment before creating an account. Use the enrollment form. |
 | `ENROLL-88AB8162` | Amber · You can resolve this | Section Enrollment Security Key is required for enrollment into this section. |
 | `ENROLL-88EA6C70` | Amber · You can resolve this | Google email verification failed. Choose your account again. |
+| `ENROLL-896D672D` | Amber · You can resolve this | Sign in to continue enrollment. |
 | `ENROLL-8C39BC35` | Amber · You can resolve this | Choose an enrolled student. |
 | `ENROLL-8F470097` | Amber · You can resolve this | Provide a reason for this decision. |
 | `ENROLL-91368A07` | Amber · You can resolve this | Enter the enrollment key for the selected section. |
 | `ENROLL-91A78EB3` | Amber · You can resolve this | Invalid enrollment action. |
 | `ENROLL-92E0C0F2` | Amber · You can resolve this | Choose your Google account again. |
+| `ENROLL-A0E21AD5` | Amber · You can resolve this | Enrollment confirmation settings are unavailable. Try again later. |
 | `ENROLL-AAFEA598` | Amber · You can resolve this | Only pending admissions can be updated. |
 | `ENROLL-AC5B8921` | Amber · You can resolve this | Choose at least one item that the enrollee must clarify. |
 | `ENROLL-C83D1E9E` | Amber · You can resolve this | Account creation is temporarily limited. Wait for the displayed cooldown to end before creating another account. |
@@ -305,16 +319,22 @@ The catalog includes current frontend and backend rules as well as published leg
 | `ENROLL-CC16A5E6` | Amber · You can resolve this | Invalid section enrollment key. |
 | `ENROLL-CD06F188` | Amber · You can resolve this | Choose a Google account. |
 | `ENROLL-D2DE12E2` | Amber · You can resolve this | Google sign-in has not been configured by the school. |
+| `ENROLL-D483C6FB` | Amber · You can resolve this | Enter your enrollment email address. |
+| `ENROLL-D58A9E0A` | Amber · You can resolve this | Unable to check email confirmation. |
+| `ENROLL-D62B07B7` | Amber · You can resolve this | An enrolled authenticator is required to verify this action. |
 | `ENROLL-D85DC4B0` | Blue · School staff can help | Enrollment is frozen. |
 | `ENROLL-D864F3D7` | Amber · You can resolve this | Use an enrollment key of at least 8 characters. |
+| `ENROLL-DA076DBF` | Amber · You can resolve this | Only an active Super Admin can change enrollment confirmation. |
 | `ENROLL-DA6554C2` | Amber · You can resolve this | Complete the enrollment form. |
 | `ENROLL-DFFB247B` | Amber · You can resolve this | Unable to save your approval notice. Reconnect and try again. |
 | `ENROLL-E432977A` | Blue · School staff can help | You are not authorized to review admissions. |
 | `ENROLL-E753F257` | Amber · You can resolve this | Choose at least one field that needs clarification. |
+| `ENROLL-ECBE45F0` | Grey · Support needs to check this | Unable to update enrollment confirmation. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
 | `ENROLL-F0F5B56C` | Amber · You can resolve this | Name is required. |
 | `ENROLL-F2F1CB1E` | Amber · You can resolve this | Invalid document. |
 | `ENROLL-F41B5D1A` | Amber · You can resolve this | The enrollment key could not be cleared. |
 | `ENROLL-FB69B76B` | Amber · You can resolve this | Unable to load the agreement. Please retry before continuing. |
+| `ENROLL-FC91D1EC` | Amber · You can resolve this | Enrollment settings could not be loaded. Reload this page before signing up. |
 | `ENROLL-FD121586` | Amber · You can resolve this | Complete the admission form to create an account. |
 | `EVENT-001` | Blue · School staff can help | This activity needs OSSA approval before attendance can open. Ask an eligible OSSA reviewer to check it. |
 | `EVENT-002` | Blue · School staff can help | You cannot approve your own activity. Ask another eligible OSSA reviewer to review it. |
@@ -339,6 +359,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `EVENT-223E842A` | Amber · You can resolve this | Choose a start and end date. The end date must be on or after the start date. |
 | `EVENT-2B51E8C3` | Amber · You can resolve this | Enter a title and a valid event schedule of at most one year. |
 | `EVENT-2BD2B660` | Amber · You can resolve this | Only flag ceremonies can use this scheduler. |
+| `EVENT-2CB450E0` | Amber · You can resolve this | Invalid recipient group. |
 | `EVENT-2F83F4BF` | Blue · School staff can help | Class overrides must be within your assigned ceremony scope. |
 | `EVENT-3981F327` | Amber · You can resolve this | Choose allowed ceremony dates, valid class windows, and positive volunteer merit hours (up to 24). |
 | `EVENT-39D8D9D0` | Blue · School staff can help | Events are frozen for your scope. |
@@ -349,6 +370,8 @@ The catalog includes current frontend and backend rules as well as published leg
 | `EVENT-4142520F` | Amber · You can resolve this | Specific event dates must fit within the general event duration. |
 | `EVENT-41C0D2DF` | Amber · You can resolve this | Choose a valid month. |
 | `EVENT-4349CC7D` | Amber · You can resolve this | Wait for the event to end or cancel it. |
+| `EVENT-45706C73` | Amber · You can resolve this | Choose a future start and a valid end. |
+| `EVENT-492F54C0` | Amber · You can resolve this | Recipients must be within the selected school unit. |
 | `EVENT-4B9CBAB7` | Amber · You can resolve this | Invalid weekly class schedule. |
 | `EVENT-4CD630B9` | Amber · You can resolve this | Select recipients only within your assigned unit. |
 | `EVENT-4DB71755` | Amber · You can resolve this | Select at least one recipient group. |
@@ -362,6 +385,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `EVENT-5DB0E45F` | Amber · You can resolve this | Each class day needs a valid start time and a later end time. |
 | `EVENT-5E911DB9` | Amber · You can resolve this | Specific events must belong to the same school unit and organization as their general event. |
 | `EVENT-618B9E79` | Amber · You can resolve this | Review ceremony exemptions and class windows individually before rescheduling. |
+| `EVENT-618EC3F1` | Blue · School staff can help | School unit outside your assigned scope. |
 | `EVENT-627E01BF` | Amber · You can resolve this | Suspension-only does not change event schedules. |
 | `EVENT-63FF8812` | Amber · You can resolve this | You can manage events only within your current assigned unit. |
 | `EVENT-65BB47A8` | Amber · You can resolve this | Choose ceremony dates. |
@@ -377,8 +401,10 @@ The catalog includes current frontend and backend rules as well as published leg
 | `EVENT-8B19763C` | Amber · You can resolve this | Archive events that have records. |
 | `EVENT-8D6CEA1F` | Amber · You can resolve this | OSSA review access is required. |
 | `EVENT-8EF515B0` | Amber · You can resolve this | A weekly schedule object is required. |
+| `EVENT-91548C90` | Amber · You can resolve this | Only upcoming schedules can be updated. |
 | `EVENT-93ABD601` | Amber · You can resolve this | Sanction values must be zero or greater. |
 | `EVENT-93FB109D` | Amber · You can resolve this | Sanctions require a nonnegative value and hours or minutes. |
+| `EVENT-94F69A0C` | Blue · School staff can help | Choose a school unit within your assigned scope. |
 | `EVENT-956CD621` | Amber · You can resolve this | Schedules changed. Refresh the new schedule preview before applying. |
 | `EVENT-97072502` | Blue · School staff can help | Permission required: calendar.manage_closures |
 | `EVENT-99FB4698` | Amber · You can resolve this | A specific activity must move with its selected general event. Choose the general event date only. |
@@ -386,13 +412,16 @@ The catalog includes current frontend and backend rules as well as published leg
 | `EVENT-9D91F083` | Amber · You can resolve this | Clear all sanctions during the scheduled clearing period to qualify. |
 | `EVENT-9D945B18` | Amber · You can resolve this | An event cannot contain itself. |
 | `EVENT-9F1E67E6` | Amber · You can resolve this | Enter a whole number from 0 to 30 excuse submission days. |
+| `EVENT-A7E46EDD` | Amber · You can resolve this | Choose 1 to 100 recipient groups. |
 | `EVENT-AA2350DF` | Amber · You can resolve this | Volunteer merit must be between 0.01 and 24 hours. |
 | `EVENT-AAD50EC5` | Blue · School staff can help | Exempt students must be within your assigned ceremony scope. |
+| `EVENT-AB219E04` | Blue · School staff can help | Schedule unavailable or outside your scope. |
 | `EVENT-ABE65D64` | Amber · You can resolve this | Remove recipients outside your assigned unit before saving. |
 | `EVENT-ACBDB420` | Amber · You can resolve this | Remove preview-only dates before saving. Past dates cannot be scheduled. |
 | `EVENT-AD680D6C` | Amber · You can resolve this | Choose 1 to 62 allowed ceremony dates. Remove preview-only dates and follow the selected ceremony weekday. |
 | `EVENT-B21F6BA5` | Amber · You can resolve this | Create ceremonies only in the current month or next 7 days, before their start time. |
 | `EVENT-B2E92671` | Amber · You can resolve this | The form is not ready to save. Go back to check the configuration and your assigned unit. |
+| `EVENT-B72073E7` | Blue · School staff can help | Schedule management permission required. |
 | `EVENT-BA901CD2` | Amber · You can resolve this | Invalid class day. |
 | `EVENT-BB95EC38` | Amber · You can resolve this | Choose a JPG, PNG, or WebP banner of 5 MB or smaller. |
 | `EVENT-BC41F513` | Amber · You can resolve this | This event is outside your assigned unit. |
@@ -410,8 +439,10 @@ The catalog includes current frontend and backend rules as well as published leg
 | `EVENT-D7825AE3` | Blue · School staff can help | Permission required: calendar.view |
 | `EVENT-D7B89F93` | Blue · School staff can help | School-wide suspension permission required. |
 | `EVENT-D8E8EF4B` | Amber · You can resolve this | Class windows must be a nonempty list. |
+| `EVENT-DE0BFF1C` | Amber · You can resolve this | Completed schedules cannot be cancelled. |
 | `EVENT-DE4B721B` | Amber · You can resolve this | The event type and general event cannot be changed after creation. |
 | `EVENT-DFD4C6D7` | Amber · You can resolve this | Select an available general event. |
+| `EVENT-E3614659` | Amber · You can resolve this | Choose recipients. |
 | `EVENT-E3CE2975` | Blue · School staff can help | This academic unit is outside your assigned scope. |
 | `EVENT-E6BBF968` | Blue · School staff can help | Only OSAS and admins can change class schedules within their assigned scope. |
 | `EVENT-EA3D2A6B` | Grey · Support needs to check this | Unable to save decision. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
@@ -438,6 +469,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `FILE-2F14BAE8` | Amber · You can resolve this | Attach an excuse letter or supporting document uploaded to your account. |
 | `FILE-3186BAF6` | Amber · You can resolve this | Choose a JPG, PNG, WebP, or PDF file up to 5 MB. |
 | `FILE-3E8DFC17` | Amber · You can resolve this | No people were found. Add at least one completed row and upload the file again. |
+| `FILE-42685D99` | Amber · You can resolve this | Could not read this file. Save it to your device and choose it again. |
 | `FILE-444A2BBE` | Amber · You can resolve this | Add at least one person to the CSV file. |
 | `FILE-44BA0E16` | Amber · You can resolve this | Image reading was cancelled. Choose the photo again. |
 | `FILE-49BEDFE0` | Amber · You can resolve this | This image is empty. Choose another photo. |
@@ -459,6 +491,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `FILE-B59A7793` | Grey · Support needs to check this | Unable to read the photo. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
 | `FILE-B6473B98` | Amber · You can resolve this | Card image took too long to load |
 | `FILE-B96C8DD1` | Amber · You can resolve this | The photo upload service rejected the request. Send this code to technical support so they can check the upload service. |
+| `FILE-C4D25854` | Amber · You can resolve this | Choose a file of the selected value MB or smaller. |
 | `FILE-C89414CC` | Amber · You can resolve this | Your new photo is saved, but the old copy could not be removed from Drive. |
 | `FILE-CB67197C` | Grey · Support needs to check this | Unable to preview this image. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
 | `FILE-CFC3DF69` | Amber · You can resolve this | Choose a JPG, PNG, or WebP image. |
@@ -466,6 +499,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `FILE-DF1F19D7` | Amber · You can resolve this | Unable to read this banner. Choose another image. |
 | `FILE-E67156A1` | Amber · You can resolve this | The CSV file could not be read. |
 | `FILE-E95ACFEE` | Amber · You can resolve this | Unsupported profile field. |
+| `FILE-EA485C04` | Amber · You can resolve this | This file is empty. Choose another file. |
 | `FILE-F1B5E970` | Amber · You can resolve this | Unable to open this document. Please try again. |
 | `FILE-F66DA4DF` | Amber · You can resolve this | Document unavailable. |
 | `FILE-F779B1B5` | Amber · You can resolve this | The CSV file is empty. |
@@ -518,6 +552,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-05E2D773` | Grey · Support needs to check this | Account operation failed. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
 | `RULE-065FD7B6` | Amber · You can resolve this | student_id |
 | `RULE-0664AEA8` | Amber · You can resolve this | Only an unarchived service activity can be extended. |
+| `RULE-06C04709` | Blue · School staff can help | This student account is frozen. |
 | `RULE-0740D09C` | Amber · You can resolve this | Submit an information request for OSSA or admin approval. |
 | `RULE-07B4E02B` | Blue · School staff can help | Operations are frozen for this school or class. |
 | `RULE-08787B0E` | Amber · You can resolve this | Unit name and type are required. |
@@ -527,7 +562,9 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-0C880480` | Amber · You can resolve this | The selection changed or your admin access expired. Reload before saving again. |
 | `RULE-0D91DCBC` | Amber · You can resolve this | Enter a valid category and at least 10 characters of explanation. |
 | `RULE-10BDD7D9` | Amber · You can resolve this | Please select a valid section to proceed. |
+| `RULE-1158EC80` | Amber · You can resolve this | Unexpected command gateway. Review before applying the designation fix. |
 | `RULE-12A518DC` | Blue · School staff can help | Only an administrator can create administrator accounts. |
+| `RULE-12ADF7E1` | Amber · You can resolve this | Type initiate exactly to confirm. |
 | `RULE-1489A1AE` | Amber · You can resolve this | useTheme must be used within a ThemeProvider |
 | `RULE-15F9580E` | Blue · School staff can help | Service is outside your assigned scope. |
 | `RULE-167EC1BD` | Grey · Support needs to check this | Could not save notification read status. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues. |
@@ -557,6 +594,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-32E2C670` | Amber · You can resolve this | Unable to load the latest notifications. Reconnect to try again. |
 | `RULE-334E344C` | Amber · You can resolve this | Every section needs a paragraph or bullet point. |
 | `RULE-34808253` | Amber · You can resolve this | OSSA has not released this certificate. |
+| `RULE-34A82508` | Amber · You can resolve this | Unable to initiate refresh. Try again. |
 | `RULE-355166C9` | Amber · You can resolve this | Invalid role assignment. |
 | `RULE-357C3676` | Amber · You can resolve this | The officer could not be assigned. |
 | `RULE-36C6AF46` | Amber · You can resolve this | Enter a reason for this account freeze. |
@@ -569,6 +607,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-4127A4BE` | Amber · You can resolve this | You already have a pending request. Wait for its decision. |
 | `RULE-44B234FE` | Amber · You can resolve this | Paragraphs and bullet points must contain 1 to 20000 characters. |
 | `RULE-46CD2A89` | Amber · You can resolve this | Unable to update. Reconnect and try again. |
+| `RULE-47986376` | Amber · You can resolve this | Choose Student or Mayor. |
 | `RULE-482991B5` | Amber · You can resolve this | Section content must be an array. |
 | `RULE-486818E0` | Blue · School staff can help | An unfrozen active admin account is required. |
 | `RULE-494746E1` | Amber · You can resolve this | Choose a later service end date. |
@@ -583,7 +622,9 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-5A4F4B92` | Amber · You can resolve this | One or more accounts no longer exist. No accounts were changed. |
 | `RULE-5D0C6930` | Amber · You can resolve this | The excuse submission window has closed. Contact OSSA for exceptional cases. |
 | `RULE-5D9D821C` | Blue · School staff can help | Only the administrator can create campuses. |
+| `RULE-5E91FD40` | Amber · You can resolve this | Invalid recipient role. |
 | `RULE-5E961B26` | Amber · You can resolve this | Excuses are unavailable for this activity. |
+| `RULE-60C6AE6B` | Amber · You can resolve this | Verify your current two-factor code again. |
 | `RULE-61C4A074` | Amber · You can resolve this | Username must be 3–100 letters, numbers, dots, underscores, or hyphens. |
 | `RULE-62DB3947` | Amber · You can resolve this | Unable to load the saved page. Showing the original content. Reload to try again. |
 | `RULE-63DA4A44` | Amber · You can resolve this | System owner access cannot be assigned here. |
@@ -616,6 +657,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-864FD0EC` | Amber · You can resolve this | Unknown rate limit route |
 | `RULE-86745AFB` | Amber · You can resolve this | The CSV contains an unclosed quoted field. |
 | `RULE-86746504` | Amber · You can resolve this | Choose flag raising or retreat. |
+| `RULE-88E342A1` | Amber · You can resolve this | Choose an active Student or Mayor. |
 | `RULE-8C6DD66D` | Amber · You can resolve this | The latest application data could not be loaded. Displayed record counts may be outdated. |
 | `RULE-8CFE333B` | Amber · You can resolve this | The CSV contains duplicate member headers. |
 | `RULE-8FAFA7ED` | Blue · School staff can help | This record is outside your assigned scope. |
@@ -639,6 +681,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-9F268C74` | Amber · You can resolve this | All priorities |
 | `RULE-A12D37A9` | Amber · You can resolve this | You already have a pending or approved excuse for this activity. |
 | `RULE-A3E0E535` | Amber · You can resolve this | Type the target name exactly as it appears in the confirmation dialog. |
+| `RULE-A56918D6` | Amber · You can resolve this | A refresh was just initiated. Wait 30 seconds before trying again. |
 | `RULE-A5E51281` | Amber · You can resolve this | Select a section or block. |
 | `RULE-A7AA7F33` | Amber · You can resolve this | Service must end in the future and span at most one year. |
 | `RULE-A98743D9` | Amber · You can resolve this | This activity has not been approved. |
@@ -651,12 +694,14 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-B12D2DFE` | Amber · You can resolve this | A CSV row has the wrong number of columns. Use the import template and check quotation marks around values containing commas. |
 | `RULE-B28D595B` | Blue · School staff can help | Frozen status is unavailable for this account. |
 | `RULE-B3D97101` | Amber · You can resolve this | Choose information to change or delete. |
+| `RULE-B57E0567` | Blue · School staff can help | The current Mayor account is frozen. |
 | `RULE-B666E845` | Amber · You can resolve this | Name, student ID, and a valid username are required. |
 | `RULE-B763E8C7` | Amber · You can resolve this | Enter a title and a current or future clearing period, with an end after its start. |
 | `RULE-B7A86152` | Amber · You can resolve this | Confirmation email sent. Check your inbox and spam folder. |
 | `RULE-B7C61473` | Amber · You can resolve this | Enter a valid email address. |
 | `RULE-BAF58209` | Amber · You can resolve this | error-notice-code |
 | `RULE-BB349F9A` | Amber · You can resolve this | This student account is no longer eligible. |
+| `RULE-BC0E72C8` | Blue · School staff can help | Only an active administrator can initiate an app refresh. |
 | `RULE-BC540609` | Amber · You can resolve this | Invalid rate limit subject |
 | `RULE-BD2A9D25` | Amber · You can resolve this | Request is too large. |
 | `RULE-BE33AB01` | Amber · You can resolve this | Select a valid academic unit. |
@@ -667,6 +712,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-C78D352A` | Amber · You can resolve this | An active account is required. |
 | `RULE-C817AB76` | Amber · You can resolve this | A fresh, accurate GPS location is required. |
 | `RULE-C9C84B97` | Amber · You can resolve this | This service is temporarily unavailable. Please try again shortly. |
+| `RULE-CABFF0E5` | Amber · You can resolve this | Choose a section or block. |
 | `RULE-CEAE2A6C` | Amber · You can resolve this | The action could not be completed. |
 | `RULE-D550A297` | Amber · You can resolve this | Unit not found. |
 | `RULE-DA576134` | Amber · You can resolve this | An account already uses one of these details. Check the username, email, and student ID before creating another account. |
@@ -687,6 +733,7 @@ The catalog includes current frontend and backend rules as well as published leg
 | `RULE-EACD1C3E` | Amber · You can resolve this | Could not refresh accounts. Try again. |
 | `RULE-EC2C2521` | Blue · School staff can help | Only OSAS or an administrator can change the excess service hours policy. |
 | `RULE-EDEF262D` | Amber · You can resolve this | Core role not found. |
+| `RULE-EE9274CA` | Amber · You can resolve this | Choose the student's current class. |
 | `RULE-EEA18BFD` | Amber · You can resolve this | An activity no longer exists. |
 | `RULE-EF862BD1` | Amber · You can resolve this | An assigned OSSA reviewer is required. |
 | `RULE-F1B4908A` | Amber · You can resolve this | Invalid review. |

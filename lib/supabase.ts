@@ -17,6 +17,37 @@ export function requireConfiguration() {
   if (configurationError) throw new Error(configurationError);
 }
 
+// Only the freshly password-authenticated session can invoke the server action.
+async function verifyPrivilegedAction(password: string, code: string, typed: string, enrollmentSettings?: Record<string, unknown> | null) {
+  requireConfiguration();
+  if (typed !== 'initiate') throw new Error('Type initiate exactly to confirm.');
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user?.email) throw new Error('Sign in again before continuing.');
+  const verifier = createClient(url, key, { global: { fetch: backendFetch }, auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'rmc-refresh-verification' } });
+  try {
+    const login = await verifier.auth.signInWithPassword({ email: user.email, password });
+    if (login.error || login.data.user?.id !== user.id) throw new Error('Incorrect current password.');
+    const factors = await verifier.auth.mfa.listFactors();
+    if (factors.error) throw factors.error;
+    const all = factors.data.all || factors.data.totp;
+    const verifiedFactors = all.filter(factor => factor.status === 'verified');
+    if (verifiedFactors.length) {
+      const factor = factors.data.totp.find(factor => factor.status === 'verified');
+      if (!factor) throw new Error('An enrolled authenticator is required to verify this action.');
+      const verification = await verifier.auth.mfa.challengeAndVerify({ factorId: factor.id, code: code.trim() });
+      if (verification.error) throw new Error('Invalid or expired authenticator code.');
+    }
+    const result = enrollmentSettings !== undefined
+      ? await verifier.rpc('rmc_set_enrollment_confirmation', { confirmation: typed, settings: enrollmentSettings })
+      : await verifier.rpc('rmc_initiate_app_refresh', { confirmation: typed });
+    if (result.error) throw result.error;
+    return result.data;
+  } finally { await verifier.auth.signOut({ scope: 'local' }); }
+}
+
+export const initiateAppRefresh = (password: string, code: string, typed: string) => verifyPrivilegedAction(password, code, typed);
+export const configureEnrollmentConfirmation = (password: string, code: string, typed: string, settings: Record<string, unknown> | null) => verifyPrivilegedAction(password, code, typed, settings);
+
 export type SensitiveConfirmation = { password: string; code: string; typedAction: string; typedName: string; reason: string };
 
 // A separate, short-lived session proves both factors without changing the

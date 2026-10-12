@@ -6,14 +6,15 @@ import { enrollmentHandler } from '../supabase/functions/_shared/enrollment';
 const nonce = 'a'.repeat(64);
 afterEach(() => vi.unstubAllGlobals());
 const profile = { email: 'spoofed@example.test', name: 'Student', username: 'student', student_id: '2026-12345A' };
-let admin: any, client: any, verify: any, find: any, rpc: any;
+let admin: any, client: any, verify: any, find: any, rpc: any, policy: any;
 beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto);
   find = vi.fn().mockResolvedValue({ data: null });
+  policy = { mode: 'required', email_kind: 'supabase', email_subject: 'Confirm', email_body: 'Welcome' };
   rpc = vi.fn(async (name: string) => ({ data: name === 'rmc_validate_enrollment' ? {} : 0 }));
-  admin = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: find }) }) }), rpc,
+  admin = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: find, single: async () => ({ data: policy }) }) }) }), rpc,
     auth: { admin: { createUser: vi.fn().mockResolvedValue({ data: { user: { id: 'new' } } }) } } };
-  client = { auth: { signUp: vi.fn().mockResolvedValue({ data: { user: { id: 'new', identities: [{}] }, session: null } }),
+  client = { auth: { resend: vi.fn().mockResolvedValue({}), signInWithPassword: vi.fn().mockResolvedValue({ data: { session: { access_token: 'access', refresh_token: 'refresh' } } }), signUp: vi.fn().mockResolvedValue({ data: { user: { id: 'new', identities: [{}] }, session: null } }),
     signInWithIdToken: vi.fn().mockResolvedValue({ data: { user: { id: 'new' }, session: { access_token: 'access', refresh_token: 'refresh' } } }) } };
   verify = vi.fn().mockResolvedValue('verified@gmail.com');
 });
@@ -69,12 +70,61 @@ it('reuses a concurrently created Google account after a duplicate creation resp
 });
 it('keeps normal email enrollment confirmation and uses the server-issued ticket', async () => {
   expect((await call(enroll)).body).toEqual({ uid: 'new', needsEmailConfirmation: true });
-  expect(client.auth.signUp).toHaveBeenCalledWith(expect.objectContaining({ email: profile.email,
-    options: expect.objectContaining({ data: expect.objectContaining({ enrollment_ticket: expect.any(String) }) }) }));
-  expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+  expect(admin.auth.admin.createUser).toHaveBeenCalledWith(expect.objectContaining({ email: profile.email, email_confirm: false,
+    user_metadata: expect.objectContaining({ enrollment_ticket: expect.any(String) }) }));
+  expect(client.auth.resend).toHaveBeenCalled();
+  expect(client.auth.signUp).not.toHaveBeenCalled();
 });
 it('blocks inactive accounts even with valid Google credentials', async () => {
   find.mockResolvedValue({ data: { id: 'new', status: 'inactive' } });
   expect((await call({ action: 'google', ...google })).body.error).toContain('inactive');
   expect(client.auth.signInWithIdToken).not.toHaveBeenCalled();
+});
+it('rejects password enrollment under Google-only policy before reserving or creating', async () => {
+  policy.mode = 'google_only';
+  expect((await call(enroll)).body.error).toContain('verified Google');
+  expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+  expect(rpc).not.toHaveBeenCalledWith('rmc_enrollment_reserve', expect.anything());
+});
+it('accepts verified Google enrollment under Google-only policy', async () => {
+  policy.mode = 'google_only';
+  expect((await call({ ...enroll, ...google })).body.needsEmailConfirmation).toBe(false);
+});
+it('bypasses email confirmation only when the server policy permits it', async () => {
+  policy.mode = 'bypass';
+  const result = await call({ ...enroll, mode: 'required' });
+  expect(result.body.session.access_token).toBe('access');
+  expect(result.body.needsEmailConfirmation).toBe(false);
+  expect(admin.auth.admin.createUser).toHaveBeenCalledWith(expect.objectContaining({ email_confirm: true }));
+  expect(client.auth.resend).not.toHaveBeenCalled();
+});
+it('ignores a client-supplied bypass request under required policy', async () => {
+  expect((await call({ ...enroll, mode: 'bypass' })).body.needsEmailConfirmation).toBe(true);
+  expect(admin.auth.admin.createUser).toHaveBeenCalledWith(expect.objectContaining({ email_confirm: false }));
+});
+it('fails closed if settings are missing', async () => {
+  policy = null;
+  expect((await call(enroll)).body.error).toContain('settings are unavailable');
+  expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+});
+it('does not create an account when custom mail is unconfigured', async () => {
+  policy.email_kind = 'custom';
+  expect((await call(enroll)).body.error).toContain('not configured');
+  expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+});
+it('keeps saved enrollment recoverable if delivery fails', async () => {
+  client.auth.resend.mockResolvedValue({ error: { message: 'SMTP unavailable' } });
+  const result = await call(enroll);
+  expect(result.body.needsEmailConfirmation).toBe(true);
+  expect(result.body.deliveryWarning).toContain('saved');
+  expect(result.body.session).toBeUndefined();
+});
+it('sends an actual custom email and does not expose its verification link', async () => {
+  policy.email_kind = 'custom';
+  admin.auth.admin.generateLink = vi.fn().mockResolvedValue({ data: { properties: { action_link: 'https://auth.test/secret-link' } } });
+  const send = vi.fn().mockResolvedValue(undefined);
+  const response = await enrollmentHandler(admin, client, verify, { ready: true, send })(new Request('https://backend.test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(enroll) }));
+  expect(await response.json()).toEqual({ uid: 'new', needsEmailConfirmation: true });
+  expect(send).toHaveBeenCalledWith(profile.email, 'Confirm', 'Welcome', 'https://auth.test/secret-link');
+  expect(client.auth.resend).not.toHaveBeenCalled();
 });

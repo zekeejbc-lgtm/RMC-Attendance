@@ -178,8 +178,7 @@ async function accounts(action: string, data: unknown) {
 export const appAuth = {
   async resendConfirmation(email: string) {
     requireConfiguration();
-    const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase() });
-    if (error) { console.error('[Supabase] resend confirmation failed', error); throw error; }
+    await googleRequest({ action: 'resend', email: email.trim().toLowerCase() });
   },
   async signIn(identifier: string, password: string) {
   return toast.track(async (progress) => {
@@ -291,7 +290,7 @@ export const appData = {
       const { error } = await supabase.auth.setSession(result.session);
       if (error) throw error;
     }
-    return { uid: result.uid, needsEmailConfirmation: result.needsEmailConfirmation };
+    return { uid: result.uid, needsEmailConfirmation: result.needsEmailConfirmation, deliveryWarning: result.deliveryWarning };
   
   }, 'Submit application');
 },

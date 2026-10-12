@@ -24,10 +24,13 @@ export default function PwaStatus({ children }: { children?: React.ReactNode }) 
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState('');
   const [registration, setRegistration] = useState<ServiceWorkerRegistration>();
-  const { needRefresh: [needRefresh, setNeedRefresh], updateServiceWorker } = useRegisterSW({
+  const { needRefresh: [needRefresh], updateServiceWorker } = useRegisterSW({
     onRegisteredSW: (_url, registeredWorker) => setRegistration(registeredWorker),
     onRegisterError: () => console.warn('Offline setup was unavailable. It will be retried on the next visit.'),
   });
+  useEffect(() => {
+    if (needRefresh && online) void updateServiceWorker(true).catch(() => setUpdateError('Unable to update. Reconnect and try again.'));
+  }, [needRefresh, online, updateServiceWorker]);
   useEffect(() => {
     if (!registration) return;
     let checking = false;
@@ -93,12 +96,11 @@ export default function PwaStatus({ children }: { children?: React.ReactNode }) 
       <RefreshCw aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-brand-900 dark:text-gold-400" />
       <div className="min-w-0 flex-1">
         <h2 id={updateTitleId} className="text-base font-semibold">App update ready</h2>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">An app update is ready. Save your work before reloading.</p>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Installing the latest app version. This page will reload automatically.</p>
       </div>
     </div>
     <div className="mt-4 flex flex-wrap gap-2">
       <Button disabled={!online || updating} onClick={() => void update()}>{updating ? 'Updating…' : 'Reload to update'}</Button>
-      <Button variant="secondary" disabled={updating} onClick={() => setNeedRefresh(false)}>Later</Button>
     </div>
       {updateError && <ErrorNotice error={updateError} operation="Pwa Status"></ErrorNotice>}
   </aside>}

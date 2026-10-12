@@ -12,6 +12,7 @@ fs.writeFileSync('vercel.json', JSON.stringify({
     { source: '/(.*)', headers: Object.entries(headers).map(([key, value]) => ({ key, value })) },
     { source: '/', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
     { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }] },
+    { source: '/version.json', headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }] },
     { source: '/index.html', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
     { source: '/manifest.webmanifest', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
   ],

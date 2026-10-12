@@ -3,6 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { installDiagnostics } from './lib/diagnostics';
+import { checkAppUpdates, isAppRefreshing, watchAppUpdates } from './lib/appUpdates';
 
 installDiagnostics();
 
@@ -15,8 +16,13 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// Check the actual deployment before mounting a possibly cached workspace.
+void checkAppUpdates().catch(() => {}).then(() => {
+  if (isAppRefreshing()) return;
+  watchAppUpdates();
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+});

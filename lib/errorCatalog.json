@@ -602,6 +602,13 @@
     "file": "lib/attendanceCorrections.ts"
   },
   {
+    "code": "ATT-9A7E208A",
+    "message": "Student assignment changed. Refresh the class roster.",
+    "owner": "user",
+    "source": "Student assignment changed. Refresh the class roster.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
+  },
+  {
     "code": "ATT-9DB6FC38",
     "message": "Choose a non-empty PDF, JPG, PNG, or WebP file up to 5 MB.",
     "owner": "user",
@@ -1176,6 +1183,13 @@
     "file": "lib/passkeys.ts"
   },
   {
+    "code": "AUTH-26F2510F",
+    "message": "Invalid or expired authenticator code.",
+    "owner": "user",
+    "source": "Invalid or expired authenticator code.",
+    "file": "lib/supabase.ts"
+  },
+  {
     "code": "AUTH-3348049F",
     "message": "Your session has expired. Sign in again before freezing a scope.",
     "owner": "school",
@@ -1316,6 +1330,13 @@
     "file": "supabase/functions/_shared/login.ts"
   },
   {
+    "code": "AUTH-6E742391",
+    "message": "Unable to check two-factor authentication. Reopen this dialog to retry.",
+    "owner": "user",
+    "source": "Unable to check two-factor authentication. Reopen this dialog to retry.",
+    "file": "components/admin/AdminAppUpdates.tsx"
+  },
+  {
     "code": "AUTH-6EB38CD2",
     "message": "Invalid or expired Google Authenticator code. Try the latest code.",
     "owner": "user",
@@ -1344,6 +1365,13 @@
     "file": "lib/passkeys.ts"
   },
   {
+    "code": "AUTH-792D806A",
+    "message": "Verify your current password again before initiating a refresh.",
+    "owner": "user",
+    "source": "Verify your current password again before initiating a refresh.",
+    "file": "supabase/migrations/20261012145703_app_refresh.sql"
+  },
+  {
     "code": "AUTH-82FD2676",
     "message": "No matching passkey was found. Sign in with your password or Google, then add a passkey in My Profile.",
     "owner": "user",
@@ -1363,6 +1391,13 @@
     "owner": "unknown",
     "source": "Unable to update two-factor authentication.",
     "file": "views/StudentProfile.tsx"
+  },
+  {
+    "code": "AUTH-911ED2BE",
+    "message": "An active, unfrozen authenticated account is required.",
+    "owner": "school",
+    "source": "An active, unfrozen authenticated account is required.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
   },
   {
     "code": "AUTH-9A47EF90",
@@ -1673,6 +1708,13 @@
     "file": "views/LandingPage.tsx"
   },
   {
+    "code": "ENROLL-12962CF0",
+    "message": "Custom confirmation email delivery is not configured. Contact your school administrator.",
+    "owner": "school",
+    "source": "Custom confirmation email delivery is not configured. Contact your school administrator.",
+    "file": "supabase/functions/_shared/enrollment.ts"
+  },
+  {
     "code": "ENROLL-14F8107A",
     "message": "Choose a profile picture before registering.",
     "owner": "user",
@@ -1705,6 +1747,13 @@
     "message": "Unable to check enrollment status.",
     "owner": "user",
     "source": "Unable to check enrollment status.",
+    "file": "views/LandingPage.tsx"
+  },
+  {
+    "code": "ENROLL-281B46DE",
+    "message": "Sign up with Google to continue enrollment.",
+    "owner": "user",
+    "source": "Sign up with Google to continue enrollment.",
     "file": "views/LandingPage.tsx"
   },
   {
@@ -1743,11 +1792,32 @@
     "file": "supabase/migrations/20260920035948_enrollment_validation.sql"
   },
   {
+    "code": "ENROLL-38341ED8",
+    "message": "Confirmation email delivery failed.",
+    "owner": "user",
+    "source": "Confirmation email delivery failed.",
+    "file": "supabase/functions/rmc-enroll/index.ts"
+  },
+  {
     "code": "ENROLL-38A1002D",
     "message": "You already have an account. Open your application status or sign out to register another student.",
     "owner": "user",
     "source": "You already have an account. Open your application status or sign out to register another student.",
     "file": "lib/backend.ts"
+  },
+  {
+    "code": "ENROLL-51BC3855",
+    "message": "Enrollment requires a verified Google account. Choose Sign up with Google.",
+    "owner": "user",
+    "source": "Enrollment requires a verified Google account. Choose Sign up with Google.",
+    "file": "supabase/functions/_shared/enrollment.ts"
+  },
+  {
+    "code": "ENROLL-531D2AF4",
+    "message": "Confirm your email address using the link in your inbox first.",
+    "owner": "user",
+    "source": "Confirm your email address using the link in your inbox first.",
+    "file": "components/EnrollmentEmailConfirmation.tsx"
   },
   {
     "code": "ENROLL-565FBC9F",
@@ -1783,6 +1853,20 @@
     "owner": "unknown",
     "source": "Unable to upload document.",
     "file": "views/RegisterStatus.tsx"
+  },
+  {
+    "code": "ENROLL-67B18005",
+    "message": "Verify your current password again.",
+    "owner": "user",
+    "source": "Verify your current password again.",
+    "file": "supabase/migrations/20261012151908_enrollment_confirmation.sql"
+  },
+  {
+    "code": "ENROLL-68321DE7",
+    "message": "Choose an enrolled student with an assigned class.",
+    "owner": "user",
+    "source": "Choose an enrolled student with an assigned class.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
   },
   {
     "code": "ENROLL-6A431FDD",
@@ -1834,6 +1918,13 @@
     "file": "supabase/functions/rmc-enroll/index.ts"
   },
   {
+    "code": "ENROLL-896D672D",
+    "message": "Sign in to continue enrollment.",
+    "owner": "user",
+    "source": "Sign in to continue enrollment.",
+    "file": "supabase/functions/_shared/enrollment.ts"
+  },
+  {
     "code": "ENROLL-8C39BC35",
     "message": "Choose an enrolled student.",
     "owner": "user",
@@ -1866,6 +1957,13 @@
     "message": "Choose your Google account again.",
     "owner": "user",
     "source": "Choose your Google account again.",
+    "file": "supabase/functions/_shared/enrollment.ts"
+  },
+  {
+    "code": "ENROLL-A0E21AD5",
+    "message": "Enrollment confirmation settings are unavailable. Try again later.",
+    "owner": "user",
+    "source": "Enrollment confirmation settings are unavailable. Try again later.",
     "file": "supabase/functions/_shared/enrollment.ts"
   },
   {
@@ -1925,6 +2023,27 @@
     "file": "supabase/functions/rmc-enroll/index.ts"
   },
   {
+    "code": "ENROLL-D483C6FB",
+    "message": "Enter your enrollment email address.",
+    "owner": "user",
+    "source": "Enter your enrollment email address.",
+    "file": "supabase/functions/_shared/enrollment.ts"
+  },
+  {
+    "code": "ENROLL-D58A9E0A",
+    "message": "Unable to check email confirmation.",
+    "owner": "user",
+    "source": "Unable to check email confirmation.",
+    "file": "components/EnrollmentEmailConfirmation.tsx"
+  },
+  {
+    "code": "ENROLL-D62B07B7",
+    "message": "An enrolled authenticator is required to verify this action.",
+    "owner": "user",
+    "source": "An enrolled authenticator is required to verify this action.",
+    "file": "lib/supabase.ts"
+  },
+  {
     "code": "ENROLL-D85DC4B0",
     "message": "Enrollment is frozen.",
     "owner": "school",
@@ -1937,6 +2056,13 @@
     "owner": "user",
     "source": "Use an enrollment key of at least 8 characters.",
     "file": "supabase/migrations/20260919102901_production_backend.sql"
+  },
+  {
+    "code": "ENROLL-DA076DBF",
+    "message": "Only an active Super Admin can change enrollment confirmation.",
+    "owner": "user",
+    "source": "Only an active Super Admin can change enrollment confirmation.",
+    "file": "supabase/migrations/20261012151908_enrollment_confirmation.sql"
   },
   {
     "code": "ENROLL-DA6554C2",
@@ -1967,6 +2093,13 @@
     "file": "supabase/migrations/20260923170000_enrollment_resubmission_workflow.sql"
   },
   {
+    "code": "ENROLL-ECBE45F0",
+    "message": "Unable to update enrollment confirmation. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues.",
+    "owner": "unknown",
+    "source": "Unable to update enrollment confirmation.",
+    "file": "components/admin/AdminEnrollmentConfirmation.tsx"
+  },
+  {
     "code": "ENROLL-F0F5B56C",
     "message": "Name is required.",
     "owner": "user",
@@ -1993,6 +2126,13 @@
     "owner": "user",
     "source": "Unable to load the agreement. Please retry before continuing.",
     "file": "components/EnrollmentPrivacyAgreement.tsx"
+  },
+  {
+    "code": "ENROLL-FC91D1EC",
+    "message": "Enrollment settings could not be loaded. Reload this page before signing up.",
+    "owner": "user",
+    "source": "Enrollment settings could not be loaded. Reload this page before signing up.",
+    "file": "views/LandingPage.tsx"
   },
   {
     "code": "ENROLL-FD121586",
@@ -2142,6 +2282,13 @@
     "file": "supabase/migrations/20260928161758_ceremony_scheduling.sql"
   },
   {
+    "code": "EVENT-2CB450E0",
+    "message": "Invalid recipient group.",
+    "owner": "user",
+    "source": "Invalid recipient group.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
+  },
+  {
     "code": "EVENT-2F83F4BF",
     "message": "Class overrides must be within your assigned ceremony scope.",
     "owner": "school",
@@ -2210,6 +2357,20 @@
     "owner": "user",
     "source": "Wait for the event to end or cancel it.",
     "file": "supabase/migrations/20260919102901_production_backend.sql"
+  },
+  {
+    "code": "EVENT-45706C73",
+    "message": "Choose a future start and a valid end.",
+    "owner": "user",
+    "source": "Choose a future start and a valid end.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
+  },
+  {
+    "code": "EVENT-492F54C0",
+    "message": "Recipients must be within the selected school unit.",
+    "owner": "user",
+    "source": "Recipients must be within the selected school unit.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
   },
   {
     "code": "EVENT-4B9CBAB7",
@@ -2301,6 +2462,13 @@
     "owner": "user",
     "source": "Review ceremony exemptions and class windows individually before rescheduling.",
     "file": "supabase/migrations/20261009121805_holiday_suspensions.sql"
+  },
+  {
+    "code": "EVENT-618EC3F1",
+    "message": "School unit outside your assigned scope.",
+    "owner": "school",
+    "source": "School unit outside your assigned scope.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
   },
   {
     "code": "EVENT-627E01BF",
@@ -2408,6 +2576,13 @@
     "file": "supabase/migrations/20260928165929_class_schedules_exemptions.sql"
   },
   {
+    "code": "EVENT-91548C90",
+    "message": "Only upcoming schedules can be updated.",
+    "owner": "user",
+    "source": "Only upcoming schedules can be updated.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
+  },
+  {
     "code": "EVENT-93ABD601",
     "message": "Sanction values must be zero or greater.",
     "owner": "user",
@@ -2420,6 +2595,13 @@
     "owner": "user",
     "source": "Sanctions require a nonnegative value and hours or minutes.",
     "file": "supabase/migrations/20260928154613_validate_event_configuration.sql"
+  },
+  {
+    "code": "EVENT-94F69A0C",
+    "message": "Choose a school unit within your assigned scope.",
+    "owner": "school",
+    "source": "Choose a school unit within your assigned scope.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
   },
   {
     "code": "EVENT-956CD621",
@@ -2471,6 +2653,13 @@
     "file": "components/events/ActivityForm.tsx"
   },
   {
+    "code": "EVENT-A7E46EDD",
+    "message": "Choose 1 to 100 recipient groups.",
+    "owner": "user",
+    "source": "Choose 1 to 100 recipient groups.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
+  },
+  {
     "code": "EVENT-AA2350DF",
     "message": "Volunteer merit must be between 0.01 and 24 hours.",
     "owner": "user",
@@ -2483,6 +2672,13 @@
     "owner": "school",
     "source": "Exempt students must be within your assigned ceremony scope.",
     "file": "supabase/migrations/20260928161758_ceremony_scheduling.sql"
+  },
+  {
+    "code": "EVENT-AB219E04",
+    "message": "Schedule unavailable or outside your scope.",
+    "owner": "school",
+    "source": "Schedule unavailable or outside your scope.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
   },
   {
     "code": "EVENT-ABE65D64",
@@ -2518,6 +2714,13 @@
     "owner": "user",
     "source": "The form is not ready to save. Go back to check the configuration and your assigned unit.",
     "file": "components/events/ActivityForm.tsx"
+  },
+  {
+    "code": "EVENT-B72073E7",
+    "message": "Schedule management permission required.",
+    "owner": "school",
+    "source": "Schedule management permission required.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
   },
   {
     "code": "EVENT-BA901CD2",
@@ -2639,6 +2842,13 @@
     "file": "supabase/migrations/20260928161758_ceremony_scheduling.sql"
   },
   {
+    "code": "EVENT-DE0BFF1C",
+    "message": "Completed schedules cannot be cancelled.",
+    "owner": "user",
+    "source": "Completed schedules cannot be cancelled.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
+  },
+  {
     "code": "EVENT-DE4B721B",
     "message": "The event type and general event cannot be changed after creation.",
     "owner": "user",
@@ -2651,6 +2861,13 @@
     "owner": "user",
     "source": "Select an available general event.",
     "file": "supabase/migrations/20260930173427_general_event_groups.sql"
+  },
+  {
+    "code": "EVENT-E3614659",
+    "message": "Choose recipients.",
+    "owner": "user",
+    "source": "Choose recipients.",
+    "file": "supabase/migrations/20261011223109_informational_calendar_schedules.sql"
   },
   {
     "code": "EVENT-E3CE2975",
@@ -2814,6 +3031,13 @@
     "file": "components/members/BulkMemberImportModal.tsx"
   },
   {
+    "code": "FILE-42685D99",
+    "message": "Could not read this file. Save it to your device and choose it again.",
+    "owner": "user",
+    "source": "Could not read this file. Save it to your device and choose it again.",
+    "file": "lib/fileUploads.ts"
+  },
+  {
     "code": "FILE-444A2BBE",
     "message": "Add at least one person to the CSV file.",
     "owner": "user",
@@ -2961,6 +3185,13 @@
     "file": "lib/googleDrive.ts"
   },
   {
+    "code": "FILE-C4D25854",
+    "message": "Choose a file of the selected value MB or smaller.",
+    "owner": "user",
+    "source": "Choose a file of {value} MB or smaller.",
+    "file": "lib/fileUploads.ts"
+  },
+  {
     "code": "FILE-C89414CC",
     "message": "Your new photo is saved, but the old copy could not be removed from Drive.",
     "owner": "user",
@@ -3008,6 +3239,13 @@
     "owner": "user",
     "source": "Unsupported profile field.",
     "file": "supabase/migrations/20261009014006_student_information_requests.sql"
+  },
+  {
+    "code": "FILE-EA485C04",
+    "message": "This file is empty. Choose another file.",
+    "owner": "user",
+    "source": "This file is empty. Choose another file.",
+    "file": "lib/fileUploads.ts"
   },
   {
     "code": "FILE-F1B5E970",
@@ -3318,6 +3556,13 @@
     "file": "supabase/migrations/20260928163625_activity_completion_and_merit.sql"
   },
   {
+    "code": "RULE-06C04709",
+    "message": "This student account is frozen.",
+    "owner": "school",
+    "source": "This student account is frozen.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
+  },
+  {
     "code": "RULE-0740D09C",
     "message": "Submit an information request for OSSA or admin approval.",
     "owner": "user",
@@ -3381,11 +3626,25 @@
     "file": "views/LandingPage.tsx"
   },
   {
+    "code": "RULE-1158EC80",
+    "message": "Unexpected command gateway. Review before applying the designation fix.",
+    "owner": "user",
+    "source": "Unexpected command gateway. Review before applying the designation fix.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
+  },
+  {
     "code": "RULE-12A518DC",
     "message": "Only an administrator can create administrator accounts.",
     "owner": "school",
     "source": "Only an administrator can create administrator accounts.",
     "file": "supabase/migrations/20260924201000_allow_admin_account_provisioning.sql"
+  },
+  {
+    "code": "RULE-12ADF7E1",
+    "message": "Type initiate exactly to confirm.",
+    "owner": "user",
+    "source": "Type initiate exactly to confirm.",
+    "file": "lib/supabase.ts"
   },
   {
     "code": "RULE-1489A1AE",
@@ -3591,6 +3850,13 @@
     "file": "supabase/migrations/20261009153009_clearance_certificates.sql"
   },
   {
+    "code": "RULE-34A82508",
+    "message": "Unable to initiate refresh. Try again.",
+    "owner": "user",
+    "source": "Unable to initiate refresh. Try again.",
+    "file": "components/admin/AdminAppUpdates.tsx"
+  },
+  {
     "code": "RULE-355166C9",
     "message": "Invalid role assignment.",
     "owner": "user",
@@ -3673,6 +3939,13 @@
     "owner": "user",
     "source": "Unable to update. Reconnect and try again.",
     "file": "components/ui/PwaStatus.tsx"
+  },
+  {
+    "code": "RULE-47986376",
+    "message": "Choose Student or Mayor.",
+    "owner": "user",
+    "source": "Choose Student or Mayor.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
   },
   {
     "code": "RULE-482991B5",
@@ -3773,11 +4046,25 @@
     "file": "supabase/migrations/20260919102901_production_backend.sql"
   },
   {
+    "code": "RULE-5E91FD40",
+    "message": "Invalid recipient role.",
+    "owner": "user",
+    "source": "Invalid recipient role.",
+    "file": "supabase/migrations/20261011224236_role_recipient_groups.sql"
+  },
+  {
     "code": "RULE-5E961B26",
     "message": "Excuses are unavailable for this activity.",
     "owner": "user",
     "source": "Excuses are unavailable for this activity.",
     "file": "lib/excusePolicy.ts"
+  },
+  {
+    "code": "RULE-60C6AE6B",
+    "message": "Verify your current two-factor code again.",
+    "owner": "user",
+    "source": "Verify your current two-factor code again.",
+    "file": "supabase/migrations/20261012145703_app_refresh.sql"
   },
   {
     "code": "RULE-61C4A074",
@@ -4004,6 +4291,13 @@
     "file": "supabase/migrations/20260928163625_activity_completion_and_merit.sql"
   },
   {
+    "code": "RULE-88E342A1",
+    "message": "Choose an active Student or Mayor.",
+    "owner": "user",
+    "source": "Choose an active Student or Mayor.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
+  },
+  {
     "code": "RULE-8C6DD66D",
     "message": "The latest application data could not be loaded. Displayed record counts may be outdated.",
     "owner": "user",
@@ -4165,6 +4459,13 @@
     "file": "components/admin/AdminFreezeView.tsx"
   },
   {
+    "code": "RULE-A56918D6",
+    "message": "A refresh was just initiated. Wait 30 seconds before trying again.",
+    "owner": "user",
+    "source": "A refresh was just initiated. Wait 30 seconds before trying again.",
+    "file": "supabase/migrations/20261012145703_app_refresh.sql"
+  },
+  {
     "code": "RULE-A5E51281",
     "message": "Select a section or block.",
     "owner": "user",
@@ -4249,6 +4550,13 @@
     "file": "components/members/ProfileRequests.tsx"
   },
   {
+    "code": "RULE-B57E0567",
+    "message": "The current Mayor account is frozen.",
+    "owner": "school",
+    "source": "The current Mayor account is frozen.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
+  },
+  {
     "code": "RULE-B666E845",
     "message": "Name, student ID, and a valid username are required.",
     "owner": "user",
@@ -4289,6 +4597,13 @@
     "owner": "user",
     "source": "This student account is no longer eligible.",
     "file": "supabase/migrations/20261009014006_student_information_requests.sql"
+  },
+  {
+    "code": "RULE-BC0E72C8",
+    "message": "Only an active administrator can initiate an app refresh.",
+    "owner": "school",
+    "source": "Only an active administrator can initiate an app refresh.",
+    "file": "supabase/migrations/20261012145703_app_refresh.sql"
   },
   {
     "code": "RULE-BC540609",
@@ -4359,6 +4674,13 @@
     "owner": "user",
     "source": "This service is temporarily unavailable. Please try again shortly.",
     "file": "supabase/functions/_shared/rateLimit.ts"
+  },
+  {
+    "code": "RULE-CABFF0E5",
+    "message": "Choose a section or block.",
+    "owner": "user",
+    "source": "Choose a section or block.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
   },
   {
     "code": "RULE-CEAE2A6C",
@@ -4499,6 +4821,13 @@
     "owner": "user",
     "source": "Core role not found.",
     "file": "supabase/migrations/20260924180000_allow_core_role_permission_updates.sql"
+  },
+  {
+    "code": "RULE-EE9274CA",
+    "message": "Choose the student's current class.",
+    "owner": "user",
+    "source": "Choose the student's current class.",
+    "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
   },
   {
     "code": "RULE-EEA18BFD",

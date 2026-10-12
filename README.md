@@ -259,6 +259,16 @@ Validation: run `npm test -- tests/rate-limit-edge.test.ts tests/login-edge.test
 
 References: [Supabase API security](https://supabase.com/docs/guides/api/securing-your-api), [Vercel WAF rate limiting](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting), [Vercel Bot Management](https://vercel.com/docs/bot-management).
 
+## Automatic app updates and admin refresh
+
+Every production build emits a unique `version.json` outside the service worker cache. The app checks it before mounting, then every minute while visible, on focus, and on reconnect. Vercel and Netlify configurations prevent caching that endpoint and revalidate HTML. A GitHub push must successfully deploy through your hosting provider before clients can receive its changes.
+
+Administrators can open **Admin Controls → App Updates → Refresh everyone now**. Confirmation requires the current password, the authenticator code when enrolled, and the exact word `initiate`. A temporary Auth session performs verification without replacing the active session. The database independently enforces the active `admin` role, fresh password/MFA claims, session existence, account freezes, and a 30-second cooldown, and writes an audit entry without credentials. Custom roles and OSSA cannot initiate refreshes.
+
+The public release singleton sends a Supabase Realtime update to signed-in and signed-out clients. Clients re-read the authoritative revision before refreshing; polling recovers missed events. Refresh unregisters the old app worker, removes only its Workbox caches, and navigates with a cache-busting query while preserving the current route, authentication storage, and saved offline attendance. Unsaved forms can be lost. Offline and suspended clients refresh after reconnecting or becoming active. Older clients from before this feature need to receive this first deployment through their existing update flow once; code cannot remotely alter a browser that has not loaded it.
+
+Database migration: `supabase/migrations/20261012145703_app_refresh.sql`. Verify permissions and authentication checks with `supabase/tests/app_refresh.sql` (all changes roll back and no real refresh is sent). Run `npx vitest run lib/appUpdates.test.ts lib/supabase.test.ts components/admin/AdminAppUpdates.test.tsx`, then `npm run build` and `node scripts/browser-app-updates-check.mjs` against a preview server at port 4178. The browser check simulates a release signal without refreshing production users.
+
 ## Public homepage and legal pages
 
 The homepage uses plain language and links to four public pages: `/#/privacy-policy`, `/#/data-deletion`, `/#/data-privacy-agreement`, and `/#/terms-of-service`. They remain readable without signing in, including for signed-in users. The registration dialog opens the notices in separate tabs to preserve the application in progress. The Organizations shortcut has been removed from the homepage navigation.

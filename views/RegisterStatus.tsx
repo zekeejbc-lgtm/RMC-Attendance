@@ -2,6 +2,7 @@ import { selectUploadFile } from '../lib/fileUploads';
 import { errorMessage } from '../lib/errors';
 import ErrorNotice from '../components/ui/ErrorNotice';
 import { useEffect, useState } from 'react';
+import { CheckCircle2, Clock3, FileText, GraduationCap, Info, LogOut, Maximize2, ShieldCheck, UploadCloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
 import Button from '../components/ui/Button';
@@ -15,6 +16,7 @@ import ProfileAvatar from '../components/ui/ProfileAvatar';
 import CountdownBar from '../components/ui/CountdownBar';
 import { claimApprovalNotice } from '../lib/approvalNotice';
 import FrozenAccess from '../components/admin/FrozenAccess';
+import { Modal } from '../components/ui/Modal';
 
 const fieldLabels: Record<string, string> = {
   name: 'Full name', student_id: 'Student ID', guardian_name: 'Guardian name',
@@ -27,6 +29,7 @@ export default function RegisterStatus() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState<{ src: string; title: string; alt: string } | null>(null);
   const [approvalReady, setApprovalReady] = useState(false);
   const [approvalRetry, setApprovalRetry] = useState(0);
   const application = appData.getApplications().find(a => a.id === user?.uid);
@@ -110,33 +113,103 @@ export default function RegisterStatus() {
     : canResubmit ? application?.rejection_reason || 'Update your application and submit it again.'
       : 'Your school officer will review your admission details and supporting documents.';
 
-  return <div className="min-h-dvh bg-brand-900 p-5 pt-20">
-    <div className="absolute top-4 right-4"><ThemeToggle /></div>
-    <main className="app-surface mx-auto max-w-lg space-y-5 p-6">
-      <h1 className="text-2xl font-bold">{heading}</h1>
-      <p className="text-sm text-slate-500 [overflow-wrap:anywhere]">{description}</p>
-      {profile && approvalReady && <CountdownBar seconds={8} label="Opening your dashboard" onComplete={() => navigate('/dashboard', { replace: true })} />}
-      {application && <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2"><div><dt className="text-slate-500">Status</dt><dd className="font-bold capitalize">{application.status === 'bounced' ? 'Returned for clarification' : application.status}</dd></div><div><dt className="text-slate-500">Name</dt><dd>{application.form_data.name}</dd></div><div><dt className="text-slate-500">Student ID</dt><dd>{application.form_data.student_id}</dd></div><div><dt className="text-slate-500">School unit</dt><dd>{schoolData?.department || schoolData?.type || '—'}</dd></div><div><dt className="text-slate-500">Program / track</dt><dd>{schoolData?.program || schoolData?.track || schoolData?.strand || '—'}</dd></div><div><dt className="text-slate-500">Level</dt><dd>{schoolData?.level || '—'}</dd></div><div><dt className="text-slate-500">Section</dt><dd>{schoolData?.section || '—'}</dd></div></dl>}
+  const statusLabel = profile ? 'Approved'
+    : application?.status === 'bounced' ? 'Action needed'
+      : application?.status === 'pending' ? 'Pending review'
+        : application?.status === 'rejected' ? 'Rejected'
+          : application?.status === 'deleted' ? 'Deleted' : 'Not submitted';
+  const StatusIcon = profile ? CheckCircle2 : canResubmit ? Info : Clock3;
+  const statusStyle = profile
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+    : canResubmit
+      ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+      : 'border-brand-200 bg-brand-50 text-brand-800 dark:border-brand-800 dark:bg-brand-950/40 dark:text-brand-200';
+  const details = application ? [
+    ['Full name', application.form_data.name],
+    ['Student ID', application.form_data.student_id],
+    ['School unit', schoolData?.department || schoolData?.type],
+    ['Program / track', schoolData?.program || schoolData?.track || schoolData?.strand],
+    ['Level', schoolData?.level],
+    ['Section', schoolData?.section],
+  ] : [];
 
-      {application && ['bounced', 'rejected'].includes(application.status) && <section className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-        <div><h2 className="font-bold">Update your application</h2><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Review your details, make corrections, and submit the application again.</p></div>
-        {(application.status === 'rejected' ? Object.keys(corrections) : clarificationFields.filter(field => field in corrections)).map(field => <label className="block text-sm font-semibold" key={field}>{fieldLabels[field]}
-          <input className="app-control mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 dark:border-slate-700 dark:bg-slate-900" placeholder={field === 'student_id' ? 'YYYY-XXXXXL' : undefined} value={corrections[field as keyof typeof corrections]} onChange={event => setCorrections(current => ({ ...current, [field]: event.target.value }))} />
-        </label>)}
-      </section>}
+  return <div className="auth-challenge-background min-h-dvh px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+    <header className="mx-auto mb-6 flex max-w-5xl items-center justify-between gap-3 sm:mb-8">
+      <div className="flex min-w-0 items-center gap-3">
+        <button type="button" aria-label="View app logo" aria-haspopup="dialog" className="shrink-0 rounded-full" onClick={() => setImagePreview({ src: `${import.meta.env.BASE_URL}academic-seal-transparent.png`, title: 'App logo', alt: 'IARS Academic Seal' })}>
+          <img src={`${import.meta.env.BASE_URL}academic-seal-transparent.png`} alt="IARS Academic Seal" className="h-11 w-11 rounded-full bg-white object-contain p-0.5 shadow-sm ring-2 ring-gold-400/60 sm:h-12 sm:w-12" />
+        </button>
+        <div className="min-w-0"><p className="text-sm font-bold text-slate-900 dark:text-slate-100">Institution Attendance &amp; Records</p><p className="text-xs text-slate-600 dark:text-slate-400">Student admission</p></div>
+      </div>
+      <div className="shrink-0"><ThemeToggle /></div>
+    </header>
+    <main className="mx-auto max-w-5xl space-y-5 [overflow-wrap:anywhere]" aria-labelledby="admission-heading">
+      <section className="app-surface p-5 sm:p-7">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${statusStyle}`}><StatusIcon aria-hidden="true" size={25} /></span>
+          <div className="min-w-0 flex-1">
+            <span className={`mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold ${statusStyle}`}><span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />{statusLabel}</span>
+            <h1 id="admission-heading" className="text-2xl font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">{heading}</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 dark:text-slate-300">{application || profile ? description : 'No admission application is linked to this account. Return to registration to complete your details.'}</p>
+            {application?.status === 'pending' && !profile && <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400"><ShieldCheck size={16} className="mt-0.5 shrink-0" aria-hidden="true" />You can return to this page to check your status. If a reviewer requests changes, they will appear here.</p>}
+            {profile && approvalReady && <div className="mt-5"><CountdownBar seconds={8} label="Opening your dashboard" onComplete={() => navigate('/dashboard', { replace: true })} /></div>}
+          </div>
+        </div>
+      </section>
 
-      {application && application.status !== 'approved' && <section className="space-y-4">
-        <h2 className="font-bold">{application.status === 'bounced' ? 'Requested documents' : 'Admission documents'}</h2>
-        <p className="text-sm text-slate-500">Profile photo is required. Additional documents appear only when requested by a reviewer.</p>
-        {([['photo', 'Profile photo'], ['id_front', 'Student ID front'], ['id_back', 'Student ID back']] as const)
-          .filter(([kind]) => kind === 'photo' || (application.status === 'bounced' && clarificationFields.includes(kind)))
-          .map(([kind, label]) => <div key={kind} className="block text-sm">{kind === 'photo' && savedProfilePhoto && !photoNeedsCorrection ? <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700"><p className="text-xs font-semibold text-slate-500">Submitted profile photo</p><ProfileAvatar src={savedProfilePhoto} alt="Submitted profile" className="mt-2 h-28 w-28 rounded-xl object-cover" /><a href={savedProfilePhoto} target="_blank" rel="noreferrer" className="mt-2 block text-xs underline">Open submitted photo</a></div> : <label>{photoNeedsCorrection ? 'Replace profile photo' : label}<input className="mt-2 block w-full" type="file" accept={kind === 'photo' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,application/pdf'} disabled={uploading} onChange={event => void upload(selectUploadFile(event.currentTarget), kind)} /></label>}{kind !== 'photo' && application.documents?.[kind] && <button type="button" className="mt-1 underline" onClick={async () => { const url = await documentUrl(application.documents![kind]); window.open(url, '_blank', 'noopener,noreferrer'); }}>View uploaded document</button>}</div>)}
-      </section>}
-      {error && <ErrorNotice error={error} operation="Register Status"></ErrorNotice>}
-      {uploading && <p role="status">Uploading…</p>}
-      {profile && <Button onClick={() => navigate('/dashboard', { replace: true })}>Open dashboard</Button>}
-      {canResubmit && <Button onClick={resubmit}>{application?.status === 'bounced' ? 'Submit clarifications' : 'Reapply with updated details'}</Button>}
-      <Button variant="secondary" onClick={async () => { await appAuth.signOut(); navigate('/login'); }}>Sign out</Button>
+      {application && <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-5">
+          <section className="app-surface p-5 sm:p-6" aria-labelledby="application-details-heading">
+            <div className="mb-5 flex items-center gap-2.5"><GraduationCap size={20} className="shrink-0 text-brand-600 dark:text-brand-300" aria-hidden="true" /><h2 id="application-details-heading" className="text-base font-bold">Application details</h2></div>
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-5 text-sm sm:grid-cols-2">
+              {details.map(([label, value]) => <div key={label} className="min-w-0 border-t border-slate-200 pt-3 dark:border-slate-700"><dt className="text-xs font-semibold text-slate-600 dark:text-slate-400">{label}</dt><dd className="mt-1.5 font-semibold leading-relaxed text-slate-900 dark:text-slate-100">{value || '—'}</dd></div>)}
+            </dl>
+          </section>
+          {['bounced', 'rejected'].includes(application.status) && <section className="app-surface space-y-4 p-5 sm:p-6" aria-labelledby="corrections-heading">
+            <div><h2 id="corrections-heading" className="flex items-center gap-2 text-base font-bold"><Info aria-hidden="true" size={20} className="shrink-0 text-amber-600 dark:text-amber-400" />Update your application</h2><p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Review your details, make corrections, and submit the application again.</p></div>
+            {(application.status === 'rejected' ? Object.keys(corrections) : clarificationFields.filter(field => field in corrections)).map(field => <label className="block text-sm font-semibold" key={field}>{fieldLabels[field]}
+              <input className="app-control mt-2 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 dark:border-slate-700 dark:bg-slate-900" placeholder={field === 'student_id' ? 'YYYY-XXXXXL' : undefined} value={corrections[field as keyof typeof corrections]} onChange={event => setCorrections(current => ({ ...current, [field]: event.target.value }))} />
+            </label>)}
+          </section>}
+        </div>
+
+        {application.status !== 'approved' && <section className="app-surface min-w-0 space-y-5 p-5 sm:p-6" aria-labelledby="admission-documents-heading">
+          <div><div className="flex items-center gap-2.5"><FileText size={20} className="shrink-0 text-brand-600 dark:text-brand-300" aria-hidden="true" /><h2 id="admission-documents-heading" className="text-base font-bold">{application.status === 'bounced' ? 'Requested documents' : 'Admission documents'}</h2></div>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">Profile photo is required. Additional documents appear only when requested by a reviewer.</p>
+          </div>
+          {([['photo', 'Profile photo'], ['id_front', 'Student ID front'], ['id_back', 'Student ID back']] as const)
+            .filter(([kind]) => kind === 'photo' || (application.status === 'bounced' && clarificationFields.includes(kind)))
+            .map(([kind, label]) => <div key={kind} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-sm dark:border-slate-700 dark:bg-slate-900/40">
+              {kind === 'photo' && savedProfilePhoto && !photoNeedsCorrection ? <div>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><p className="font-semibold">Submitted profile photo</p><span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 aria-hidden="true" size={14} />Uploaded</span></div>
+                <button type="button" aria-label="View submitted profile photo" aria-haspopup="dialog" className="group relative block rounded-xl" onClick={() => setImagePreview({ src: savedProfilePhoto, title: 'Submitted profile photo', alt: 'Full submitted profile photo' })}>
+                  <ProfileAvatar src={savedProfilePhoto} alt="Submitted profile" className="h-28 w-28 rounded-xl border border-slate-200 object-cover dark:border-slate-700" />
+                  <span className="absolute bottom-2 right-2 rounded-lg bg-slate-950/70 p-1.5 text-white transition-colors group-hover:bg-brand-700"><Maximize2 size={16} aria-hidden="true" /></span>
+                </button>
+                <button type="button" aria-haspopup="dialog" onClick={() => setImagePreview({ src: savedProfilePhoto, title: 'Submitted profile photo', alt: 'Full submitted profile photo' })} className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-brand-700 underline underline-offset-4 dark:text-brand-300">Open submitted photo</button>
+              </div> : <label className="block min-w-0">
+                <span className="flex items-center gap-2 font-semibold"><UploadCloud size={18} className="shrink-0 text-slate-500" aria-hidden="true" />{photoNeedsCorrection ? 'Replace profile photo' : label}</span>
+                <span className="mt-2 block text-xs leading-relaxed text-slate-600 dark:text-slate-400">{kind === 'photo' ? 'JPG, PNG or WebP' : 'JPG, PNG, WebP or PDF'}</span>
+                <input className="mt-3 block min-h-11 w-full min-w-0 max-w-full rounded-lg text-xs text-slate-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-brand-100 file:px-3 file:py-3 file:font-semibold file:text-brand-800 disabled:opacity-60 dark:text-slate-300 dark:file:bg-brand-900 dark:file:text-brand-100" type="file" aria-label={photoNeedsCorrection && kind === 'photo' ? 'Replace profile photo' : label} accept={kind === 'photo' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,application/pdf'} disabled={uploading} onChange={event => void upload(selectUploadFile(event.currentTarget), kind)} />
+              </label>}
+              {kind !== 'photo' && application.documents?.[kind] && <button type="button" className="mt-3 min-h-11 text-sm font-semibold text-brand-700 underline underline-offset-4 dark:text-brand-300" onClick={async () => { const url = await documentUrl(application.documents![kind]); window.open(url, '_blank', 'noopener,noreferrer'); }}>View uploaded document</button>}
+            </div>)}
+        </section>}
+      </div>}
+      {error && <ErrorNotice error={error} operation="Register Status" />}
+      {uploading && <p role="status" className="text-sm font-semibold text-brand-700 dark:text-brand-300">Uploading…</p>}
+      <footer className="app-surface flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">{canResubmit ? 'Save your corrections by submitting your application again.' : profile ? 'Your dashboard is ready. Continue to access your account.' : 'Your application details stay saved when you sign out.'}</p>
+        <div className="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:shrink-0">
+          {profile && <Button onClick={() => navigate('/dashboard', { replace: true })}>Open dashboard</Button>}
+          {canResubmit && <Button disabled={uploading} className="[&>span]:whitespace-normal" onClick={resubmit}>{application?.status === 'bounced' ? 'Submit clarifications' : 'Reapply with updated details'}</Button>}
+          {!application && !profile && <Button onClick={() => navigate('/register')}>Complete registration</Button>}
+          <Button variant="secondary" onClick={async () => { await appAuth.signOut(); navigate('/login'); }}><LogOut size={16} aria-hidden="true" />Sign out</Button>
+        </div>
+      </footer>
     </main>
+    <Modal open={Boolean(imagePreview)} onClose={() => setImagePreview(null)} title={imagePreview?.title || 'Image preview'} size="xl" bodyClassName="min-h-0 min-w-0 overflow-auto bg-slate-50 p-4 dark:bg-slate-900 sm:p-6">
+      {imagePreview && <ProfileAvatar src={imagePreview.src} alt={imagePreview.alt} className="mx-auto block h-auto max-h-[calc(100dvh-12rem)] w-auto max-w-full rounded-lg object-contain" />}
+    </Modal>
   </div>;
 }

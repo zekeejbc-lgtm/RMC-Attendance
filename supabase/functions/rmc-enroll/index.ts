@@ -14,5 +14,14 @@ Deno.serve(async (req: Request) => {
     const { payload } = await jwtVerify(credential, keys, { audience, issuer: ['https://accounts.google.com', 'accounts.google.com'], algorithms: ['RS256'], requiredClaims: ['exp', 'sub', 'email', 'nonce'] });
     if (payload.email_verified !== true || typeof payload.email !== 'string' || payload.nonce !== await sha256(nonce)) throw new Error('Google email verification failed. Choose your account again.');
     return payload.email.trim().toLowerCase();
+  }, {
+    ready: Boolean(Deno.env.get('ENROLLMENT_RESEND_API_KEY') && Deno.env.get('ENROLLMENT_EMAIL_FROM')),
+    send: async (email, subject, body, link) => {
+      const result = await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('ENROLLMENT_RESEND_API_KEY')}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: Deno.env.get('ENROLLMENT_EMAIL_FROM'), to: [email], subject, text: `${body}\n\nConfirm your email: ${link}` }),
+      });
+      if (!result.ok) throw new Error('Confirmation email delivery failed.');
+    },
   })(req);
 });
