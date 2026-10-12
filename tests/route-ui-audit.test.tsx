@@ -28,6 +28,10 @@ import { defaultLegalPages } from '../lib/legalPages';
 import { DEFAULT_CORE_ROLES, setMockDataRef } from '../lib/accessControl';
 
 vi.mock('../lib/legalPageStore', () => ({ loadLegalPage: vi.fn(async () => defaultLegalPages.agreement) }));
+vi.mock('../lib/enrollmentConfirmation', async importOriginal => {
+  const actual = await importOriginal<typeof import('../lib/enrollmentConfirmation')>();
+  return { ...actual, loadConfirmationSettings: vi.fn(async () => actual.defaultConfirmationSettings) };
+});
 vi.mock('../lib/attendanceCorrections', async importOriginal => ({
   ...await importOriginal<any>(),
   loadAttendanceCorrections: vi.fn(async () => []),
@@ -472,11 +476,11 @@ describe('public route UI behavior', () => {
     renderRoute(<RegisterStatus />);
 
     expect(await screen.findByRole('heading', { name: /application rejected/i })).toBeInTheDocument();
-    expect(screen.getByText(rejectionReason)).toHaveClass('[overflow-wrap:anywhere]');
+    expect(screen.getByText(rejectionReason).closest('main')).toHaveClass('[overflow-wrap:anywhere]');
     expect(screen.getByRole('button', { name: /reapply with updated details/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /current theme: dark mode/i })).toBeInTheDocument();
-    expect(screen.getByRole('main')).toHaveClass('app-surface');
+    expect(screen.getByText(rejectionReason).closest('section')).toHaveClass('app-surface');
   });
 
   it('does not redirect registration status while authentication is still initializing', async () => {

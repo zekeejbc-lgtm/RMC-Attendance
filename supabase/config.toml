@@ -425,6 +425,18 @@ verify_jwt = false
 verify_jwt = false
 # Verifies Google JWTs; final enrollment is required before creating an Auth user.
 
+[functions.rmc-send-email]
+verify_jwt = false
+# Auth hook is authenticated with a Standard Webhooks signature.
+
+[functions.rmc-email-worker]
+verify_jwt = false
+# Apps Script worker uses a server-only shared secret; never callable by browsers.
+
+[functions.rmc-email-request]
+verify_jwt = false
+# Public request endpoint: IP budgets, recipient cooldown and queue deduplication.
+
 [functions.rmc-scanner-photo]
 verify_jwt = false
 # Auth is verified with getUser; the caller's JWT is used for current account/MFA/event/scope checks.

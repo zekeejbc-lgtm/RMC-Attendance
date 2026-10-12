@@ -6,7 +6,7 @@ import { enrollmentHandler } from '../supabase/functions/_shared/enrollment';
 const nonce = 'a'.repeat(64);
 afterEach(() => vi.unstubAllGlobals());
 const profile = { email: 'spoofed@example.test', name: 'Student', username: 'student', student_id: '2026-12345A' };
-let admin: any, client: any, verify: any, find: any, rpc: any, policy: any;
+let admin: any, client: any, verify: any, find: any, rpc: any, policy: any, mail: any;
 beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto);
   find = vi.fn().mockResolvedValue({ data: null });
@@ -17,9 +17,10 @@ beforeEach(() => {
   client = { auth: { resend: vi.fn().mockResolvedValue({}), signInWithPassword: vi.fn().mockResolvedValue({ data: { session: { access_token: 'access', refresh_token: 'refresh' } } }), signUp: vi.fn().mockResolvedValue({ data: { user: { id: 'new', identities: [{}] }, session: null } }),
     signInWithIdToken: vi.fn().mockResolvedValue({ data: { user: { id: 'new' }, session: { access_token: 'access', refresh_token: 'refresh' } } }) } };
   verify = vi.fn().mockResolvedValue('verified@gmail.com');
+  mail = {ready:true,send:vi.fn().mockResolvedValue(undefined)};
 });
 async function call(body: any) {
-  const response = await enrollmentHandler(admin, client, verify)(new Request('https://backend.test', {
+  const response = await enrollmentHandler(admin, client, verify, mail)(new Request('https://backend.test', {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '127.0.0.1' }, body: JSON.stringify(body),
   }));
   return { status: response.status, body: await response.json() };
@@ -72,7 +73,7 @@ it('keeps normal email enrollment confirmation and uses the server-issued ticket
   expect((await call(enroll)).body).toEqual({ uid: 'new', needsEmailConfirmation: true });
   expect(admin.auth.admin.createUser).toHaveBeenCalledWith(expect.objectContaining({ email: profile.email, email_confirm: false,
     user_metadata: expect.objectContaining({ enrollment_ticket: expect.any(String) }) }));
-  expect(client.auth.resend).toHaveBeenCalled();
+  expect(mail.send).toHaveBeenCalledWith(profile.email,'','','new');
   expect(client.auth.signUp).not.toHaveBeenCalled();
 });
 it('blocks inactive accounts even with valid Google credentials', async () => {
@@ -109,11 +110,12 @@ it('fails closed if settings are missing', async () => {
 });
 it('does not create an account when custom mail is unconfigured', async () => {
   policy.email_kind = 'custom';
+  mail.ready=false;
   expect((await call(enroll)).body.error).toContain('not configured');
   expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
 });
 it('keeps saved enrollment recoverable if delivery fails', async () => {
-  client.auth.resend.mockResolvedValue({ error: { message: 'SMTP unavailable' } });
+  mail.send.mockRejectedValue(new Error('Queue unavailable'));
   const result = await call(enroll);
   expect(result.body.needsEmailConfirmation).toBe(true);
   expect(result.body.deliveryWarning).toContain('saved');
@@ -125,6 +127,7 @@ it('sends an actual custom email and does not expose its verification link', asy
   const send = vi.fn().mockResolvedValue(undefined);
   const response = await enrollmentHandler(admin, client, verify, { ready: true, send })(new Request('https://backend.test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(enroll) }));
   expect(await response.json()).toEqual({ uid: 'new', needsEmailConfirmation: true });
-  expect(send).toHaveBeenCalledWith(profile.email, 'Confirm', 'Welcome', 'https://auth.test/secret-link');
+  expect(send).toHaveBeenCalledWith(profile.email, 'Confirm', 'Welcome', 'new');
+  expect(admin.auth.admin.generateLink).not.toHaveBeenCalled();
   expect(client.auth.resend).not.toHaveBeenCalled();
 });

@@ -1190,6 +1190,13 @@
     "file": "lib/supabase.ts"
   },
   {
+    "code": "AUTH-27C1F6B3",
+    "message": "Unsupported authentication email request.",
+    "owner": "user",
+    "source": "Unsupported authentication email request.",
+    "file": "supabase/functions/_shared/emailIntent.ts"
+  },
+  {
     "code": "AUTH-3348049F",
     "message": "Your session has expired. Sign in again before freezing a scope.",
     "owner": "school",
@@ -1202,6 +1209,13 @@
     "owner": "user",
     "source": "Passwords do not match.",
     "file": "views/LandingPage.tsx"
+  },
+  {
+    "code": "AUTH-35FD744B",
+    "message": "Unsupported authentication email action.",
+    "owner": "user",
+    "source": "Unsupported authentication email action.",
+    "file": "supabase/functions/_shared/authEmail.ts"
   },
   {
     "code": "AUTH-3E0762B6",
@@ -1253,6 +1267,13 @@
     "file": "supabase/migrations/20260924200000_account_password_management.sql"
   },
   {
+    "code": "AUTH-49D5FDB5",
+    "message": "Invalid authentication token.",
+    "owner": "user",
+    "source": "Invalid authentication token.",
+    "file": "supabase/functions/_shared/authEmail.ts"
+  },
+  {
     "code": "AUTH-4E4B8417",
     "message": "Set up Google Authenticator in your profile security settings before continuing.",
     "owner": "user",
@@ -1272,6 +1293,13 @@
     "owner": "unknown",
     "source": "Unable to connect to Supabase.",
     "file": "components/AuthContext.tsx"
+  },
+  {
+    "code": "AUTH-52506F58",
+    "message": "Unable to queue authentication email. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues.",
+    "owner": "unknown",
+    "source": "Unable to queue authentication email.",
+    "file": "supabase/functions/_shared/emailQueue.ts"
   },
   {
     "code": "AUTH-591FEB03",
@@ -1300,6 +1328,20 @@
     "owner": "user",
     "source": "Please meet all password requirements before creating the account.",
     "file": "components/admin/AdminAccountView.tsx"
+  },
+  {
+    "code": "AUTH-5F583B57",
+    "message": "Invalid authentication email request.",
+    "owner": "user",
+    "source": "Invalid authentication email request.",
+    "file": "supabase/functions/_shared/emailIntent.ts"
+  },
+  {
+    "code": "AUTH-6276D75F",
+    "message": "Invalid authentication link.",
+    "owner": "user",
+    "source": "Invalid authentication link.",
+    "file": "supabase/functions/_shared/authEmail.ts"
   },
   {
     "code": "AUTH-62BBBB50",
@@ -1337,6 +1379,13 @@
     "file": "components/admin/AdminAppUpdates.tsx"
   },
   {
+    "code": "AUTH-6EB1081D",
+    "message": "Invalid email recipient.",
+    "owner": "user",
+    "source": "Invalid email recipient.",
+    "file": "supabase/functions/_shared/authEmail.ts"
+  },
+  {
     "code": "AUTH-6EB38CD2",
     "message": "Invalid or expired Google Authenticator code. Try the latest code.",
     "owner": "user",
@@ -1370,6 +1419,13 @@
     "owner": "user",
     "source": "Verify your current password again before initiating a refresh.",
     "file": "supabase/migrations/20261012145703_app_refresh.sql"
+  },
+  {
+    "code": "AUTH-7D3C6A71",
+    "message": "Unable to queue authentication email. Try again later.",
+    "owner": "user",
+    "source": "Unable to queue authentication email. Try again later.",
+    "file": "supabase/functions/rmc-send-email/index.ts"
   },
   {
     "code": "AUTH-82FD2676",
@@ -1470,11 +1526,25 @@
     "file": "views/LandingPage.tsx"
   },
   {
+    "code": "AUTH-D57C76DD",
+    "message": "Unable to prepare a fresh authentication link. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues.",
+    "owner": "unknown",
+    "source": "Unable to prepare a fresh authentication link.",
+    "file": "supabase/functions/_shared/emailIntent.ts"
+  },
+  {
     "code": "AUTH-DB3615B8",
     "message": "The passkey request was cancelled or could not be completed. Try again, or use your password or Google.",
     "owner": "user",
     "source": "The passkey request was cancelled or could not be completed. Try again, or use your password or Google.",
     "file": "lib/passkeys.ts"
+  },
+  {
+    "code": "AUTH-E195A271",
+    "message": "AUTH_EMAIL_ENCRYPTION_KEY",
+    "owner": "user",
+    "source": "AUTH_EMAIL_ENCRYPTION_KEY",
+    "file": "supabase/functions/rmc-email-worker/index.ts"
   },
   {
     "code": "AUTH-E8646BCA",
@@ -1517,6 +1587,13 @@
     "owner": "user",
     "source": "Enter the Google Authenticator code to continue.",
     "file": "components/admin/AdminFreezeView.tsx"
+  },
+  {
+    "code": "AUTH-F2A4B3EB",
+    "message": "Invalid authentication email event.",
+    "owner": "user",
+    "source": "Invalid authentication email event.",
+    "file": "supabase/functions/_shared/authEmail.ts"
   },
   {
     "code": "AUTH-FC9BC666",
@@ -3619,6 +3696,13 @@
     "file": "supabase/migrations/20260919102901_production_backend.sql"
   },
   {
+    "code": "RULE-0ED369A2",
+    "message": "Email configuration unavailable.",
+    "owner": "user",
+    "source": "Email configuration unavailable.",
+    "file": "supabase/functions/rmc-send-email/index.ts"
+  },
+  {
     "code": "RULE-10BDD7D9",
     "message": "Please select a valid section to proceed.",
     "owner": "user",
@@ -3652,6 +3736,13 @@
     "owner": "user",
     "source": "useTheme must be used within a ThemeProvider",
     "file": "components/ThemeContext.tsx"
+  },
+  {
+    "code": "RULE-14E720C7",
+    "message": "Unable to queue email. Please try again later.",
+    "owner": "user",
+    "source": "Unable to queue email. Please try again later.",
+    "file": "supabase/functions/_shared/emailIntent.ts"
   },
   {
     "code": "RULE-15F9580E",
@@ -3724,6 +3815,20 @@
     "file": "components/academic/NodeOfficerManager.tsx"
   },
   {
+    "code": "RULE-1FFC0862",
+    "message": "Unable to load email analytics. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues.",
+    "owner": "unknown",
+    "source": "Unable to load email analytics.",
+    "file": "components/admin/AdminEmailDashboard.tsx"
+  },
+  {
+    "code": "RULE-238D17D9",
+    "message": "Only an active Super Admin can view email delivery statistics.",
+    "owner": "user",
+    "source": "Only an active Super Admin can view email delivery statistics.",
+    "file": "supabase/migrations/20261012161905_email_queue_reliability.sql"
+  },
+  {
     "code": "RULE-24B50B1C",
     "message": "Fixed merit must be between 0.01 and 24 hours.",
     "owner": "user",
@@ -3773,6 +3878,13 @@
     "file": "supabase/migrations/20261009054136_individual_account_freezes.sql"
   },
   {
+    "code": "RULE-2B4AC806",
+    "message": "Only Super Admins can preview emails.",
+    "owner": "user",
+    "source": "Only Super Admins can preview emails.",
+    "file": "supabase/migrations/20261012170221_email_admin_history.sql"
+  },
+  {
     "code": "RULE-2C46AA17",
     "message": "This account is outside your scope.",
     "owner": "school",
@@ -3813,6 +3925,13 @@
     "owner": "user",
     "source": "Choose a release state.",
     "file": "supabase/migrations/20261009153009_clearance_certificates.sql"
+  },
+  {
+    "code": "RULE-318F9B26",
+    "message": "Unable to load email history. Try refreshing.",
+    "owner": "user",
+    "source": "Unable to load email history. Try refreshing.",
+    "file": "components/admin/AdminEmailDashboard.tsx"
   },
   {
     "code": "RULE-322CD108",
@@ -3857,6 +3976,13 @@
     "file": "components/admin/AdminAppUpdates.tsx"
   },
   {
+    "code": "RULE-34D3671E",
+    "message": "Invalid analytics period.",
+    "owner": "user",
+    "source": "Invalid analytics period.",
+    "file": "supabase/migrations/20261012170221_email_admin_history.sql"
+  },
+  {
     "code": "RULE-355166C9",
     "message": "Invalid role assignment.",
     "owner": "user",
@@ -3890,6 +4016,13 @@
     "owner": "user",
     "source": "The CSV contains characters after a closing quote.",
     "file": "lib/memberCsv.ts"
+  },
+  {
+    "code": "RULE-3A9960D4",
+    "message": "Invalid email history filters.",
+    "owner": "user",
+    "source": "Invalid email history filters.",
+    "file": "supabase/migrations/20261012170221_email_admin_history.sql"
   },
   {
     "code": "RULE-3AD171EA",
@@ -3990,6 +4123,13 @@
     "file": "supabase/migrations/20260919102901_production_backend.sql"
   },
   {
+    "code": "RULE-52E7600B",
+    "message": "Invalid email request budget.",
+    "owner": "user",
+    "source": "Invalid email request budget.",
+    "file": "supabase/migrations/20261012161905_email_queue_reliability.sql"
+  },
+  {
     "code": "RULE-53DB3F1F",
     "message": "Choose an available account role.",
     "owner": "user",
@@ -4030,6 +4170,13 @@
     "owner": "user",
     "source": "One or more accounts no longer exist. No accounts were changed.",
     "file": "supabase/migrations/20261009054136_individual_account_freezes.sql"
+  },
+  {
+    "code": "RULE-5AF75D7B",
+    "message": "Email history entry not found.",
+    "owner": "user",
+    "source": "Email history entry not found.",
+    "file": "supabase/migrations/20261012170221_email_admin_history.sql"
   },
   {
     "code": "RULE-5D0C6930",
@@ -4081,6 +4228,13 @@
     "file": "views/LegalPage.tsx"
   },
   {
+    "code": "RULE-634365C7",
+    "message": "Unable to load this preview. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues.",
+    "owner": "unknown",
+    "source": "Unable to load this preview.",
+    "file": "components/admin/AdminEmailDashboard.tsx"
+  },
+  {
     "code": "RULE-63DA4A44",
     "message": "System owner access cannot be assigned here.",
     "owner": "user",
@@ -4100,6 +4254,13 @@
     "owner": "user",
     "source": "An active student account is required.",
     "file": "supabase/migrations/20260919102901_production_backend.sql"
+  },
+  {
+    "code": "RULE-67953216",
+    "message": "Only Super Admins can view email analytics.",
+    "owner": "user",
+    "source": "Only Super Admins can view email analytics.",
+    "file": "supabase/migrations/20261012170221_email_admin_history.sql"
   },
   {
     "code": "RULE-67D99B46",
@@ -4144,6 +4305,13 @@
     "file": "supabase/migrations/20260924180000_allow_core_role_permission_updates.sql"
   },
   {
+    "code": "RULE-6ECB7C36",
+    "message": "Email delivery is not configured.",
+    "owner": "user",
+    "source": "Email delivery is not configured.",
+    "file": "supabase/functions/rmc-send-email/index.ts"
+  },
+  {
     "code": "RULE-6F51CE32",
     "message": "Your excuse has already been approved.",
     "owner": "user",
@@ -4177,6 +4345,13 @@
     "owner": "user",
     "source": "This role cannot be assigned to this unit.",
     "file": "supabase/migrations/20260919102901_production_backend.sql"
+  },
+  {
+    "code": "RULE-72FF35BD",
+    "message": "Email worker request failed.",
+    "owner": "user",
+    "source": "Email worker request failed.",
+    "file": "supabase/functions/rmc-email-worker/index.ts"
   },
   {
     "code": "RULE-7393D2C8",
@@ -4333,6 +4508,13 @@
     "file": "supabase/migrations/20260919102901_production_backend.sql"
   },
   {
+    "code": "RULE-9049F633",
+    "message": "Too many email requests. Please wait before trying again.",
+    "owner": "user",
+    "source": "Too many email requests. Please wait before trying again.",
+    "file": "supabase/functions/_shared/emailRequest.ts"
+  },
+  {
     "code": "RULE-90968E87",
     "message": "An academic unit no longer exists.",
     "owner": "user",
@@ -4380,6 +4562,13 @@
     "owner": "user",
     "source": "Unable to load the saved video. Check your connection and reload.",
     "file": "components/admin/AdminHomepageVideoView.tsx"
+  },
+  {
+    "code": "RULE-96363687",
+    "message": "Invalid email queue request.",
+    "owner": "user",
+    "source": "Invalid email queue request.",
+    "file": "supabase/migrations/20261012161905_email_queue_reliability.sql"
   },
   {
     "code": "RULE-97AD0213",
@@ -4494,6 +4683,13 @@
     "file": "supabase/migrations/20261009121805_holiday_suspensions.sql"
   },
   {
+    "code": "RULE-A9EDA1A8",
+    "message": "/admin/controls",
+    "owner": "user",
+    "source": "/admin/controls",
+    "file": "components/ui/RouteErrorBoundary.tsx"
+  },
+  {
     "code": "RULE-AAB8C27E",
     "message": "The member could not be created.",
     "owner": "user",
@@ -4527,6 +4723,13 @@
     "owner": "user",
     "source": "Enter at least 10 characters of explanation.",
     "file": "views/StudentCeremonies.tsx"
+  },
+  {
+    "code": "RULE-AF68FB8A",
+    "message": "Email requests are temporarily unavailable. Try again later.",
+    "owner": "user",
+    "source": "Email requests are temporarily unavailable. Try again later.",
+    "file": "lib/emailDelivery.ts"
   },
   {
     "code": "RULE-B12D2DFE",
@@ -4648,11 +4851,25 @@
     "file": "lib/memberCsv.ts"
   },
   {
+    "code": "RULE-C4B6B99E",
+    "message": "Only Super Admins can view email history.",
+    "owner": "user",
+    "source": "Only Super Admins can view email history.",
+    "file": "supabase/migrations/20261012170221_email_admin_history.sql"
+  },
+  {
     "code": "RULE-C69C2ED2",
     "message": "Choose at least one pending change.",
     "owner": "user",
     "source": "Choose at least one pending change.",
     "file": "supabase/migrations/20261009020523_profile_request_field_decisions.sql"
+  },
+  {
+    "code": "RULE-C6E7FD65",
+    "message": "Unable to request email. The cause was not provided. Check the latest records before repeating the action, and send this code to support if it continues.",
+    "owner": "unknown",
+    "source": "Unable to request email.",
+    "file": "lib/emailDelivery.ts"
   },
   {
     "code": "RULE-C78D352A",
@@ -4681,6 +4898,13 @@
     "owner": "user",
     "source": "Choose a section or block.",
     "file": "supabase/migrations/20261011215817_scoped_student_designations.sql"
+  },
+  {
+    "code": "RULE-CC08C070",
+    "message": "Invalid worker heartbeat.",
+    "owner": "user",
+    "source": "Invalid worker heartbeat.",
+    "file": "supabase/migrations/20261012161905_email_queue_reliability.sql"
   },
   {
     "code": "RULE-CEAE2A6C",
@@ -4891,6 +5115,13 @@
     "owner": "user",
     "source": "A student account is required.",
     "file": "supabase/migrations/20261009153009_clearance_certificates.sql"
+  },
+  {
+    "code": "RULE-F43FEFD7",
+    "message": "Unable to load the email tracker. It will retry automatically.",
+    "owner": "user",
+    "source": "Unable to load the email tracker. It will retry automatically.",
+    "file": "components/admin/EmailDeliveryTracker.tsx"
   },
   {
     "code": "RULE-F47E11CA",

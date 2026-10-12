@@ -2,6 +2,8 @@ import { errorMessage } from '../../lib/errors';
 import ErrorNotice from '../ui/ErrorNotice';
 import { useEffect, useState } from 'react';
 import { Surface } from '../ui/Page';
+import CustomSelect from '../ui/CustomSelect';
+import Button from '../ui/Button';
 import { homepageVideos, HomepageVideoSetting, loadHomepageVideo, saveHomepageVideo } from '../../lib/homepageVideos';
 
 export default function AdminHomepageVideoView() {
@@ -31,19 +33,17 @@ export default function AdminHomepageVideoView() {
       catch (cause) { setError(errorMessage(cause)); }
       finally { setSaving(false); }
     }}>
-      <div><label htmlFor="homepage-video" className="mb-2 block text-sm font-semibold">Available videos</label>
-        <select id="homepage-video" value={selected} disabled={saving} onChange={event => { setSelected(event.target.value); setPreviewFailed(false); setMessage(''); }} className="w-full min-w-0 rounded-xl border border-slate-300 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900">
-          {!video && <option value={selected}>Saved video is unavailable — choose a replacement</option>}
-          {homepageVideos.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-        </select>
-      </div>
+      <CustomSelect label="Available videos" ariaLabel="Available videos" value={selected} disabled={saving} onChange={value => { setSelected(value as string); setPreviewFailed(false); setMessage(''); }} options={[
+        ...(!video ? [{ value: selected, label: 'Saved video is unavailable — choose a replacement' }] : []),
+        ...homepageVideos.map(item => ({ value: item.id, label: item.label })),
+      ]} />
       {video && <div className="space-y-2"><video key={video.id} src={video.url} controls playsInline preload="metadata" aria-label="Homepage video preview" onError={() => setPreviewFailed(true)} className="aspect-video w-full rounded-2xl bg-brand-950" />
         {previewFailed && <ErrorNotice error="The preview could not load. Try another video." />}
         <p className="break-all text-xs text-slate-500">{video.id}</p>
       </div>}
       <div className="flex flex-wrap gap-3">
-        <button type="submit" disabled={saving || !video || previewFailed || selected === saved.video_id} className="rounded-xl bg-brand-900 px-5 py-3 text-sm font-bold text-white disabled:opacity-50 dark:bg-gold-400 dark:text-brand-950">{saving ? 'Saving…' : 'Save homepage video'}</button>
-        <button type="button" disabled={saving || selected === saved.video_id} onClick={() => { setSelected(saved.video_id); setPreviewFailed(false); setMessage(''); }} className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold disabled:opacity-50">Cancel changes</button>
+        <Button type="submit" fullWidth={false} loading={saving} disabled={!video || previewFailed || selected === saved.video_id}>Save homepage video</Button>
+        <Button variant="secondary" fullWidth={false} disabled={saving || selected === saved.video_id} onClick={() => { setSelected(saved.video_id); setPreviewFailed(false); setMessage(''); }}>Cancel changes</Button>
       </div>
     </form>}
     {!loading && <button type="button" disabled={saving} onClick={() => { setPreviewFailed(false); void load(); }} className="text-sm font-semibold underline underline-offset-4">Reload saved selection</button>}

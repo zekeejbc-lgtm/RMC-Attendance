@@ -21,6 +21,8 @@ function Page() {
     <button onClick={() => navigate('/student/records')}>Records</button>
     <button onClick={() => back()}>Smart back</button>
     <button onClick={() => navigate(-1)}>Browser back</button>
+    <button onClick={() => navigate('/admin/controls?tab=updates')}>App updates</button>
+    <button onClick={() => navigate('/admin/controls?tab=legal&page=terms')}>Legal terms</button>
   </>;
 }
 
@@ -105,4 +107,24 @@ it('keeps navigation functional when browser storage is unavailable', () => {
   expect(screen.getByText('details')).toBeInTheDocument();
   fireEvent.click(screen.getByText('Smart back'));
   expect(screen.getByRole('status').textContent).toBe('/dashboard');
+});
+
+it('keeps the workspace scroll position when switching control sections and legal pages', async () => {
+  writeMemory('alice:scroll:/admin/controls', { x: 0, y: 180 });
+  Object.defineProperty(window, 'scrollY', { configurable: true, value: 180 });
+  mount('/admin/controls?tab=enrollment');
+  await waitFor(() => expect(window.scrollTo).toHaveBeenCalledWith({ left: 0, top: 180, behavior: 'instant' }));
+  vi.mocked(window.scrollTo).mockClear();
+  fireEvent.click(screen.getByText('App updates'));
+  fireEvent.click(screen.getByText('Legal terms'));
+  fireEvent.click(screen.getByText('Browser back'));
+  await act(async () => { await new Promise(resolve => requestAnimationFrame(resolve)); });
+  expect(window.scrollTo).not.toHaveBeenCalled();
+  expect(readReturnHistory('alice')).toEqual(['/admin/controls?tab=enrollment', '/admin/controls?tab=updates']);
+  Object.defineProperty(window, 'scrollY', { configurable: true, value: 240 });
+  fireEvent.scroll(window);
+  expect(JSON.parse(sessionStorage.getItem('rmc:navigation:v1:alice:scroll:/admin/controls')!)).toEqual({ x: 0, y: 240 });
+  fireEvent.click(screen.getByText('Records'));
+  await waitFor(() => expect(window.scrollTo).toHaveBeenCalledWith({ left: 0, top: 0, behavior: 'instant' }));
+  Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
 });

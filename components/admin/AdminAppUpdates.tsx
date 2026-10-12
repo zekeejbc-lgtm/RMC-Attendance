@@ -5,6 +5,7 @@ import { Modal } from '../ui/Modal';
 import { Surface } from '../ui/Page';
 import { supabase, initiateAppRefresh } from '../../lib/supabase';
 import ErrorNotice from '../ui/ErrorNotice';
+import { RefreshCw, CheckCircle2, WifiOff, TriangleAlert, ArrowRight } from 'lucide-react';
 
 export default function AdminAppUpdates() {
   const { profile } = useAuth();
@@ -34,12 +35,37 @@ export default function AdminAppUpdates() {
     catch (error) { setError(error instanceof Error ? error.message : 'Unable to initiate refresh. Try again.'); setPassword(''); setCode(''); }
     finally { setBusy(false); }
   };
-  return <Surface className="space-y-4 p-6">
-    <h2 className="text-xl font-bold">App Updates</h2>
-    <p>New deployments update automatically. Use this action to refresh every connected browser, including logged-out visitors.</p>
-    <p className="text-sm text-slate-600 dark:text-slate-300">Unsaved form entries may be lost. Sign-ins and saved offline attendance are preserved. Offline devices refresh after reconnecting. Publish your deployment before initiating a refresh.</p>
-    <Button onClick={() => void begin()}>Refresh everyone now</Button>
-    {success && <p role="status">Refresh initiated for all clients.</p>}
+  return <Surface className="overflow-hidden">
+    <div className="space-y-6 p-5 sm:p-6">
+      <div className="flex items-start gap-3">
+        <div className="operations-icon p-3"><RefreshCw size={22} aria-hidden="true" /></div>
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-brand-900 dark:text-white">App Updates</h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--color-text-muted)]">New deployments update automatically. Use a manual refresh when everyone needs the latest version now.</p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="operations-detail p-4">
+          <CheckCircle2 size={20} aria-hidden="true" className="mb-2 text-[var(--color-success)]" />
+          <h3 className="text-sm font-bold">Saved data stays safe</h3>
+          <p className="mt-1 text-sm leading-6 text-[var(--color-text-muted)]">Sign-ins and saved offline attendance are preserved.</p>
+        </div>
+        <div className="operations-detail p-4">
+          <WifiOff size={20} aria-hidden="true" className="mb-2 text-[var(--color-text-muted)]" />
+          <h3 className="text-sm font-bold">Offline devices catch up</h3>
+          <p className="mt-1 text-sm leading-6 text-[var(--color-text-muted)]">They refresh after reconnecting. Logged-out visitors are included too.</p>
+        </div>
+      </div>
+      <div className="flex items-start gap-3 operations-warning p-4">
+        <TriangleAlert size={20} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--color-warning-text)]" />
+        <div className="text-sm leading-6 text-[var(--color-warning-text)]"><p className="font-bold">Before you refresh</p><p>Publish your deployment first. Unsaved form entries may be lost when browsers refresh.</p></div>
+      </div>
+      {success && <p role="status" className="flex items-center gap-2 text-sm font-semibold text-[var(--color-success)]"><CheckCircle2 size={18} aria-hidden="true" />Refresh initiated for all clients.</p>}
+    </div>
+    <div className="flex flex-col gap-4 operations-action-bar p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
+      <div><h3 className="text-sm font-bold">Refresh all connected browsers</h3><p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Identity verification is required before initiating a refresh.</p></div>
+      <Button fullWidth={false} className="w-full shrink-0 sm:w-auto" onClick={() => void begin()}>Refresh everyone now<ArrowRight size={16} aria-hidden="true" /></Button>
+    </div>
     <Modal open={open} onClose={close} closeOnBackdrop={!busy} title="Confirm refresh for everyone" description="Verify your identity before refreshing all connected browsers.">
       <form onSubmit={event => void submit(event)} className="space-y-4">
         <label className="block">Current admin password<input type="password" autoComplete="current-password" required disabled={busy} value={password} onChange={event => setPassword(event.target.value)} className="app-control mt-2 w-full rounded-xl border p-3" /></label>

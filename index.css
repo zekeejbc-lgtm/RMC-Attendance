@@ -205,6 +205,7 @@
 html {
   min-width: 320px;
   background: var(--neutral-bg);
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -253,6 +254,65 @@ a {
   background-color: var(--surface-card);
   box-shadow: var(--shadow-surface);
   min-width: 0;
+}
+
+.operations-center { color: var(--color-text); }
+.operations-nav-link {
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  transition: background-color var(--motion-fast) var(--motion-snappy), color var(--motion-fast) var(--motion-snappy);
+}
+.operations-nav-link:hover { background: var(--color-control); color: var(--color-text); }
+.operations-nav-link[aria-current='page'] { background: var(--color-selected); color: var(--color-selected-text); }
+.operations-detail { border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+.operations-detail--muted { background: var(--color-surface-muted); }
+.operations-icon { border-radius: var(--radius-control); background: var(--color-selected); color: var(--color-selected-text); }
+.operations-action-bar { border-top: 1px solid var(--color-border); background: var(--color-surface-muted); }
+
+/* Email operations: scoped panels share the app's light and dark theme tokens. */
+.email-panel {
+  min-width: 0;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-surface);
+}
+.email-eyebrow { margin-bottom: 0.25rem; color: var(--color-text-muted); font-size: 0.625rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
+.email-metric { min-width: 0; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-control); background: var(--color-surface-muted); color: var(--color-text); }
+.email-metric > div > p { color: var(--color-text-muted); }
+.email-metric--featured { border-color: rgb(var(--palette-brand-800)); background: rgb(var(--palette-brand-900)); color: white; }
+.email-metric--featured > div > p { color: rgb(var(--palette-brand-100)); }
+.email-metric--featured svg { color: rgb(var(--palette-gold-300)); }
+.email-status { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.65rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 700; }
+.email-status[data-tone='success'], .email-worker-note[data-tone='success'] { color: rgb(var(--palette-emerald-700)); background: rgb(var(--palette-emerald-50)); }
+.email-status[data-tone='warning'], .email-worker-note[data-tone='warning'] { color: var(--color-warning-text); background: color-mix(in srgb, var(--color-warning-text) 9%, var(--color-surface)); }
+.dark .email-status[data-tone='success'], .dark .email-worker-note[data-tone='success'] { color: rgb(var(--palette-emerald-300)); background: rgb(var(--palette-emerald-500) / 0.12); }
+.email-status-dot { width: 0.375rem; height: 0.375rem; border-radius: 50%; background: currentColor; }
+.email-quota { padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+.email-quota-meter { display: block; width: 100%; height: 0.5rem; overflow: hidden; border: 0; border-radius: 999px; appearance: none; background: var(--color-border); }
+.email-quota-meter::-webkit-progress-bar { border-radius: 999px; background: var(--color-border); }
+.email-quota-meter::-webkit-progress-value { border-radius: 999px; background: var(--color-brand); }
+.email-quota-meter::-moz-progress-bar { border-radius: 999px; background: var(--color-brand); }
+.email-worker-note { border-radius: var(--radius-control); padding: 0.75rem 1rem; font-size: 0.8125rem; line-height: 1.6; }
+.email-details > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--color-border); }
+.email-details dt { color: var(--color-text-muted); font-size: 0.75rem; }
+.email-details dd { font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.email-table-scroll { border: 1px solid var(--color-border); border-radius: var(--radius-control); }
+.email-table-scroll thead { background: var(--color-surface-muted); color: var(--color-text-muted); }
+.email-table-scroll th { font-size: 0.6875rem; }
+.email-table-scroll tbody tr:hover { background: var(--color-surface-muted); }
+.email-table-scroll tbody tr:last-child { border-bottom: 0; }
+.email-filters { padding: 1rem; border-radius: var(--radius-control); background: var(--color-surface-muted); }
+.email-pagination { color: var(--color-text-muted); }
+.email-pagination button { border-color: var(--color-border); background: var(--color-surface); color: var(--color-text); font-weight: 600; }
+.email-pagination button:hover:not(:disabled) { background: var(--color-selected); color: var(--color-selected-text); }
+.email-pagination button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.operations-warning {
+  border: 1px solid color-mix(in srgb, var(--color-warning-text) 30%, var(--color-border));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--color-warning-text) 7%, var(--color-surface));
+  color: var(--color-warning-text);
 }
 
 /* Soft blue washes and a fine dotted texture for verification screens. */
@@ -318,7 +378,19 @@ a {
   transform: translateX(-8px);
   overflow: hidden;
 }
-.app-sidebar-link { transition-duration: 320ms; }
+.app-nav-link {
+  transition: background-color 160ms var(--motion-snappy), color 160ms var(--motion-snappy), border-color 160ms var(--motion-snappy), box-shadow 160ms var(--motion-snappy);
+}
+.app-desktop-sidebar nav {
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
+  overscroll-behavior-y: contain;
+}
+.app-route-enter { animation: workspacePageEnter 180ms ease-out; }
+@keyframes workspacePageEnter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 .app-desktop-sidebar[data-collapsed='true'] .app-sidebar-link { gap: 0; }
 .app-sidebar-link:hover > svg { transform: scale(1.08); }
 .app-sidebar-link > svg { transition: transform 160ms ease; }

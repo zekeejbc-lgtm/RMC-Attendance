@@ -25,6 +25,7 @@ it('animates the success popup again when an operation finishes', () => {
   const after = screen.getByText('Changes saved').closest('.app-toast');
   expect(after).not.toBe(before);
   expect(after).toHaveAttribute('data-state', 'open');
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
 });
 
 it('renders repeated failures once, including during the exit animation', () => {

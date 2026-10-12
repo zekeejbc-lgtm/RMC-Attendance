@@ -119,6 +119,27 @@ it('gives an updated success toast its full duration', () => {
   vi.advanceTimersByTime(1);
   expect(toastStore.getSnapshot()).toHaveLength(0);
 });
+
+it('reports one success for an action and its slower underlying requests', () => {
+  const action = toast.start('Update account');
+  const request = toast.start('Updating account details', undefined, true);
+  vi.advanceTimersByTime(1000);
+  expect(toastStore.getSnapshot()).toEqual([expect.objectContaining({ title: 'Update account', kind: 'progress' })]);
+  request.complete();
+  action.complete('Account updated');
+  expect(toastStore.getSnapshot()).toEqual([expect.objectContaining({ title: 'Update account', kind: 'success', message: 'Account updated' })]);
+  vi.advanceTimersByTime(5000);
+  expect(toastStore.getSnapshot()).toHaveLength(0);
+});
+
+it('does not publish a delayed nested request after its owning action finishes', () => {
+  const action = toast.start('Save');
+  const request = toast.start('Saving your changes', undefined, true);
+  action.complete();
+  vi.advanceTimersByTime(600);
+  request.complete();
+  expect(toastStore.getSnapshot()).toEqual([expect.objectContaining({ title: 'Save', kind: 'success' })]);
+});
 it('explains the offline roster preparation window instead of reporting invalid input', () => {
   expect(classifyError({ status: 400, code: '22023', message: 'Prepare an approved ongoing event or one starting within 24 hours.' })).toMatchObject({ code: 'ROSTER-001', owner: 'user', message: expect.stringContaining('within 24 hours') });
 });

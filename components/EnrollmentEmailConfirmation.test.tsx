@@ -30,6 +30,6 @@ it('accepts confirmation from the email link only for the matching email', async
 });
 it('requests resend without marking the email confirmed', async () => {
  const onConfirmed = vi.fn(); render(<EnrollmentEmailConfirmation email="student@example.test" settings={defaultConfirmationSettings} onConfirmed={onConfirmed} />);
- fireEvent.click(screen.getByText('Resend confirmation email')); await screen.findByText('Confirmation email requested. Check your inbox and spam folder.');
+ fireEvent.click(screen.getByText('Resend confirmation email')); await screen.findByText('Request received. If confirmation is needed, one email is queued. You can close this page and return after delivery.');
  expect(api.resend).toHaveBeenCalledWith('student@example.test'); expect(onConfirmed).not.toHaveBeenCalled();
 });

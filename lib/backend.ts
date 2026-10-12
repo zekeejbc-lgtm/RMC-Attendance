@@ -1,4 +1,5 @@
 import { retainedUploadFile } from './fileUploads';
+import { requestAuthEmail } from './emailDelivery';
 import { hotState } from './hotState';
 import { reconcileData } from './reconcileData';
 import { toast, type OperationProgress } from './toast';
@@ -164,21 +165,26 @@ async function command<T = any>(action: string, args: unknown[]): Promise<T> {
   }, action.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase()));
 }
 async function accounts(action: string, data: unknown) {
-  return trackWrite(async (progress) => {
+  const operation = async (progress?: OperationProgress) => {
   const { data: result, error } = await supabase.functions.invoke('rmc-accounts', { body: { action, data } });
   if (error) {
     const body = await error.context?.json?.().catch(() => null);
     throw Object.assign(new Error(body?.error || error.message), { code: body?.code || error.code, status: error.context?.status });
   }
   if (result.error) throw new Error(result.error);
-  await refreshAfterWrite(progress); return result;
+  if (action !== 'access') await refreshAfterWrite(progress);
+  return result;
 
-  }, action === 'create' ? 'Create accounts' : 'Update account');
+  };
+  // Access status is a read, already represented by the table's loading state.
+  if (action === 'access') return operation();
+  const labels: Record<string, string> = { create: 'Create accounts', deactivate: 'Deactivate account', reset_password: 'Reset account password' };
+  return trackWrite(operation, labels[action] || 'Update account');
 }
 export const appAuth = {
   async resendConfirmation(email: string) {
     requireConfiguration();
-    await googleRequest({ action: 'resend', email: email.trim().toLowerCase() });
+    return requestAuthEmail('confirmation',email);
   },
   async signIn(identifier: string, password: string) {
   return toast.track(async (progress) => {

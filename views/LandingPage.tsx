@@ -3,6 +3,7 @@ import ErrorNotice from '../components/ui/ErrorNotice';
 import { signInDestination } from '../lib/navigationMemory';
 import { toast } from '../lib/toast';
 import { supabase } from '../lib/supabase';
+import { requestAuthEmail } from '../lib/emailDelivery';
 import EnrollmentEmailConfirmation from '../components/EnrollmentEmailConfirmation';
 import { defaultConfirmationSettings, loadConfirmationSettings } from '../lib/enrollmentConfirmation';
 import React, { useState, useEffect, useRef } from 'react';
@@ -61,6 +62,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [emailNotice,setEmailNotice] = useState('');
+  const [confirmationUntil,setConfirmationUntil] = useState(0);
+  const [resetBusy,setResetBusy] = useState(false);
+  const [resetUntil,setResetUntil] = useState(0);
+  const [emailClock,setEmailClock] = useState(Date.now());
+  useEffect(()=>{const timer=setInterval(()=>setEmailClock(Date.now()),1000);return()=>clearInterval(timer);},[]);
   const [googleEnrollment, setGoogleEnrollment] = useState<GoogleEnrollment | null>(null);
   const [googleNeedsEnrollment, setGoogleNeedsEnrollment] = useState(false);
   const [missingAccountEmail, setMissingAccountEmail] = useState('');
@@ -247,9 +254,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   };
 
   const resendConfirmation = async () => {
-    if (!identifier.includes('@') || resendingConfirmation) return;
+    if (!identifier.includes('@') || resendingConfirmation || emailClock<confirmationUntil) return;
     setResendingConfirmation(true);
-    try { await appAuth.resendConfirmation(identifier); setLoginError('Confirmation email sent. Check your inbox and spam folder.'); }
+    try { await appAuth.resendConfirmation(identifier);setConfirmationUntil(Date.now()+120000);setLoginError('');setEmailNotice('If email confirmation is needed, one request is queued. It sends automatically when Gmail’s allowance is available. A fresh link is created just before sending; repeated requests do not add duplicate emails.'); }
     catch (error) { console.error('[Auth] resend confirmation failed', error); setLoginError(errorMessage(error)); }
     finally { setResendingConfirmation(false); }
   };
@@ -464,15 +471,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
            <div className="min-w-0">
               <div className="flex flex-col justify-between">
                 <div>
+                   {emailNotice && <p role="status" className="mb-4 rounded-xl bg-blue-50 p-4 text-sm text-blue-900 dark:bg-slate-800 dark:text-slate-100">{emailNotice}</p>}
                    {loginError && (
                      <div className="mb-4 sm:mb-5">
                        <ShieldAlert size={18} className="shrink-0" /> 
                        <ErrorNotice error={loginError} operation="Landing Page"></ErrorNotice>
                      </div>
                    )}
-                   {loginError && /confirm|verification/i.test(loginError) && identifier.includes('@') && (
-                     <button type="button" onClick={() => void resendConfirmation()} disabled={resendingConfirmation} className="mb-4 text-xs font-bold text-brand-700 underline dark:text-gold-400">
-                       {resendingConfirmation ? 'Sending confirmation email…' : 'Resend confirmation email'}
+                   {((loginError && /confirm|verification/i.test(loginError)) || /email confirmation/.test(emailNotice)) && identifier.includes('@') && (
+                     <button type="button" onClick={() => void resendConfirmation()} disabled={resendingConfirmation || emailClock<confirmationUntil} className="mb-4 text-xs font-bold text-brand-700 underline dark:text-gold-400">
+                       {resendingConfirmation ? 'Queueing confirmation email…' : emailClock<confirmationUntil ? `Resend available in ${Math.ceil((confirmationUntil-emailClock)/1000)}s` : 'Resend confirmation email'}
                      </button>
                    )}
 
@@ -522,11 +530,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                      <Button type="submit" disabled={isLoggingIn} className="!rounded-2xl text-xs font-black uppercase tracking-widest py-4 mt-2 shadow-lg hover:shadow-xl transition-all">
                        {isLoggingIn ? <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={18}/> Logging in...</span> : 'Log In'}
                      </Button>
-                     <button type="button" className="text-sm underline" onClick={async () => {
+                     <button type="button" disabled={resetBusy || emailClock<resetUntil} className="text-sm underline disabled:opacity-50" onClick={async () => {
                        if (!identifier.includes('@')) { setLoginError('Enter your email address above, then choose Forgot password.'); return; }
-                       const { error } = await toast.result(() => supabase.auth.resetPasswordForEmail(identifier.trim(), { redirectTo: window.location.origin }), 'Request password reset', 'Check your email for a reset link');
-                       setLoginError(error ? error.message : 'Check your email for a password reset link.');
-                     }}>Forgot password?</button>
+                       setResetBusy(true);setLoginError('');setEmailNotice('');
+                       try {
+                         const result=await requestAuthEmail('recovery',identifier);
+                         setResetUntil(Date.now()+(result.cooldownSeconds || 120)*1000);
+                         setEmailNotice('If this email has an account, its reset request is queued. Gmail sends it automatically when an allowance is available, including after a daily quota reset. The reset link is created just before sending. Check Spam or Junk; repeated requests do not add duplicate emails.');
+                       } catch(error) {setLoginError(errorMessage(error));} finally {setResetBusy(false);}
+                     }}>{resetBusy ? 'Queueing reset email…' : emailClock<resetUntil ? `Try again in ${Math.ceil((resetUntil-emailClock)/1000)}s` : 'Forgot password?'}</button>
                    </form>
                    {showLoginModal && <div className="mt-4 space-y-3">
                      <PasskeySignIn disabled={isLoggingIn} onSuccess={() => {

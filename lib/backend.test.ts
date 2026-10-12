@@ -6,7 +6,7 @@ vi.mock('./supabase', () => ({
 }));
 import { appAuth, appData, refreshData, resetData, subscribeData, uploadDocument } from './backend';
 import { retainedUploadFile, selectUploadFile, uploadFileText } from './fileUploads';
-import { toastStore } from './toast';
+import { toast, toastStore } from './toast';
 import type { UserProfile } from '../types';
 
 const applicant = { email: 'student@example.edu', name: 'Student', username: 'student_123', student_id: '123', school_data: {} } as UserProfile;
@@ -141,6 +141,15 @@ it('starts empty and never seeds or persists school records in local storage', (
   expect(appData.getEvents()).toEqual([]);
   expect(appData.getAllStudents()).toEqual([]);
   expect(localStorage.length).toBe(0);
+});
+
+it('reads account access without reporting an update or refreshing the snapshot', async () => {
+  toastStore.getSnapshot().forEach(item => toast.dismiss(item.id));
+  api.invoke.mockResolvedValue({ data: { users: [{ id: 'student', last_sign_in_at: null }] }, error: null });
+  expect(await appData.getAccountAccess()).toEqual({ student: { id: 'student', last_sign_in_at: null } });
+  expect(api.invoke).toHaveBeenCalledWith('rmc-accounts', { body: { action: 'access', data: {} } });
+  expect(api.rpc).not.toHaveBeenCalled();
+  expect(toastStore.getSnapshot()).toHaveLength(0);
 });
 it('preserves each attendance window and maps the event and sanction balance', async () => {
   api.rpc.mockResolvedValue({ data: snapshot(), error: null });

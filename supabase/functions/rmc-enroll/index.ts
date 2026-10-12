@@ -1,6 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
 import { createRemoteJWKSet, jwtVerify } from 'npm:jose@6.1.0';
 import { enrollmentHandler, sha256 } from '../_shared/enrollment.ts';
+import { enqueueIntent } from '../_shared/emailIntent.ts';
+import { EMAIL_SITE } from '../_shared/authEmail.ts';
 
 const keys = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 Deno.serve(async (req: Request) => {
@@ -15,13 +17,9 @@ Deno.serve(async (req: Request) => {
     if (payload.email_verified !== true || typeof payload.email !== 'string' || payload.nonce !== await sha256(nonce)) throw new Error('Google email verification failed. Choose your account again.');
     return payload.email.trim().toLowerCase();
   }, {
-    ready: Boolean(Deno.env.get('ENROLLMENT_RESEND_API_KEY') && Deno.env.get('ENROLLMENT_EMAIL_FROM')),
-    send: async (email, subject, body, link) => {
-      const result = await fetch('https://api.resend.com/emails', {
-        method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('ENROLLMENT_RESEND_API_KEY')}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: Deno.env.get('ENROLLMENT_EMAIL_FROM'), to: [email], subject, text: `${body}\n\nConfirm your email: ${link}` }),
-      });
-      if (!result.ok) throw new Error('Confirmation email delivery failed.');
+    ready: Boolean(Deno.env.get('AUTH_EMAIL_ENCRYPTION_KEY')),
+    send: async (email, subject, body, userId) => {
+      await enqueueIntent(admin,{kind:'intent',userId,email,recipient:email,action:'signup',subject:subject || undefined,body:body || undefined,redirect:`${EMAIL_SITE}/`},crypto.randomUUID(),Deno.env.get('AUTH_EMAIL_ENCRYPTION_KEY')!);
     },
   })(req);
 });

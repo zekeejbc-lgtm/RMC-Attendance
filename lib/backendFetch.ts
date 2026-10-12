@@ -38,6 +38,12 @@ export const backendFetch: typeof fetch = async (input, init) => {
   // Diagnostics report failures in their own UI; recording them again would loop.
   const requestUrl = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   if (requestUrl.pathname === '/rest/v1/rmc_client_errors') return fetch(input, { ...init, cache: 'no-store' });
+  // The account table owns the loading/error feedback for this read-only call.
+  if (requestUrl.pathname.endsWith('/functions/v1/rmc-accounts') && typeof init?.body === 'string') {
+    let action: unknown;
+    try { action = JSON.parse(init.body).action; } catch { /* Let the server validate malformed bodies. */ }
+    if (action === 'access') return fetch(input, { ...init, cache: 'no-store' });
+  }
   const progress = toast.start(requestLabel(input, init), ['Working on it', 'Getting your updates', 'Finishing up'], true);
   try {
     const response = await fetch(input, { ...init, cache: 'no-store' });

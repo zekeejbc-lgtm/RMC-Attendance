@@ -67,6 +67,14 @@ function doPost(e) {
     const request = JSON.parse(contents);
     if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Invalid request.');
     const action = request.action || 'create';
+    if (action === 'email_setup' || action === 'email_health' || action === 'email_flush') {
+      const config = authEmailConfig_();
+      if (!config.secret || typeof request.secret !== 'string' || request.secret !== config.secret) throw new Error('Unauthorized email service request.');
+      if (action === 'email_setup') installAuthEmailDelivery();
+      if (action === 'email_flush') deliverAuthEmails();
+      GmailApp.getAliases(); // Verify Gmail permission without sending a message.
+      return json_({ success: true, gmailAuthorized: true, installed: ScriptApp.getProjectTriggers().some(function (trigger) { return trigger.getHandlerFunction() === 'deliverAuthEmails'; }) });
+    }
     const actor = actor_(request.accessToken);
     if (action === 'create') {
       return json_({ success: true, ...createFile_(request, actor) });
@@ -84,6 +92,124 @@ function doPost(e) {
   }
 }
 
+// The deployment script installs this configuration as a separate server-only
+// source file. Secrets are not embedded in this repository or returned publicly.
+// Run once as the owner if Google asks for consent to the new Gmail permission.
+function installAuthEmailDelivery() {
+  GmailApp.getAliases();
+  const config = authEmailConfig_();
+  if (!config.secret || !config.workerUrl) throw new Error('Deploy the authentication email configuration first.');
+  const previous = ScriptApp.getProjectTriggers().filter(function (trigger) { return trigger.getHandlerFunction() === 'deliverAuthEmails'; });
+  if (!previous.length) ScriptApp.newTrigger('deliverAuthEmails').timeBased().everyMinutes(1).create();
+  previous.slice(1).forEach(function (trigger) { ScriptApp.deleteTrigger(trigger); });
+  console.log('Gmail authentication email worker installed: every minute.');
+}
+
+function emailWorkerRequest_(body) {
+  const config = authEmailConfig_();
+  const result = UrlFetchApp.fetch(config.workerUrl, { method: 'post', contentType: 'application/json', headers: { Authorization: 'Bearer ' + config.secret }, payload: JSON.stringify(body), muteHttpExceptions: true });
+  if (result.getResponseCode() !== 200) throw new Error('Email queue service unavailable.');
+  return JSON.parse(result.getContentText());
+}
+
+function deliverAuthEmails() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return;
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const now = Date.now();
+    let budget = JSON.parse(properties.getProperty('AUTH_EMAIL_BUDGET') || '{}');
+    if (!budget.started || now - budget.started >= 24 * 60 * 60 * 1000) {
+      budget = { started: now, sent: 0 };
+      properties.deleteProperty('AUTH_EMAIL_ERROR_CODE');
+    }
+    const batch = emailWorkerRequest_({ action: 'claim', heartbeat: { started: budget.started, sent: budget.sent || 0, errorCode: properties.getProperty('AUTH_EMAIL_ERROR_CODE') || null } });
+    let logo;
+    const markerFor = function (id) { return 'IARS-DELIVERY-' + id; };
+    const sentFor = function (id) {
+      const threads = GmailApp.search('in:sent "' + markerFor(id) + '"', 0, 1);
+      if (!threads.length) return null;
+      const messages = threads[0].getMessages();
+      return messages.filter(function (message) { return message.getPlainBody().indexOf(markerFor(id)) >= 0; })[0] || null;
+    };
+    const remember = function (id, entry) { entry.updated = Date.now(); properties.setProperty('AUTH_EMAIL_JOB_' + id, JSON.stringify(entry)); };
+    const countSent = function (id, entry, messageId) {
+      if (!entry.counted) { budget.sent += 1; entry.counted = true; properties.setProperty('AUTH_EMAIL_BUDGET', JSON.stringify(budget)); }
+      entry.state = 'sent'; entry.messageId = messageId; remember(id, entry);
+    };
+    (batch.review || []).forEach(function (item) {
+      try {
+        const found = sentFor(item.id);
+        if (found) {
+          const entry = JSON.parse(properties.getProperty('AUTH_EMAIL_JOB_' + item.id) || '{}');
+          countSent(item.id, entry, found.getId());
+          emailWorkerRequest_({ action: 'reconciled', id: item.id, messageId: found.getId() });
+        }
+      } catch (_) { /* An uncertain send remains held, never blindly duplicated. */ }
+    });
+    (batch.messages || []).forEach(function (item) {
+      let entry = JSON.parse(properties.getProperty('AUTH_EMAIL_JOB_' + item.id) || '{}');
+      let draft;
+      let sendAttempted = false;
+      try {
+        if (entry.state === 'sent') {
+          emailWorkerRequest_({ action: 'ack', id: item.id, lease: item.lease, delivered: true });
+          return;
+        }
+        const draftId = entry.draftId || item.draftId;
+        if (draftId) {
+          try { draft = GmailApp.getDraft(draftId); } catch (_) {
+            const found = sentFor(item.id);
+            if (found) { countSent(item.id, entry, found.getId()); emailWorkerRequest_({ action: 'ack', id: item.id, lease: item.lease, delivered: true }); }
+            else { emailWorkerRequest_({ action: 'uncertain', id: item.id, lease: item.lease }); properties.setProperty('AUTH_EMAIL_ERROR_CODE', 'uncertain'); }
+            return;
+          }
+        } else if (entry.state === 'creating') {
+          draft = GmailApp.getDrafts().filter(function (candidate) { return candidate.getMessage().getPlainBody().indexOf(markerFor(item.id)) >= 0; })[0];
+        }
+        if (budget.sent >= 90) { emailWorkerRequest_({ action: 'ack', id: item.id, lease: item.lease, delivered: false }); return; }
+        const prepared = emailWorkerRequest_({ action: 'prepare', id: item.id, lease: item.lease });
+        if (!prepared.message) { if (draft) draft.deleteDraft(); properties.deleteProperty('AUTH_EMAIL_JOB_' + item.id); return; }
+        const message = prepared.message;
+        const options = { name: 'IARS · RMC Attendance', htmlBody: message.html + '<p style="color:#64748b;font-size:10px;">Delivery reference: ' + markerFor(item.id) + '</p>' };
+        if (!logo) {
+          const image = UrlFetchApp.fetch('https://rmcssg.vercel.app/academic-seal-transparent.png', { muteHttpExceptions: true });
+          if (image.getResponseCode() === 200) logo = image.getBlob().setName('iars-seal.png');
+        }
+        if (logo) { options.inlineImages = { iarsSeal: logo }; options.htmlBody = options.htmlBody.split('https://rmcssg.vercel.app/academic-seal-transparent.png').join('cid:iarsSeal'); }
+        const plain = message.text + '\n\nDelivery reference: ' + markerFor(item.id);
+        if (!draft) { entry.state = 'creating'; remember(item.id, entry); draft = GmailApp.createDraft(message.to, message.subject, plain, options); }
+        else draft.update(message.to, message.subject, plain, options);
+        entry.draftId = draft.getId(); entry.state = 'drafted'; remember(item.id, entry);
+        // Persist the provider object before sending. Every retry reuses this draft.
+        emailWorkerRequest_({ action: 'draft', id: item.id, lease: item.lease, draftId: entry.draftId });
+        sendAttempted = true;
+        const sent = draft.send();
+        countSent(item.id, entry, sent.getId());
+        properties.deleteProperty('AUTH_EMAIL_ERROR_CODE');
+        emailWorkerRequest_({ action: 'ack', id: item.id, lease: item.lease, delivered: true });
+      } catch (error) {
+        if (entry.state === 'sent') return; // Lost acknowledgement: the durable ledger retries it.
+        let reusable = !sendAttempted;
+        if (sendAttempted && entry.draftId) { try { GmailApp.getDraft(entry.draftId); reusable = true; } catch (_) { reusable = false; } }
+        try { emailWorkerRequest_({ action: reusable ? 'ack' : 'uncertain', id: item.id, lease: item.lease, delivered: false }); } catch (_) { /* Lease expiry resumes recovery. */ }
+        const code = /quota|too many|limit exceeded|service invoked too many/i.test(String(error)) ? 'quota' : reusable ? 'provider' : 'uncertain';
+        properties.setProperty('AUTH_EMAIL_ERROR_CODE', code);
+        properties.setProperty('AUTH_EMAIL_LAST_ERROR', 'Email delivery is delayed; check the live email tracker.');
+      }
+    });
+    properties.setProperty('AUTH_EMAIL_LAST_RUN', new Date().toISOString());
+    // Heartbeat-only calls do not claim more mail and report a newly detected quota.
+    if ((batch.messages || []).length || (batch.review || []).length) emailWorkerRequest_({ action: 'heartbeat', heartbeat: { started: budget.started, sent: budget.sent, errorCode: properties.getProperty('AUTH_EMAIL_ERROR_CODE') || null } });
+    if (now - Number(properties.getProperty('AUTH_EMAIL_LEDGER_CLEANUP') || 0) > 24 * 60 * 60 * 1000) {
+      const saved = properties.getProperties();
+      Object.keys(saved).filter(function (key) { return key.indexOf('AUTH_EMAIL_JOB_') === 0; }).forEach(function (key) {
+        try { const job = JSON.parse(saved[key]); if (job.state === 'sent' && now - job.updated > 7 * 24 * 60 * 60 * 1000) properties.deleteProperty(key); } catch (_) {}
+      });
+      properties.setProperty('AUTH_EMAIL_LEDGER_CLEANUP', String(now));
+    }
+  } finally { lock.releaseLock(); }
+}
 function actor_(token) {
   if (!token) return null; // Registration uploads happen before signup.
   if (typeof token !== 'string' || token.length > 8192) throw new Error('Invalid session.');

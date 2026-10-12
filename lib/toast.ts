@@ -71,6 +71,8 @@ function errorToast(error: unknown, id?: number) {
 export const toast = {
   dismiss,
   start(label: string, phases = ['Getting ready', 'Working on it', 'Finishing up'], request = false): OperationProgress {
+    const hasAction = () => items.some(item => !item.request && item.kind === 'progress');
+    const coveredByAction = request && hasAction();
     const id = request ? ++sequence : show('progress', phases[0]);
     let finished = false;
     let currentPhase = 0;
@@ -80,7 +82,10 @@ export const toast = {
       items = items.map(item => item.id === id ? { ...item, title: label, request, phases, phase, percent: Math.round(phase / phases.length * 100), message: phases[phase] } : item);
       emit();
     };
-    const publish = () => { show('progress', phases[currentPhase], undefined, id); step(currentPhase); };
+    const publish = () => {
+      if (request && (coveredByAction || hasAction())) return;
+      show('progress', phases[currentPhase], undefined, id); step(currentPhase);
+    };
     // Fast background checks stay quiet; longer requests still show progress.
     const delay = request ? setTimeout(publish, 500) : undefined;
     step(0);
@@ -89,6 +94,11 @@ export const toast = {
       complete(message = `${label} completed`) {
         if (finished) return;
         finished = true; clearTimeout(delay);
+        // The user action already reports the result of its underlying requests.
+        if (request && (coveredByAction || hasAction())) {
+          if (items.some(item => item.id === id)) dismiss(id);
+          return;
+        }
         // Fast background checks stay quiet. Once progress is visible, keep
         // its completion readable instead of removing it immediately.
         if (!request || items.some(item => item.id === id)) show('success', message, undefined, id);

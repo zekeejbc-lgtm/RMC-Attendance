@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => {
     const buildVersion = randomUUID();
     return {
       define: { __APP_BUILD_VERSION__: JSON.stringify(buildVersion) },
+      // Prepare the admin chart dependency before serving lazy-loaded routes.
+      optimizeDeps: { include: ['recharts'] },
       server: {
         port: 3000,
         strictPort: true,
@@ -74,7 +76,7 @@ export default defineConfig(({ mode }) => {
       },
       test: {
         // Keep generated browser profiles and verification artifacts out of discovery.
-        include: ['lib/**/*.test.{ts,tsx}', 'components/**/*.test.{ts,tsx}', 'views/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
+        include: ['App.test.tsx', 'lib/**/*.test.{ts,tsx}', 'components/**/*.test.{ts,tsx}', 'views/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
         environment: 'jsdom',
         setupFiles: './tests/setup.ts',
         css: true,

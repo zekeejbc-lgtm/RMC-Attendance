@@ -34,3 +34,25 @@ it('retains network failures at the server-wait phase', async () => {
   await expect(backendFetch('https://test.example/rest/v1/rmc_nodes')).rejects.toBe(error);
   expect(toastStore.getSnapshot()[0]).toMatchObject({ kind: 'error', phase: 0, code: 'NET-001' });
 });
+
+it('keeps slow account access reads quiet and preserves responses for the table', async () => {
+  vi.useFakeTimers();
+  try {
+    let finish!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })));
+    const pending = backendFetch('https://test.example/functions/v1/rmc-accounts', { method: 'POST', body: JSON.stringify({ action: 'access', data: {} }) });
+    vi.advanceTimersByTime(2000);
+    expect(toastStore.getSnapshot()).toHaveLength(0);
+    finish(new Response(JSON.stringify({ access: { user: { banned: false } } }), { headers: { 'content-type': 'application/json' } }));
+    expect(await (await pending).json()).toEqual({ access: { user: { banned: false } } });
+    expect(toastStore.getSnapshot()).toHaveLength(0);
+  } finally { vi.useRealTimers(); }
+});
+
+it('preserves access-read failures for inline error handling without success toasts', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'content-type': 'application/json' } })));
+  const result = await backendFetch('https://test.example/functions/v1/rmc-accounts', { method: 'POST', body: JSON.stringify({ action: 'access' }) });
+  expect(result.status).toBe(403);
+  expect(await result.json()).toEqual({ error: 'Forbidden' });
+  expect(toastStore.getSnapshot()).toHaveLength(0);
+});

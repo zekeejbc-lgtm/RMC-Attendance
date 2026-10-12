@@ -310,17 +310,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   const navButtonClass = (isActive: boolean, compact = false) => (
-    `w-full min-h-11 flex items-center gap-4 rounded-xl transition-all duration-fast ${
+    `app-nav-link w-full min-h-11 flex items-center gap-4 rounded-xl ${
       compact ? 'justify-center px-2 py-3' : 'px-4 py-3.5'
     } ${isActive ? 'bg-gold-400 text-brand-900 shadow-lg font-bold' : 'text-gold-100 hover:bg-brand-800'}`
   );
 
   const renderDirectory = (mobile = false) => {
     const controlsId = mobile ? 'mobile-directory-links' : 'desktop-directory-links';
-    const itemClass = (path: string) => `w-full min-h-11 flex items-center gap-3 p-3 rounded-xl transition-all duration-fast ${
+    const itemClass = (path: string) => `app-nav-link w-full min-h-11 flex items-center gap-3 p-3 rounded-xl border ${
       location.pathname === path
         ? 'bg-white/10 text-white font-bold border border-white/10 shadow-sm'
-        : 'text-gold-100/70 hover:bg-brand-800 hover:text-white'
+        : 'border-transparent text-gold-100/70 hover:bg-brand-800 hover:text-white'
     }`;
 
     if (!hasDirectory) return null;
@@ -469,7 +469,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {!frozen && <FreezeBanner />}
       {['ossa', 'ossa_staff'].includes(role) && appData.getPaymentInfo().reminders.slice(0, 1).map(reminder => <div key={reminder.id} role="status" className="border-b border-amber-200 bg-amber-50 p-4 text-amber-950"><strong>{reminder.subject}</strong><p className="mt-1 whitespace-pre-line text-sm">{reminder.message}</p><p className="mt-1 text-xs">Payment due: {formatManilaDate(appData.getPaymentInfo().dueDate)}</p></div>)}
 
-      <main className="min-w-0 flex-1 overflow-x-hidden">{frozen ? <FrozenAccess /> : children}</main>
+      <main className="min-w-0 flex-1 overflow-x-hidden"><div key={location.pathname} className="app-route-enter">{children}</div></main>
       </div>
     </div>
   );

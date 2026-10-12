@@ -1,7 +1,7 @@
 import { hierarchyPathForRole } from './lib/workspaceRoutes';
 
 import React, { lazy, Suspense, useRef } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, Outlet, useLocation, useOutletContext } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import { ThemeProvider } from './components/ThemeContext';
 import Layout from './components/ui/Layout';
@@ -36,6 +36,7 @@ import { UserRole } from './types';
 import { ossaSections, ossaSectionPath } from './lib/ossaHub';
 import { hasPermission, AppPermission } from './lib/accessControl';
 import RouteLoading from './components/ui/RouteLoading';
+import RouteErrorBoundary from './components/ui/RouteErrorBoundary';
 import ToastViewport from './components/ui/ToastViewport';
 import PwaStatus from './components/ui/PwaStatus';
 import { canAccessSystemControls } from './lib/systemControlsAccess';
@@ -47,20 +48,28 @@ interface ProtectedRouteProps {
   permissionAny?: AppPermission[];
 }
 
+// The shared route keeps navigation state and scroll intact between workspace pages.
+const WorkspaceLayout: React.FC = () => {
+  const { user, profile } = useAuth();
+  const routeOwner = useRef<string | undefined>(undefined);
+  if (user) routeOwner.current = user.uid;
+  const outlet = <Outlet context={routeOwner.current} />;
+  return user && profile ? <Layout>{outlet}</Layout> : outlet;
+};
+
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permission, permissionAny }) => {
   const { user, loading, profile, error, offlineScanner } = useAuth();
   const location = useLocation();
-  const routeOwner = useRef<string | undefined>(undefined);
-  if (user) routeOwner.current = user.uid;
+  const routeOwner = useOutletContext<string | undefined>();
 
   if (loading) return profile
-    ? <Layout><RouteLoading embedded label="Loading your workspace" /></Layout>
+    ? <RouteLoading embedded label="Loading your workspace" />
     : <RouteLoading label="Loading your workspace" />;
 
-  if (!user) return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search, returnToOwner: routeOwner.current }} />;
+  if (!user) return <Navigate to="/login" replace state={{ returnTo: location.pathname + location.search, returnToOwner: routeOwner }} />;
   if (offlineScanner) {
     if (location.pathname !== '/mayor/scan') return <Navigate to="/mayor/scan" replace />;
-    return <Layout><Suspense fallback={<RouteLoading embedded />}>{children}</Suspense></Layout>;
+    return <Suspense fallback={<RouteLoading embedded />}>{children}</Suspense>;
   }
 
   if (!profile && error) return <main className="mx-auto max-w-xl px-4 py-12 text-slate-800 dark:text-slate-100">
@@ -90,7 +99,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles, permis
     return <Navigate to={profile.role === 'ossa' || profile.role === 'ossa_staff' ? '/ossa/dashboard' : '/dashboard'} replace />;
   }
 
-  return <Layout><Suspense fallback={<RouteLoading embedded />}>{children}</Suspense></Layout>;
+  return <Suspense fallback={<RouteLoading embedded />}>{children}</Suspense>;
 };
 
 // Keep saved links working while giving administrators their own hierarchy URL.
@@ -111,7 +120,7 @@ const App: React.FC = () => {
       <AuthProvider>
         <HashRouter>
           <NavigationMemory>
-          <Suspense fallback={<RouteLoading />}><Routes>
+          <RouteErrorBoundary><Suspense fallback={<RouteLoading />}><Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/verify/clearance/:token" element={<VerifyClearance />} />
           <Route path="/privacy-policy" element={<LegalPage kind="privacy" />} />
@@ -120,12 +129,13 @@ const App: React.FC = () => {
           <Route path="/terms-of-service" element={<LegalPage kind="terms" />} />
           <Route path="/login" element={<LandingPage defaultOpenLogin={true} />} />
           <Route path="/organizations/public" element={<Organizations publicDirectory />} />
+          <Route path="/register" element={<LandingPage />} />
+          <Route path="/register/status" element={<RegisterStatus />} />
+          <Route element={<WorkspaceLayout />}>
           <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
           <Route path="/organizations/:organizationId" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
           <Route path="/organizations/:organizationId/events/create" element={<ProtectedRoute><OrganizationEvent /></ProtectedRoute>} />
           <Route path="/organizations/:organizationId/events/:eventId/edit" element={<ProtectedRoute><OrganizationEvent /></ProtectedRoute>} />
-          <Route path="/register" element={<LandingPage />} />
-          <Route path="/register/status" element={<RegisterStatus />} />
           
           <Route path="/dashboard" element={
             <ProtectedRoute>
@@ -241,8 +251,9 @@ const App: React.FC = () => {
           <Route path="/admin/accounts" element={
             <Navigate to="/admin/hierarchy" replace />
           } />
+          </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes></Suspense>
+        </Routes></Suspense></RouteErrorBoundary>
           </NavigationMemory>
       </HashRouter>
     </AuthProvider>

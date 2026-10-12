@@ -1,12 +1,12 @@
 import React from 'react';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({ auth: {} as any, applications: [] as any[], statusVisits: vi.fn() }));
 vi.mock('./components/AuthContext', () => ({ AuthProvider: ({ children }: any) => children, useAuth: () => state.auth }));
 vi.mock('./components/ThemeContext', () => ({ ThemeProvider: ({ children }: any) => children }));
 vi.mock('./components/NavigationMemory', () => ({ default: ({ children }: any) => children }));
-vi.mock('./components/ui/Layout', () => ({ default: ({ children }: any) => children }));
+vi.mock('./components/ui/Layout', () => ({ default: ({ children }: any) => <div data-testid="workspace-shell">{children}</div> }));
 vi.mock('./components/ui/PwaStatus', () => ({ default: ({ children }: { children?: React.ReactNode }) => children }));
 vi.mock('./components/ui/ToastViewport', () => ({ default: () => null }));
 vi.mock('./lib/backend', () => ({ appData: { getApplications: () => state.applications } }));
@@ -19,7 +19,7 @@ vi.mock('./views/ClassStudentDetail', () => ({ default: () => <h1>Student detail
 vi.mock('./views/AdminControls', () => ({ default: () => <h1>System controls</h1> }));
 vi.mock('./views/LandingPage', () => ({ default: () => {
   const location = useLocation();
-  return <output>{JSON.stringify(location.state)}</output>;
+  return <output role="status">{JSON.stringify(location.state)}</output>;
 } }));
 import { useLocation } from 'react-router-dom';
 import { setMockDataRef } from './lib/accessControl';
@@ -38,6 +38,32 @@ it('opens the dashboard directly for an active account with an unseen approval n
   await screen.findByRole('heading', { name: 'Dashboard' });
   expect(window.location.hash).toBe('#/dashboard');
   expect(state.statusVisits).not.toHaveBeenCalled();
+});
+
+it('preserves the workspace shell across pages and mapped hierarchy routes', async () => {
+  state.auth.profile.role = 'admin';
+  render(<App />);
+  await screen.findByRole('heading', { name: 'Dashboard' });
+  const shell = screen.getByTestId('workspace-shell');
+  // A scrollable sidebar belongs to this node and must survive route changes.
+  shell.scrollTop = 180;
+  for (const [path, heading] of [
+    ['/admin/hierarchy', 'School hierarchy'],
+    ['/admin/hierarchy/students/student-1', 'Student detail'],
+    ['/dashboard', 'Dashboard'],
+  ]) {
+    await act(async () => { window.location.hash = `#${path}`; });
+    await screen.findByRole('heading', { name: heading });
+    expect(screen.getByTestId('workspace-shell')).toBe(shell);
+    expect(shell.scrollTop).toBe(180);
+  }
+});
+
+it('keeps public pages outside the workspace shell', async () => {
+  window.location.hash = '#/login';
+  render(<App />);
+  await waitFor(() => expect(document.querySelector('output')).toBeInTheDocument());
+  expect(screen.queryByTestId('workspace-shell')).not.toBeInTheDocument();
 });
 
 it('waits for the profile during login without visiting application status', async () => {

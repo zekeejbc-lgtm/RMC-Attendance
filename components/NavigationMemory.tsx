@@ -20,6 +20,8 @@ export default function NavigationMemory({ children }: { children: React.ReactNo
   const visited = useRef(false);
   const owner = user?.uid;
   const url = location.pathname + location.search;
+  // Control sections share one workspace; switching sections must not reset scroll.
+  const scrollUrl = location.pathname === '/admin/controls' ? location.pathname : url;
 
   useEffect(() => {
     if (loading) return;
@@ -62,8 +64,8 @@ export default function NavigationMemory({ children }: { children: React.ReactNo
   }, []);
 
   useEffect(() => {
-    if (loading || !owner || !isReturnDestination(url)) return;
-    const key = owner + ':scroll:' + url;
+    if (loading || !owner || !isReturnDestination(scrollUrl)) return;
+    const key = owner + ':scroll:' + scrollUrl;
     const saved = readMemory<{ x: number; y: number } | null>(key, null);
     let restoring = true;
     let stopped = false;
@@ -90,7 +92,7 @@ export default function NavigationMemory({ children }: { children: React.ReactNo
       window.removeEventListener('wheel', stopRestoring); window.removeEventListener('touchstart', stopRestoring);
       window.removeEventListener('keydown', stopRestoring);
     };
-  }, [owner, loading, url]);
+  }, [owner, loading, scrollUrl]);
 
   const back = (fallback = '/dashboard') => {
     const history = owner ? readReturnHistory(owner) : [];

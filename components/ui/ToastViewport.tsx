@@ -17,9 +17,9 @@ function Notification({ item, exiting }: { item: ToastItem; exiting: boolean }) 
         <span className="app-toast-code">{item.code}</span>
       </> : <>
         <span className="app-toast-label">{item.kind === 'success' ? item.message : item.title || item.message}</span>
-        {item.phases && <>
-          {item.kind === 'progress' && <div className="app-toast-phase">Step {phase + 1} of {item.phases.length}: {item.phases[phase]}</div>}
-          <div className="app-toast-bar" role="progressbar" aria-label={`${item.title} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.percent} aria-valuetext={item.kind === 'success' ? 'Done' : `Step ${phase + 1}: ${item.phases[phase]}`}>
+        {item.phases && item.kind === 'progress' && <>
+          <div className="app-toast-phase">Step {phase + 1} of {item.phases.length}: {item.phases[phase]}</div>
+          <div className="app-toast-bar" role="progressbar" aria-label={`${item.title} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.percent} aria-valuetext={`Step ${phase + 1}: ${item.phases[phase]}`}>
             <div style={{ width: `${item.percent}%` }} />
           </div>
         </>}

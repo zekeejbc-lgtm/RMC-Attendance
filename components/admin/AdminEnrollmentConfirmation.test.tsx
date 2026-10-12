@@ -2,8 +2,10 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import AdminEnrollmentConfirmation from './AdminEnrollmentConfirmation';
 import { defaultConfirmationSettings } from '../../lib/enrollmentConfirmation';
+import { changeField } from '../../tests/ui-select';
 const api = vi.hoisted(() => ({ role: 'admin', factors: vi.fn(), configure: vi.fn() }));
 vi.mock('../AuthContext', () => ({ useAuth: () => ({ profile: { role: api.role } }) }));
+vi.mock('./EmailDeliveryTracker', () => ({ default: () => <div>Live email tracker</div> }));
 vi.mock('../../lib/supabase', () => ({ supabase: { auth: { mfa: { listFactors: api.factors } } }, configureEnrollmentConfirmation: api.configure }));
 beforeEach(() => { vi.resetAllMocks(); api.role = 'admin'; api.factors.mockResolvedValue({ data: { all: [] } }); api.configure.mockResolvedValue(defaultConfirmationSettings); });
 afterEach(cleanup);
@@ -21,7 +23,9 @@ it('requires verification before opening the editor and fresh verification befor
  await waitFor(() => expect(open).toBeEnabled()); fireEvent.click(open);
  await screen.findByLabelText('Signup policy');
  expect(api.configure).toHaveBeenCalledWith('secret','','initiate',null);
- fireEvent.change(screen.getByLabelText('Signup policy'),{ target: { value: 'google_only' } });
+ changeField('Signup policy', 'google_only');
+ changeField('Confirmation email', 'custom');
+ expect(screen.getByLabelText('Custom email subject')).toBeInTheDocument();
  fireEvent.click(screen.getByText('Review and confirm changes'));
  const save = await screen.findByRole('button',{ name: 'Confirm and save' });
  expect(screen.getByLabelText('Current password')).toHaveValue(''); expect(save).toBeDisabled();
@@ -29,7 +33,7 @@ it('requires verification before opening the editor and fresh verification befor
  fireEvent.change(screen.getByLabelText('Type initiate to confirm'),{ target: { value: 'initiate' } });
  await waitFor(() => expect(save).toBeEnabled()); fireEvent.click(save);
  await screen.findByText('Enrollment confirmation settings saved.');
- expect(api.configure).toHaveBeenLastCalledWith('secret','','initiate',expect.objectContaining({ mode: 'google_only' }));
+ expect(api.configure).toHaveBeenLastCalledWith('secret','','initiate',expect.objectContaining({ mode: 'google_only', email_kind: 'custom' }));
 });
 it('requires enrolled MFA and fails closed when the factor lookup fails', async () => {
  api.factors.mockResolvedValue({ data: { all: [{ status: 'verified' }] } });

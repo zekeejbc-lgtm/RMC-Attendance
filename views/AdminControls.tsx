@@ -1,12 +1,13 @@
 import { RoleAssignment } from '../components/admin/RoleAssignment';
 import { hasPermission } from '../lib/accessControl';
 import { canAccessSystemControls, systemControlPermissions } from '../lib/systemControlsAccess';
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { legalLinks } from '../lib/legal';
-import { Snowflake, Activity, DollarSign, ShieldCheck, Shield, Users, Video } from 'lucide-react';
+import { Snowflake, Activity, DollarSign, ShieldCheck, Shield, Users, Video, RefreshCw, ChevronRight } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
 import { Page, PageHeader, Surface } from '../components/ui/Page';
+import CustomSelect from '../components/ui/CustomSelect';
 import { AdminFreezeView } from '../components/admin/AdminFreezeView';
 import { AdminSystemHealthView } from '../components/admin/AdminSystemHealthView';
 import { AdminPaymentReminderView } from '../components/admin/AdminPaymentReminderView';
@@ -16,13 +17,14 @@ import LegalPage from './LegalPage';
 import AdminHomepageVideoView from '../components/admin/AdminHomepageVideoView';
 import AdminAppUpdates from '../components/admin/AdminAppUpdates';
 import AdminEnrollmentConfirmation from '../components/admin/AdminEnrollmentConfirmation';
+import AdminEmailDashboard from '../components/admin/AdminEmailDashboard';
 import { LegalKind } from '../lib/legalPages';
 
-type TabId = 'freeze' | 'health' | 'payment' | 'rbac' | 'accounts' | 'legal' | 'video' | 'updates' | 'enrollment';
+type TabId = 'freeze' | 'health' | 'payment' | 'rbac' | 'accounts' | 'legal' | 'video' | 'updates' | 'enrollment' | 'email';
 
 const subPages: { id: TabId; label: string; icon: React.ElementType; description: string }[] = [
-  { id: 'enrollment', label: 'Enrollment', icon: ShieldCheck, description: 'Configure email verification and signup policy' },
-  { id: 'updates', label: 'App Updates', icon: Activity, description: 'Refresh all clients and keep everyone on the latest deployed app' },
+  { id: 'email', label: 'Email', icon: ShieldCheck, description: 'Monitor delivery, preview emails, manage the queue and configure enrollment verification' },
+  { id: 'updates', label: 'App Updates', icon: RefreshCw, description: 'Keep connected browsers on the latest deployed app' },
   { id: 'freeze', label: 'Freeze Controls', icon: Snowflake, description: 'Manage institutional and node-level system freezes' },
   { id: 'health', label: 'System Health', icon: Activity, description: 'Monitor system performance, database status, and audit logs' },
   { id: 'payment', label: 'Payments', icon: DollarSign, description: 'Manage subscription reminders and billing statuses' },
@@ -32,37 +34,22 @@ const subPages: { id: TabId; label: string; icon: React.ElementType; description
   { id: 'legal', label: 'Legal pages', icon: Shield, description: 'Preview and edit the current saved legal pages' },
 ];
 
+const navigationGroups: { label: string; pages: TabId[] }[] = [
+  { label: 'Access & identity', pages: ['email', 'accounts', 'rbac'] },
+  { label: 'System operations', pages: ['updates', 'freeze', 'health', 'payment'] },
+  { label: 'Public content', pages: ['video', 'legal'] },
+];
+
 const AdminControls: React.FC = () => {
   const { profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-
-  const getInitialTab = (): TabId => {
-    const params = new URLSearchParams(location.search);
-    const tab = params.get('tab');
-    if (tab && subPages.some(page => page.id === tab)) {
-      return tab as TabId;
-    }
-    return 'freeze';
-  };
-
-  const [activeTab, setActiveTab] = useState<TabId>(getInitialTab());
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const tab = params.get('tab');
-    if (tab && subPages.some(page => page.id === tab) && tab !== activeTab) {
-      setActiveTab(tab as TabId);
-    }
-  }, [location.search]);
-
-  const handleTabChange = (tabId: TabId) => {
-    setActiveTab(tabId);
-    navigate(`/admin/controls?tab=${tabId}`);
-  };
+  const requested = new URLSearchParams(location.search).get('tab');
+  const requestedTab = requested === 'enrollment' ? 'email' : requested;
+  const activeTab = subPages.some(page => page.id === requestedTab) ? requestedTab as TabId : 'freeze';
 
   const tabPermissions = systemControlPermissions;
-  const allowedPages = subPages.filter(page => (page.id === 'legal' || page.id === 'video' || page.id === 'updates' || page.id === 'enrollment') ? profile?.role === 'admin' : hasPermission(profile?.role, tabPermissions[page.id]));
+  const allowedPages = subPages.filter(page => (page.id === 'legal' || page.id === 'video' || page.id === 'updates' || page.id === 'enrollment' || page.id === 'email') ? profile?.role === 'admin' : hasPermission(profile?.role, tabPermissions[page.id]));
   const requestedPage = new URLSearchParams(location.search).get('page');
   const legalKinds: LegalKind[] = ['privacy', 'deletion', 'agreement', 'terms'];
   const legalKind = legalKinds.includes(requestedPage as LegalKind) ? requestedPage as LegalKind : 'privacy';
@@ -74,15 +61,15 @@ const AdminControls: React.FC = () => {
   }
 
   return (
-    <Page className="max-w-none space-y-8 px-5 py-6 sm:px-8 sm:py-8 xl:px-12">
+    <Page className="operations-center mx-auto max-w-[96rem]">
       <PageHeader
         eyebrow="System Administration"
-        title="Admin Control Operations"
-        description="A focused workspace for system governance, access controls, payment workflows, and security operations."
+        title="Operations center"
+        description="Manage access, keep the system running smoothly, and maintain your public content."
         className="max-w-[96rem]"
       />
 
-      <Surface className="relative max-w-[96rem] overflow-hidden !border-brand-800 !bg-brand-900 p-6 text-white shadow-brand-elevated sm:p-8">
+      <Surface className="relative overflow-hidden !border-brand-800 !bg-brand-900 p-5 text-white sm:p-6">
         <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gold-400/15 blur-3xl" />
         <div className="absolute -bottom-24 left-1/3 h-52 w-52 rounded-full bg-emerald-400/10 blur-3xl" />
         <div className="relative z-10 flex flex-col gap-5">
@@ -91,42 +78,61 @@ const AdminControls: React.FC = () => {
               <Shield size={24} />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gold-300">Operations center</p>
-              <h2 className="mt-1 text-xl font-bold tracking-tight text-white sm:text-2xl">System Operations Group</h2>
-              <p className="mt-2 max-w-md text-sm leading-6 text-slate-300">{activeSubPage.description}</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-gold-300">System controls</p>
+              <h2 className="mt-1 text-xl font-bold tracking-tight text-white sm:text-2xl">{activeSubPage.label}</h2>
+              <p className="mt-1 min-h-[4.5rem] text-sm leading-6 text-slate-300 sm:min-h-12 lg:min-h-6">{activeSubPage.description}</p>
             </div>
           </div>
 
-          <div role="tablist" aria-label="Admin control sub pages" className="grid w-full grid-cols-2 gap-1.5 rounded-2xl border border-white/10 bg-brand-950/45 p-1.5 sm:grid-cols-4">
-            {allowedPages.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                role="tab"
-                aria-selected={selectedTab === id}
-                aria-label={label}
-                onClick={() => handleTabChange(id)}
-                className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-bold transition-all sm:text-xs ${
-                  selectedTab === id
-                    ? 'app-button--gold text-brand-900 shadow-md'
-                    : 'text-white/70 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <Icon size={16} className="shrink-0" />
-                <span className="truncate">{label}</span>
-              </button>
-            ))}
-          </div>
         </div>
       </Surface>
 
+      <div className="grid items-start gap-5 lg:grid-cols-[15rem_minmax(0,1fr)] xl:gap-6">
+        <Surface className="p-3 sm:p-4">
+          <CustomSelect
+            className="sm:hidden"
+            label="Control section"
+            ariaLabel="Control section"
+            value={selectedTab || ''}
+            onChange={value => navigate(`/admin/controls?tab=${value}`)}
+            options={navigationGroups.flatMap(group => group.pages.flatMap(id => {
+              const page = allowedPages.find(page => page.id === id);
+              return page ? [{ value: page.id, label: page.label, content: <span className="flex flex-col"><span>{page.label}</span><span className="app-dropdown-meta">{group.label}</span></span> }] : [];
+            }))}
+          />
+          <nav aria-label="Admin control sub pages" className="hidden gap-5 sm:grid sm:grid-cols-3 lg:grid-cols-1">
+            {navigationGroups.map(group => {
+              const pages = group.pages.map(id => allowedPages.find(page => page.id === id)).filter((page): page is typeof subPages[number] => Boolean(page));
+              if (!pages.length) return null;
+              return <div key={group.label}>
+                <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">{group.label}</p>
+                <div className="space-y-1">
+                  {pages.map(({ id, label, icon: Icon }) => <Link
+                    key={id}
+                    to={`/admin/controls?tab=${id}`}
+                    aria-current={selectedTab === id ? 'page' : undefined}
+                    className="operations-nav-link flex min-h-11 items-center gap-2.5 px-3 py-2.5 text-sm font-semibold"
+                  >
+                    <Icon size={18} aria-hidden="true" className="shrink-0" />
+                    <span className="min-w-0 flex-1">{label}</span>
+                    {selectedTab === id && <ChevronRight size={16} aria-hidden="true" className="shrink-0" />}
+                  </Link>)}
+                </div>
+              </div>;
+            })}
+          </nav>
+        </Surface>
+
+      <div className="min-w-0 space-y-5">
+
       {selectedTab === 'legal' && <Surface className="max-w-[96rem] space-y-3 p-6">
         <h2 className="text-xl font-bold">Legal pages</h2>
-        <p className="text-sm text-slate-600 dark:text-slate-300">Open a saved page to preview it, then choose Edit page to make changes.</p>
+        <p className="text-sm text-[var(--color-text-muted)]">Open a saved page to preview it, then choose Edit page to make changes.</p>
         <nav aria-label="Legal pages" className="flex flex-wrap gap-3">{legalLinks.map((link, index) => <Link key={link.path} to={`/admin/controls?tab=legal&page=${legalKinds[index]}`} aria-current={legalKind === legalKinds[index] ? 'page' : undefined} className={`rounded-xl border px-4 py-2 text-sm font-semibold ${legalKind === legalKinds[index] ? 'border-brand-900 bg-brand-900 text-white' : 'border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800'}`}>{link.title}</Link>)}</nav>
         <LegalPage key={legalKind} kind={legalKind} adminPreview />
       </Surface>}
 
-      <div className="max-w-[96rem] animate-in fade-in">
+      <div className="max-w-[96rem]">
         {selectedTab === 'freeze' && <AdminFreezeView actorName={profile?.name} />}
         {selectedTab === 'health' && <AdminSystemHealthView />}
         {selectedTab === 'payment' && <AdminPaymentReminderView actorName={profile?.name} />}
@@ -134,7 +140,9 @@ const AdminControls: React.FC = () => {
         {selectedTab === 'accounts' && <AdminAccountView />}
         {selectedTab === 'video' && <AdminHomepageVideoView />}
         {selectedTab === 'updates' && profile?.role === 'admin' && <AdminAppUpdates />}
-        {selectedTab === 'enrollment' && profile?.role === 'admin' && <AdminEnrollmentConfirmation />}
+        {selectedTab === 'email' && profile?.role === 'admin' && <AdminEnrollmentConfirmation><AdminEmailDashboard /></AdminEnrollmentConfirmation>}
+      </div>
+      </div>
       </div>
     </Page>
   );
