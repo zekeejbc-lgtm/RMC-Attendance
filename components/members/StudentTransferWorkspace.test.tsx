@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import StudentTransferWorkspace from './StudentTransferWorkspace';
 import { classifyError } from '../../lib/errors';
 const mocks = vi.hoisted(() => ({ roster: vi.fn(), transfer: vi.fn() }));
-vi.mock('../../lib/backend', () => ({ appData: { getTransferRoster: mocks.roster, transferStudents: mocks.transfer } }));
+vi.mock('../../lib/backend', () => ({ documentUrl: (src: string) => Promise.resolve(src), appData: { getTransferRoster: mocks.roster, transferStudents: mocks.transfer } }));
 vi.mock('../ui/CustomSelect', () => ({ default: ({ label, value, onChange, options }: any) => <label>{label}<select value={value} onChange={e => onChange(e.target.value)}>{options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label> }));
 const nodes: any = [{ id: 'campus', name: 'Campus', type: 'campus', children: [{ id: 'a', name: 'Class A', type: 'section' }, { id: 'b', name: 'Class B', type: 'section' }] }];
 const chooseDestination = () => {
@@ -13,6 +13,38 @@ const chooseDestination = () => {
 };
 beforeEach(() => { mocks.roster.mockResolvedValue([{ uid: '1', name: 'Jane', student_id: '00001', node_id: 'a', role: 'student' }]); mocks.transfer.mockResolvedValue(1); });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
+it('shows the profile photo in both student layouts and the transfer review', async () => {
+  mocks.roster.mockResolvedValue([{ uid: '1', name: 'Jane', student_id: '00001', node_id: 'a', role: 'student', photo_url: '/jane.png' }]);
+  render(<StudentTransferWorkspace nodes={nodes} />);
+  const photos = await screen.findAllByRole('img', { name: 'Profile picture of Jane' });
+  expect(photos).toHaveLength(2);
+  await waitFor(() => photos.forEach(photo => expect(photo).toHaveAttribute('src', '/jane.png')));
+  fireEvent.click(screen.getAllByRole('checkbox')[0]);
+  chooseDestination();
+  fireEvent.click(screen.getByRole('button', { name: 'Review selected students (1)' }));
+  await waitFor(() => expect(screen.getByRole('img', { name: 'Profile picture of Jane' })).toHaveAttribute('src', '/jane.png'));
+});
+it('explains an empty session group and allows review after choosing a class inside a group', async () => {
+  const hierarchy: any = [{ ...nodes[0], children: [nodes[0].children[0],
+    { id: 'morning', name: 'Morning', type: 'custom', metadata: { customFields: { grouping: 'Session' } }, children: [] },
+    { id: 'afternoon', name: 'Afternoon', type: 'custom', children: [nodes[0].children[1]] },
+  ] }];
+  render(<StudentTransferWorkspace nodes={hierarchy} />);
+  fireEvent.click((await screen.findAllByRole('checkbox'))[0]);
+  const picker = within(screen.getByRole('group', { name: 'Destination class' }));
+  fireEvent.change(picker.getByLabelText('Campus'), { target: { value: 'campus' } });
+  const choice = picker.getByLabelText('Academic unit / class');
+  expect(choice).toHaveTextContent('Morning — Session');
+  fireEvent.change(choice, { target: { value: 'morning' } });
+  expect(picker.getByRole('status')).toHaveTextContent('“Morning” has no active blocks or sections');
+  expect(screen.getByRole('button', { name: 'Review selected students (1)' })).toBeDisabled();
+  fireEvent.change(choice, { target: { value: 'afternoon' } });
+  expect(picker.getByRole('status')).toHaveTextContent('Continue to a specific block or section');
+  fireEvent.change(picker.getByLabelText('Section'), { target: { value: 'b' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Review selected students (1)' }));
+  expect(screen.getByText('Review 1 assignment changes')).toBeInTheDocument();
+  expect(mocks.transfer).not.toHaveBeenCalled();
+});
 it('requires a specific destination class and clears it when a parent changes', async () => {
   const hierarchy: any = [{ id: 'campus', name: 'Campus', type: 'campus', children: [
     { id: 'unit-a', name: 'College', type: 'education_unit', children: [nodes[0].children[0]] },

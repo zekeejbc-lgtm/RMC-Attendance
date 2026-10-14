@@ -43,7 +43,8 @@ export function AcademicPathPicker({ roots, value, onChange, purpose = 'any', in
   return <div className={`space-y-3 ${className}`}>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {levels.map(({ options: levelOptions, selected }, index) => {
-        const label = getAcademicNodeLabel(levelOptions[0]?.type || 'custom');
+        const mixedTypes = new Set(levelOptions.map(node => node.type)).size > 1;
+        const label = mixedTypes ? 'Academic unit / class' : getAcademicNodeLabel(levelOptions[0]?.type || 'custom');
         const parent = selectedPath[index - 1];
         const parentOption = allowParentSelection && parent ? [{ value: parent.id, label: `All of ${parent.name}` }] : [];
         return (
@@ -54,7 +55,7 @@ export function AcademicPathPicker({ roots, value, onChange, purpose = 'any', in
             onChange={(id) => selectAt(index, id as string)}
             options={[...parentOption, ...levelOptions.map((node) => ({
               value: node.id,
-              label: `${node.name}${node.metadata?.shortCode ? ` (${node.metadata.shortCode})` : ''}`,
+              label: `${node.name}${node.metadata?.shortCode ? ` (${node.metadata.shortCode})` : ''}${mixedTypes ? ` — ${node.type === 'custom' ? node.metadata?.customFields?.grouping || 'Group' : getAcademicNodeLabel(node.type)}` : ''}`,
             }))]}
             placeholder={`Select ${label}`}
             searchable={levelOptions.length > 10}

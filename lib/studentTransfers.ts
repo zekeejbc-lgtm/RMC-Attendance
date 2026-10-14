@@ -2,7 +2,7 @@ import { SchoolNode } from '../types';
 import { findNodePath, flattenDirectory } from './academicDirectory';
 import { parseCsvRecords } from './memberCsv';
 
-export interface TransferStudent { uid: string; name: string; student_id: string; node_id: string; role: string; }
+export interface TransferStudent { uid: string; name: string; student_id: string; node_id: string; role: string; photo_url?: string; }
 export interface StudentTransfer { uid: string; student_id: string; source_node_id: string; destination_node_id: string; }
 export const TRANSFER_COLUMNS = ['name', 'student_id', 'institutional_unit', 'class', 'source_node_id', 'destination_node_id'] as const;
 export const SIMPLE_TRANSFER_COLUMNS = ['Student name', 'Student ID', 'Current institutional unit', 'Current class', 'Move to class', 'Assignment reference'] as const;

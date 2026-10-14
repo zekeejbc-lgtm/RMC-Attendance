@@ -64,14 +64,15 @@ it('blocks approval navigation for an individually frozen applicant', async () =
 it('shows only requested corrections and documents and resubmits corrected details', async () => {
   api.profile = null;
   api.application = {
-    id: 'student', status: 'bounced', rejection_reason: 'Please correct your name and provide your ID front.',
-    clarification_fields: ['name', 'id_front'],
+    id: 'student', status: 'bounced', rejection_reason: 'Please correct your name and profile photo.',
+    clarification_fields: ['name', 'photo', 'id_front', 'id_back'],
     form_data: { name: 'Original name', student_id: '2023-39680T', school_data: { section: '2SP - B' } },
   };
   await act(async () => { render(<RegisterStatus />); });
   expect(screen.getByText('Clarification requested')).toBeInTheDocument();
   expect(screen.getByText(api.application.rejection_reason)).toBeInTheDocument();
-  expect(screen.getByLabelText('Student ID front', { selector: 'input' })).toHaveAttribute('accept', expect.stringContaining('application/pdf'));
+  expect(screen.getByLabelText('Replace profile photo', { selector: 'input' })).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp');
+  expect(screen.queryByLabelText('Student ID front', { selector: 'input' })).toBeNull();
   expect(screen.queryByLabelText('Student ID back', { selector: 'input' })).toBeNull();
   expect(screen.queryByLabelText('Student ID', { selector: 'input' })).toBeNull();
   fireEvent.change(screen.getByLabelText('Full name', { selector: 'input' }), { target: { value: ' Corrected name ' } });

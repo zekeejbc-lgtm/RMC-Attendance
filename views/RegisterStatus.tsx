@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../components/AuthContext';
 import Button from '../components/ui/Button';
 import ThemeToggle from '../components/ui/ThemeToggle';
-import { appData, appAuth, uploadDocument, documentUrl, refreshData } from '../lib/backend';
+import { appData, appAuth, uploadDocument, refreshData } from '../lib/backend';
 import { supabase } from '../lib/supabase';
 import { PageSkeletonForRoute } from '../components/ui/PageLoading';
 import { AppLoading } from '../components/ui/Skeleton';
@@ -21,7 +21,6 @@ import { Modal } from '../components/ui/Modal';
 const fieldLabels: Record<string, string> = {
   name: 'Full name', student_id: 'Student ID', guardian_name: 'Guardian name',
   guardian_phone: 'Guardian contact number', photo: 'Profile photo',
-  id_front: 'Student ID front', id_back: 'Student ID back',
 };
 
 export default function RegisterStatus() {
@@ -175,10 +174,9 @@ export default function RegisterStatus() {
 
         {application.status !== 'approved' && <section className="app-surface min-w-0 space-y-5 p-5 sm:p-6" aria-labelledby="admission-documents-heading">
           <div><div className="flex items-center gap-2.5"><FileText size={20} className="shrink-0 text-brand-600 dark:text-brand-300" aria-hidden="true" /><h2 id="admission-documents-heading" className="text-base font-bold">{application.status === 'bounced' ? 'Requested documents' : 'Admission documents'}</h2></div>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">Profile photo is required. Additional documents appear only when requested by a reviewer.</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">Profile photo is required.</p>
           </div>
-          {([['photo', 'Profile photo'], ['id_front', 'Student ID front'], ['id_back', 'Student ID back']] as const)
-            .filter(([kind]) => kind === 'photo' || (application.status === 'bounced' && clarificationFields.includes(kind)))
+          {([['photo', 'Profile photo']] as const)
             .map(([kind, label]) => <div key={kind} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-sm dark:border-slate-700 dark:bg-slate-900/40">
               {kind === 'photo' && savedProfilePhoto && !photoNeedsCorrection ? <div>
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><p className="font-semibold">Submitted profile photo</p><span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 aria-hidden="true" size={14} />Uploaded</span></div>
@@ -192,7 +190,6 @@ export default function RegisterStatus() {
                 <span className="mt-2 block text-xs leading-relaxed text-slate-600 dark:text-slate-400">{kind === 'photo' ? 'JPG, PNG or WebP' : 'JPG, PNG, WebP or PDF'}</span>
                 <input className="mt-3 block min-h-11 w-full min-w-0 max-w-full rounded-lg text-xs text-slate-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-brand-100 file:px-3 file:py-3 file:font-semibold file:text-brand-800 disabled:opacity-60 dark:text-slate-300 dark:file:bg-brand-900 dark:file:text-brand-100" type="file" aria-label={photoNeedsCorrection && kind === 'photo' ? 'Replace profile photo' : label} accept={kind === 'photo' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,application/pdf'} disabled={uploading} onChange={event => void upload(selectUploadFile(event.currentTarget), kind)} />
               </label>}
-              {kind !== 'photo' && application.documents?.[kind] && <button type="button" className="mt-3 min-h-11 text-sm font-semibold text-brand-700 underline underline-offset-4 dark:text-brand-300" onClick={async () => { const url = await documentUrl(application.documents![kind]); window.open(url, '_blank', 'noopener,noreferrer'); }}>View uploaded document</button>}
             </div>)}
         </section>}
       </div>}

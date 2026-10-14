@@ -846,7 +846,7 @@ const SSGPanel: React.FC = () => {
           </label>
           {admissionDecision.decision === 'bounced' && <fieldset className="space-y-2">
             <legend className="text-sm font-bold">Information requiring clarification</legend>
-            {[['name', 'Full name'], ['student_id', 'Student ID'], ['guardian_name', 'Guardian name'], ['guardian_phone', 'Guardian contact number'], ['photo', 'Profile photo'], ['id_front', 'Student ID front'], ['id_back', 'Student ID back']].map(([value, label]) => <label key={value} className="flex items-center gap-2 text-sm">
+            {[['name', 'Full name'], ['student_id', 'Student ID'], ['guardian_name', 'Guardian name'], ['guardian_phone', 'Guardian contact number'], ['photo', 'Profile photo']].map(([value, label]) => <label key={value} className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={clarificationFields.includes(value)} onChange={event => setClarificationFields(current => event.target.checked ? [...current, value] : current.filter(field => field !== value))} /> {label}
             </label>)}
           </fieldset>}

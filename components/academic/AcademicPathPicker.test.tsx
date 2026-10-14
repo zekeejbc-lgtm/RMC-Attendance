@@ -14,6 +14,19 @@ function Harness({ roots, onPath }: { roots: SchoolNode[]; onPath: (path: School
 }
 
 describe('AcademicPathPicker', () => {
+  it('distinguishes session groups from classes in a mixed dropdown', async () => {
+    const user = userEvent.setup();
+    const roots: SchoolNode[] = [
+      { id: 'class-b', name: '2SP - B', type: 'block' },
+      { id: 'morning', name: 'Morning', type: 'custom', metadata: { customFields: { grouping: 'Session' } } },
+    ];
+    const onPath = vi.fn();
+    render(<Harness roots={roots} onPath={onPath} />);
+    await user.click(screen.getByRole('button', { name: /academic unit \/ class.*select academic unit \/ class/i }));
+    expect(screen.getByRole('option', { name: '2SP - B — Block / Section' })).toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: 'Morning — Session' }));
+    expect(onPath).toHaveBeenLastCalledWith([roots[1]]);
+  });
   it('selects JHS directly through grade and section without track or strand fields', async () => {
     const user = userEvent.setup();
     const jhs = createAcademicPreset('jhs', 'RMC');
