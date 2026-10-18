@@ -29,7 +29,7 @@ beforeEach(()=>{
 const actions=()=>fetch.mock.calls.filter(([,options]:any[])=>options?.payload).map(([,options]:any[])=>JSON.parse(options.payload));
 it('prepares a fresh link, persists the Gmail draft, then sends with inline logo and acknowledgement',()=>{
  context.deliverAuthEmails();
- expect(send).toHaveBeenCalledWith(message.to,message.subject,expect.stringContaining('IARS-DELIVERY-job'),expect.objectContaining({htmlBody:expect.stringContaining('cid:iarsSeal'),inlineImages:{iarsSeal:{logo:true}}}));
+ expect(send).toHaveBeenCalledWith(message.to,message.subject,expect.stringContaining('IARS-DELIVERY-job'),expect.objectContaining({name:'Institution Attendance and Records System',htmlBody:expect.stringContaining('cid:iarsSeal'),inlineImages:{iarsSeal:{logo:true}}}));
  const names=actions().map(value=>value.action);expect(names.indexOf('prepare')).toBeLessThan(names.indexOf('draft'));expect(names.indexOf('draft')).toBeLessThan(names.indexOf('ack'));
  expect(JSON.parse(properties.get('AUTH_EMAIL_JOB_job')).state).toBe('sent');
 });

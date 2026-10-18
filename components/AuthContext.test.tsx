@@ -13,7 +13,10 @@ vi.mock('../lib/supabase', () => ({
     auth: { onAuthStateChange: api.onAuthStateChange, signOut: api.signOut, mfa: { getAuthenticatorAssuranceLevel: api.assurance } },
   },
 }));
-vi.mock('./AuthChallenge', () => ({ AuthChallenge: () => <div>Authenticator verification required</div> }));
+vi.mock('./AuthChallenge', () => ({ AuthChallenge: ({ recovery, onComplete }: { recovery: boolean; onComplete: () => void }) => <div>
+  {recovery ? 'Set a new password' : 'Authenticator verification required'}
+  <button onClick={onComplete}>Complete challenge</button>
+</div> }));
 import { AuthProvider, useAuth } from './AuthContext';
 import { appAuth, appData, resetData } from '../lib/backend';
 import { toast } from '../lib/toast';
@@ -122,6 +125,40 @@ it('keeps a passkey SIGNED_IN session behind the existing authenticator challeng
   await screen.findByText('Authenticator verification required');
   expect(screen.queryByText('Workspace ready')).not.toBeInTheDocument();
   expect(api.autoRosters).not.toHaveBeenCalled();
+});
+
+it('preserves password recovery through MFA and token refresh until the password is saved', async () => {
+  api.assurance.mockResolvedValue({ data: { currentLevel: 'aal1', nextLevel: 'aal2' }, error: null });
+  api.rpc.mockResolvedValue({ data: snapshot, error: null });
+  render(<AuthProvider><Probe /></AuthProvider>);
+  act(() => authChange('PASSWORD_RECOVERY', { user: { id: 'student' } }));
+  await screen.findByText('Authenticator verification required');
+  expect(api.rpc).not.toHaveBeenCalled();
+  api.assurance.mockResolvedValue({ data: { currentLevel: 'aal2', nextLevel: 'aal2' }, error: null });
+  act(() => authChange('MFA_CHALLENGE_VERIFIED', { user: { id: 'student' } }));
+  act(() => screen.getByRole('button', { name: 'Complete challenge' }).click());
+  await screen.findByText('Set a new password');
+  act(() => authChange('TOKEN_REFRESHED', { user: { id: 'student' } }));
+  await waitFor(() => expect(api.assurance).toHaveBeenCalledTimes(3));
+  expect(screen.getByText('Set a new password')).toBeVisible();
+  expect(api.rpc).not.toHaveBeenCalled();
+  expect(api.autoRosters).not.toHaveBeenCalled();
+  act(() => screen.getByRole('button', { name: 'Complete challenge' }).click());
+  await screen.findByText('Student');
+  expect(screen.queryByText('Set a new password')).not.toBeInTheDocument();
+});
+
+it('keeps recovery without MFA on the password form and clears it on sign-out', async () => {
+  api.rpc.mockResolvedValue({ data: snapshot, error: null });
+  render(<AuthProvider><Probe /></AuthProvider>);
+  act(() => authChange('PASSWORD_RECOVERY', { user: { id: 'student' } }));
+  await waitFor(() => expect(api.assurance).toHaveBeenCalled());
+  expect(screen.getByText('Set a new password')).toBeVisible();
+  expect(api.rpc).not.toHaveBeenCalled();
+  act(() => authChange('SIGNED_OUT', null));
+  emit('student');
+  await screen.findByText('Student');
+  expect(screen.queryByText('Set a new password')).not.toBeInTheDocument();
 });
 
 it('does not expose an active profile for an unapproved account after passkey SIGNED_IN', async () => {

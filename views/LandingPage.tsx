@@ -54,6 +54,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
   
   // Modals
   const [showLoginModal, setShowLoginModal] = useState(defaultOpenLogin);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetNotice, setResetNotice] = useState('');
   const isEnrollmentPage = location.pathname === '/register';
   const [selectedFeature, setSelectedFeature] = useState<any>(null);
 
@@ -128,6 +132,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
   useEffect(() => {
     setShowLoginModal(defaultOpenLogin && !isEnrollmentPage);
+    setShowForgotPassword(false);
   }, [defaultOpenLogin, isEnrollmentPage]);
 
 
@@ -462,7 +467,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
       {/* LOGIN MODAL */}
       <Modal
-        open={showLoginModal}
+        open={showLoginModal && !showForgotPassword}
         onClose={() => { setShowLoginModal(false); if (defaultOpenLogin) navigate('/'); }}
         size="md"
         title="Log in to IARS"
@@ -530,15 +535,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
                      <Button type="submit" disabled={isLoggingIn} className="!rounded-2xl text-xs font-black uppercase tracking-widest py-4 mt-2 shadow-lg hover:shadow-xl transition-all">
                        {isLoggingIn ? <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={18}/> Logging in...</span> : 'Log In'}
                      </Button>
-                     <button type="button" disabled={resetBusy || emailClock<resetUntil} className="text-sm underline disabled:opacity-50" onClick={async () => {
-                       if (!identifier.includes('@')) { setLoginError('Enter your email address above, then choose Forgot password.'); return; }
-                       setResetBusy(true);setLoginError('');setEmailNotice('');
-                       try {
-                         const result=await requestAuthEmail('recovery',identifier);
-                         setResetUntil(Date.now()+(result.cooldownSeconds || 120)*1000);
-                         setEmailNotice('If this email has an account, its reset request is queued. Gmail sends it automatically when an allowance is available, including after a daily quota reset. The reset link is created just before sending. Check Spam or Junk; repeated requests do not add duplicate emails.');
-                       } catch(error) {setLoginError(errorMessage(error));} finally {setResetBusy(false);}
-                     }}>{resetBusy ? 'Queueing reset email…' : emailClock<resetUntil ? `Try again in ${Math.ceil((resetUntil-emailClock)/1000)}s` : 'Forgot password?'}</button>
+                     <button type="button" disabled={isLoggingIn} className="text-sm underline disabled:opacity-50" onClick={() => {
+                       setResetEmail(identifier.includes('@') ? identifier.trim() : '');
+                       setResetError('');
+                       setShowForgotPassword(true);
+                     }}>Forgot password?</button>
                    </form>
                    {showLoginModal && <div className="mt-4 space-y-3">
                      <PasskeySignIn disabled={isLoggingIn} onSuccess={() => {
@@ -607,6 +608,35 @@ const LandingPage: React.FC<LandingPageProps> = ({ defaultOpenLogin = false }) =
 
               </div>
            </div>
+      </Modal>
+
+      <Modal open={showLoginModal && showForgotPassword} onClose={() => setShowForgotPassword(false)} size="md"
+        title="Forgot password?" description="Enter your account email address to request a password reset link.">
+        <form className="space-y-4" onSubmit={async event => {
+          event.preventDefault();
+          if (resetBusy || Date.now() < resetUntil) return;
+          setResetBusy(true); setResetError(''); setResetNotice('');
+          try {
+            const result = await requestAuthEmail('recovery', resetEmail.trim());
+            setResetUntil(Date.now() + (result.cooldownSeconds || 120) * 1000);
+            setResetNotice('If this email has an account, its reset request is queued. Check your inbox and Spam or Junk for a reset link. Delivery may be delayed when the daily email allowance is reached. A fresh link is created just before sending; repeated requests do not add duplicate emails.');
+          } catch (error) { setResetError(errorMessage(error)); }
+          finally { setResetBusy(false); }
+        }}>
+          <div className="space-y-2">
+            <label htmlFor="forgot-password-email" className="block text-sm font-bold text-brand-900 dark:text-white">Email address</label>
+            <input id="forgot-password-email" type="email" autoComplete="email" required maxLength={254}
+              value={resetEmail} disabled={resetBusy} onChange={event => { setResetEmail(event.target.value); setResetError(''); setResetNotice(''); }}
+              className="input-field w-full" placeholder="you@example.com" />
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-300">Open the link in your email to choose a new password. If you have two-factor authentication enabled, verify your authenticator code first.</p>
+          {resetNotice && <p role="status" className="rounded-xl bg-blue-50 p-4 text-sm text-blue-900 dark:bg-slate-800 dark:text-slate-100">{resetNotice}</p>}
+          {resetError && <ErrorNotice error={resetError} operation="Request password reset" />}
+          <Button type="submit" disabled={resetBusy || emailClock < resetUntil}>
+            {resetBusy ? 'Queueing reset email…' : emailClock < resetUntil ? `Try again in ${Math.ceil((resetUntil - emailClock) / 1000)}s` : 'Send reset link'}
+          </Button>
+          <Button variant="secondary" onClick={() => setShowForgotPassword(false)}>Back to login</Button>
+        </form>
       </Modal>
 
       {isEnrollmentPage && <main className="mx-auto w-full max-w-4xl px-4 pb-12 pt-28 sm:px-6 sm:pt-32" aria-labelledby="enrollment-title">

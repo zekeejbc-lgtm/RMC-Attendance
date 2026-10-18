@@ -21,6 +21,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({ user: null, profile: null, stats: null, loading: true, isMock: false });
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const retrySync = useRef<(() => Promise<void>) | null>(null);
+  const recoveryOwner = useRef<string | null>(null);
   const [challenge, setChallenge] = useState<'mfa' | 'recovery' | null>(null);
   const [state, setState] = useState<AuthContextType>({ user: null, profile: null, stats: null, loading: true, isMock: false, error: configurationError, revision: 0 });
   useEffect(() => {
@@ -44,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const idleSession = createIdleSession(owner => {
       if (disposed || expiredOwner === owner) return;
       expiredOwner = owner;
+      recoveryOwner.current = null;
       identity = null; identityVersion++; rosterAuthorizedVersion = -1; welcomePending = null;
       setChallenge(null);
       resetData();
@@ -109,6 +111,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           needsMfa = data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2';
           if (needsMfa) rosterAuthorizedVersion = -1;
           if (needsMfa) setChallenge('mfa');
+          // Recovery is a separate pending action, not a completed login. MFA
+          // must lead back to the password form before loading the workspace.
+          if (recoveryOwner.current === identity) {
+            setChallenge(needsMfa ? 'mfa' : 'recovery');
+            return;
+          }
         }
         const applied = await refreshData();
         if (disposed || version !== identityVersion) return;
@@ -152,7 +160,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       setState(s => ({ ...s, approvalNoticeSeen: Boolean(session?.user.user_metadata?.approval_notice_seen_at) }));
-      if (_event === 'PASSWORD_RECOVERY') setChallenge('recovery');
+      if (recoveryOwner.current !== uid) recoveryOwner.current = null;
+      if (_event === 'PASSWORD_RECOVERY' && uid) {
+        recoveryOwner.current = uid;
+        setChallenge('recovery');
+      }
       if (!uid) setChallenge(null);
       if (identity !== uid) {
         const previousOwner = identity;
@@ -201,7 +213,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [state.profile?.uid, state.offlineScanner, scopeFrozen]);
   return <AuthContext.Provider value={{ ...state, markApprovalNoticeSeen: () => setState(s => ({ ...s, approvalNoticeSeen: true })) }}>
     {state.error && <ErrorNotice error={state.error} operation="Load your account"><button className="underline" onClick={() => void retrySync.current?.()}>Retry connection</button></ErrorNotice>}
-    {challenge ? <AuthChallenge recovery={challenge === 'recovery'} onComplete={() => { setChallenge(null); void refreshData(); }} /> : children}
+    {challenge ? <AuthChallenge key={challenge} recovery={challenge === 'recovery'} onComplete={() => {
+      if (challenge === 'mfa' && recoveryOwner.current) {
+        setChallenge('recovery');
+        return;
+      }
+      if (challenge === 'recovery') recoveryOwner.current = null;
+      setChallenge(null);
+      void retrySync.current?.();
+    }} /> : children}
   </AuthContext.Provider>;
 };
 export const useAuth = () => useContext(AuthContext);

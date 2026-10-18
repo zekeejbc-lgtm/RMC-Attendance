@@ -15,6 +15,8 @@ try {
  await page.waitForSelector('#landing-login-identifier');
  await page.type('#landing-login-identifier','nonexistent-email-verification@example.invalid');
  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='Forgot password?')?.click());
+ await page.waitForSelector('#forgot-password-email');
+ await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='Send reset link')?.click());
  await page.waitForFunction(()=>document.body.textContent.includes('If this email has an account, its reset request is queued.'));
  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].some(button=>button.disabled && /Try again in/.test(button.textContent))));
  console.log('PASS published forgot-password flow queues a generic request, explains fresh links and enforces its cooldown.');

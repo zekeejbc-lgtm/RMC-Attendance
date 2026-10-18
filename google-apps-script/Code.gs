@@ -171,7 +171,7 @@ function deliverAuthEmails() {
         const prepared = emailWorkerRequest_({ action: 'prepare', id: item.id, lease: item.lease });
         if (!prepared.message) { if (draft) draft.deleteDraft(); properties.deleteProperty('AUTH_EMAIL_JOB_' + item.id); return; }
         const message = prepared.message;
-        const options = { name: 'IARS · RMC Attendance', htmlBody: message.html + '<p style="color:#64748b;font-size:10px;">Delivery reference: ' + markerFor(item.id) + '</p>' };
+        const options = { name: 'Institution Attendance and Records System', htmlBody: message.html + '<p style="color:#64748b;font-size:10px;">Delivery reference: ' + markerFor(item.id) + '</p>' };
         if (!logo) {
           const image = UrlFetchApp.fetch('https://rmcssg.vercel.app/academic-seal-transparent.png', { muteHttpExceptions: true });
           if (image.getResponseCode() === 200) logo = image.getBlob().setName('iars-seal.png');

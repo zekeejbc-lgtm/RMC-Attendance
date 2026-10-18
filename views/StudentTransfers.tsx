@@ -20,6 +20,6 @@ export default function StudentTransfers() {
 
   return <Page>
     <PageHeader eyebrow="Student directory" title="Transfer students" description="Move students to another class or year level. Attendance records and balances stay with each student." actions={<Button fullWidth={false} variant="secondary" onClick={() => navigate(backPath)}><ArrowLeft size={16} />Back to directory</Button>} />
-    <StudentTransferWorkspace key={initialNodeId || 'all'} nodes={nodes} initialNodeId={initialNodeId} />
+    <StudentTransferWorkspace key={initialNodeId || 'all'} nodes={nodes} initialNodeId={initialNodeId} onShowProfile={student => navigate(`${hierarchyPathForRole(profile?.role)}/students/${encodeURIComponent(student.uid)}?unit=${encodeURIComponent(student.node_id)}`)} />
   </Page>;
 }

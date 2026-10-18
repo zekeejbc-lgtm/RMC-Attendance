@@ -13,6 +13,18 @@ const chooseDestination = () => {
 };
 beforeEach(() => { mocks.roster.mockResolvedValue([{ uid: '1', name: 'Jane', student_id: '00001', node_id: 'a', role: 'student' }]); mocks.transfer.mockResolvedValue(1); });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
+it('opens the chosen profile from both layouts without selecting or transferring the student', async () => {
+  const onShowProfile = vi.fn();
+  render(<StudentTransferWorkspace nodes={nodes} onShowProfile={onShowProfile} />);
+  const buttons = await screen.findAllByRole('button', { name: 'Show profile for Jane (00001)' });
+  expect(buttons).toHaveLength(2);
+  for (const button of buttons) {
+    fireEvent.click(button);
+    expect(onShowProfile).toHaveBeenLastCalledWith(expect.objectContaining({ uid: '1', student_id: '00001', node_id: 'a' }));
+    screen.getAllByRole('checkbox').forEach(checkbox => expect(checkbox).not.toBeChecked());
+  }
+  expect(mocks.transfer).not.toHaveBeenCalled();
+});
 it('shows the profile photo in both student layouts and the transfer review', async () => {
   mocks.roster.mockResolvedValue([{ uid: '1', name: 'Jane', student_id: '00001', node_id: 'a', role: 'student', photo_url: '/jane.png' }]);
   render(<StudentTransferWorkspace nodes={nodes} />);

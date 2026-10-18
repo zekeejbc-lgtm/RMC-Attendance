@@ -11,7 +11,8 @@ vi.mock('../lib/enrollmentConfirmation', async importOriginal => {
   return { ...actual, loadConfirmationSettings: vi.fn(async () => actual.defaultConfirmationSettings) };
 });
 
-const api = vi.hoisted(() => ({ validate: vi.fn(), submit: vi.fn(), upload: vi.fn(), remove: vi.fn(), google: vi.fn(), googleSubmit: vi.fn(), signIn: vi.fn() }));
+const api = vi.hoisted(() => ({ validate: vi.fn(), submit: vi.fn(), upload: vi.fn(), remove: vi.fn(), google: vi.fn(), googleSubmit: vi.fn(), signIn: vi.fn(), requestEmail: vi.fn() }));
+vi.mock('../lib/emailDelivery', () => ({ requestAuthEmail: api.requestEmail }));
 vi.mock('../components/GoogleSignIn', () => ({ default: ({ enrollment, onCredential, onError }: any) => <button onClick={() => onCredential('google-token', 'nonce').catch((error: Error) => onError(error.message))}>{enrollment ? 'Sign up with Google' : 'Sign in with Google'}</button> }));
 vi.mock('../lib/googleAuth', () => ({ checkGoogle: api.google, submitGoogleEnrollment: api.googleSubmit }));
 vi.mock('../components/AuthContext', () => ({ useAuth: () => ({ user: null, profile: null, loading: false, revision: 0 }) }));
@@ -66,6 +67,47 @@ function renderPublicPage(entry = '/') {
     </Routes>
   </MemoryRouter>);
 }
+
+it('opens a dedicated password reset dialog without requiring login credentials', async () => {
+  renderPublicPage('/login');
+  fireEvent.change(screen.getByLabelText('Username or email'), { target: { value: 'my.username' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+  expect(screen.getByRole('dialog', { name: 'Forgot password?' })).toBeVisible();
+  expect(screen.getByLabelText('Email address')).toHaveValue('');
+  expect(screen.getByLabelText('Email address')).toHaveAttribute('type', 'email');
+  expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+  expect(api.requestEmail).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to login' }));
+  expect(screen.getByRole('dialog', { name: 'Log in to IARS' })).toBeVisible();
+  expect(screen.getByLabelText('Username or email')).toHaveValue('my.username');
+});
+
+it('prefills the recovery email and preserves the resend cooldown when reopening the dialog', async () => {
+  api.requestEmail.mockResolvedValue({ accepted: true, cooldownSeconds: 120 });
+  renderPublicPage('/login');
+  fireEvent.change(screen.getByLabelText('Username or email'), { target: { value: 'student@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+  expect(screen.getByLabelText('Email address')).toHaveValue('student@example.com');
+  fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }));
+  await screen.findByText(/If this email has an account, its reset request is queued/);
+  expect(api.requestEmail).toHaveBeenCalledExactlyOnceWith('recovery', 'student@example.com');
+  expect(screen.getByRole('button', { name: /Try again in/ })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to login' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+  expect(screen.getByRole('button', { name: /Try again in/ })).toBeDisabled();
+  expect(api.requestEmail).toHaveBeenCalledOnce();
+});
+
+it('keeps the reset email and allows retry after a delivery request fails', async () => {
+  api.requestEmail.mockRejectedValueOnce(new Error('Email requests are temporarily unavailable. Try again later.'));
+  renderPublicPage('/login');
+  fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+  fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'student@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send reset link' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Send reset link' })).toBeEnabled());
+  expect(screen.getByLabelText('Email address')).toHaveValue('student@example.com');
+  expect(screen.getByRole('dialog', { name: 'Forgot password?' })).toHaveTextContent('Email requests are temporarily unavailable');
+});
 
 it('opens enrollment as a dedicated page and supports browser back and forward navigation', async () => {
   renderPublicPage();

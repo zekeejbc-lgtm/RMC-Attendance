@@ -10,6 +10,8 @@ Policies apply to new student accounts:
 - **Bypass:** create a confirmed account and sign it in without an email link.
 - **Google only:** reject password-only enrollment on the server; verify Google's signed email ownership proof before creation. Existing accounts can still sign in using their existing credentials.
 
+The Gmail draft sender display name is **Institution Attendance and Records System**. Inbox avatars use the sending Google account's profile picture and visibility settings; the inline school seal is part of the email body. Updating GitHub does not publish Apps Script source: deploy the updated worker to apply sender-name changes.
+
 ## Installation
 
 Apply the enrollment confirmation, GAS delivery, and `20261012163737_email_queue_reliability.sql` migrations through the normal migration process. Keep Supabase Auth email confirmations enabled. No Management API token or service-role key is sent to the browser.
